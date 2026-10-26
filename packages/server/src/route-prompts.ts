@@ -124,8 +124,11 @@ function voiceBlock(locale: Locale): string {
     ].join('\n');
 }
 
-/** Shared part of both guides: role, investigation budget, voice and language. */
-function commonGuide(locale: Locale): string {
+/**
+ * Shared parts of both guides: role, context files, research budget, voice and language.
+ * `movedPatches` is the paragraph about moved patches. The skeleton needs none, sections need only their own.
+ */
+function commonGuide(locale: Locale, movedPatches: string): string {
     return `## Your role
 
 You are a senior engineer who understands this change and lays it out as a **reading route**:
@@ -141,6 +144,8 @@ Paths under a \`shared/\` directory hold what does not change between tasks — 
 of the pull request and, on a rebuild after a push, the interdiff of that push. Read each of them
 once per session and reuse what you already read. The other paths belong to this task alone and
 are always new.
+
+${movedPatches}
 
 ## Research budget — hard
 
@@ -200,12 +205,25 @@ links (\`[label]: url\`).
   are accepted: \`http(s)://\`, \`#stop-<planIndex>\`, \`#file-<path>\` — a relative path
   like \`src/a.ts\` or \`#L42\` is rejected.`;
 
+/** Moved patches for the skeleton. Planning does not need them. */
+const SKELETON_MOVED_PATCHES = `A patch that did not fit the size budget of the pull request diff is moved to a separate file
+(its path stands in the diff) or only marked \`patch omitted\`. Planning does not need it: place
+such a file by its path, its stats and the patches around it. Open a moved file only when you
+cannot tell which stop it belongs to.`;
+
+/** Moved patches for a section. Only its stops' files are needed, with their gutter for anchors. */
+const SECTION_MOVED_PATCHES = `A patch that did not fit the size budget of the pull request diff is moved to a separate file
+under the same \`shared/\` directory (its path stands in the diff) or only marked \`patch omitted\`.
+Read the moved files of your target stops — each of them, since anchors need their gutter — and
+no others. A moved file carries the same \`old new | line\` gutter, and anchors read off it are
+validated like any other. These reads do not count toward the research budget below.`;
+
 /** Guide for a `route.skeleton` task covering the whole route plan. */
 export function skeletonGuide(locale: Locale): string {
     const text = promptLocale(locale);
     return `# Task: plan the review route
 
-${commonGuide(locale)}
+${commonGuide(locale, SKELETON_MOVED_PATCHES)}
 
 ## What you produce
 
@@ -303,7 +321,7 @@ export function sectionGuide(locale: Locale): string {
     const text = promptLocale(locale);
     return `# Task: fill in stops of the review route
 
-${commonGuide(locale)}
+${commonGuide(locale, SECTION_MOVED_PATCHES)}
 
 ## What you produce
 
@@ -348,6 +366,9 @@ An anchor is a range of **changed lines**, not a file: a file may be split acros
   one the new-side number, \`.\` means the line does not exist on that side. Those printed numbers
   are the ones the server validates against. Never count lines yourself and never derive a number
   from the \`@@\` header: an anchor off by two lines is a dead anchor.
+- A patch moved out of the pull request file to a separate file is anchored the same way: read
+  that file (its path stands where the patch would be) and take the numbers off its gutter. Never
+  take them from \`git diff\` or your own numbering.
 - \`collapsed: true\` — a display directive "fold this by default": boilerplate, lock files,
   generated code, mechanical renames. The reviewer still sees the fold and its line count.
 

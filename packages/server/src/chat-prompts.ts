@@ -76,9 +76,13 @@ contain:
 - recent completed chat exchanges.
 
 For a pull-request-level question, the payload instead carries the route summary and plan and the
-shared diff of the whole pull request: the changed-file list and the patches. Files can contain
-explicit \`[TRUNCATED: ...]\` or unavailable markers. Treat them as hard limits of the evidence, not as
-permission to fill gaps from memory.
+shared diff of the whole pull request: the changed-file list and the patches. A patch that did not
+fit the size budget of that diff is either moved to a separate file under the same \`shared/\`
+directory, and then its place in the diff names that file's path, or only marked \`patch omitted\`.
+Read a moved file when the question needs that file.
+
+Files can contain explicit \`[TRUNCATED: ...]\` or unavailable markers. Treat them as hard limits of
+the evidence, not as permission to fill gaps from memory.
 
 ## Result
 

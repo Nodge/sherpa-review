@@ -19,7 +19,8 @@ import { chatGuide, chatInstructions } from './chat-prompts.js';
 import type { PayloadFileSpec } from './payload-budget.js';
 import { byteLength, fitPayloadFiles, fitText, truncateUtf8, unavailableBlock } from './payload-budget.js';
 import type { EnqueueInput } from './queue.js';
-import { CONTEXT_BUDGET_BYTES, prDiffContext } from './route-payload.js';
+import type { RoutePayloadContext } from './route-payload.js';
+import { CONTEXT_BUDGET_BYTES, writePrDiff } from './route-payload.js';
 import type { PatchLine } from './route/diff-index.js';
 import { walkPatch } from './route/diff-index.js';
 import type { FileSide, SharedPayloadStore } from './shared-payload.js';
@@ -64,7 +65,8 @@ export interface ChatPayloadFile {
 /** Immutable question context, written to stable paths under `shared/` instead of copied per task. */
 export type SharedChatContext =
     | { readonly kind: 'guide'; readonly name: string; readonly content: string }
-    | { readonly kind: 'pr-diff'; readonly diffKey: string; readonly content: string }
+    /** The PR diff is printed on write. Placeholders for moved patches give their path in the shared directory. */
+    | { readonly kind: 'pr-diff'; readonly context: RoutePayloadContext; readonly budgetBytes: number }
     | {
           readonly kind: 'file';
           readonly diffKey: string;
@@ -145,7 +147,7 @@ function writeShared(store: SharedPayloadStore, entry: SharedChatContext): strin
         case 'guide':
             return store.guide(entry.name, entry.content);
         case 'pr-diff':
-            return store.prDiff(entry.diffKey, entry.content);
+            return writePrDiff(store, entry.context, entry.budgetBytes);
         case 'file':
             return store.fileSide(entry.diffKey, entry.fileId, entry.side, entry.content);
     }
@@ -157,11 +159,7 @@ function sharedPrDiff(context: ChatPayloadContext, budgetBytes: number): SharedC
     if (diff === null) {
         return null;
     }
-    return {
-        kind: 'pr-diff',
-        diffKey: diffKeyOf(diff),
-        content: prDiffContext({ diff, meta: context.pr }, budgetBytes),
-    };
+    return { kind: 'pr-diff', context: { diff, meta: context.pr }, budgetBytes };
 }
 
 /**

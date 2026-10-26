@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { diffKeyOf, SharedPayloadStore } from './shared-payload.js';
+import { diffKeyOf, PR_DIFF_FILE, SharedPayloadStore } from './shared-payload.js';
 import { mediumDiff } from './route/fixture-support.js';
 
 describe('shared payload directory', () => {
@@ -33,8 +33,26 @@ describe('shared payload directory', () => {
         const second = store.prDiff(key, 'other text');
 
         expect(second).toBe(first);
-        expect(first).toBe(path.join(sharedDir, 'diff', key, 'pr-diff.md'));
+        expect(first).toBe(path.join(sharedDir, 'diff', key, PR_DIFF_FILE));
         expect(fs.readFileSync(first, 'utf8')).toBe('first text');
+    });
+
+    it('writes overflow patches once under the diff key beside the shared file with private permissions', () => {
+        const file = store.prDiff('base-head', 'diff', [{ name: '03-main.ts.md', content: 'patch' }]);
+        const patch = path.join(store.prDiffPatchesDir('base-head'), '03-main.ts.md');
+        store.prDiff('base-head', 'diff', [{ name: '03-main.ts.md', content: 'other patch' }]);
+
+        expect(store.prDiffPatchesDir('base-head')).toBe(path.join(path.dirname(file), 'patches-v2'));
+        expect(fs.readFileSync(patch, 'utf8')).toBe('patch');
+        expect(fs.statSync(path.dirname(patch)).mode & 0o777).toBe(0o700);
+        expect(fs.statSync(patch).mode & 0o777).toBe(0o600);
+        // Changing the key removes them along with the shared file. They belong to one build.
+        store.prDiff('base-head2', 'new diff');
+        expect(fs.existsSync(patch)).toBe(false);
+    });
+
+    it('requires an overflow patch name to be a filename, not a path', () => {
+        expect(() => store.prDiff('base-head', 'diff', [{ name: '../escape.md', content: 'patch' }])).toThrow();
     });
 
     it('addresses a guide by its content hash, so new text gets a new path', () => {
@@ -115,7 +133,7 @@ describe('shared payload directory', () => {
         // Create a second key without key-change cleanup, as a previous process might have left it.
         const stale = path.join(sharedDir, 'diff', 'old-key');
         fs.mkdirSync(stale, { recursive: true });
-        fs.writeFileSync(path.join(stale, 'pr-diff.md'), 'previous diff');
+        fs.writeFileSync(path.join(stale, PR_DIFF_FILE), 'previous diff');
         openContextFiles = [kept, '/tmp/somewhere/else.md'];
 
         store.sweepDiffKeys();
@@ -136,7 +154,7 @@ describe('shared payload directory', () => {
         store.prDiff('base-head', 'diff');
         store.fileSide('base-head', 'f-main', 'new', 'file');
 
-        expect(fs.readdirSync(path.join(sharedDir, 'diff', 'base-head'))).toEqual(['files', 'pr-diff.md']);
+        expect(fs.readdirSync(path.join(sharedDir, 'diff', 'base-head'))).toEqual(['files', PR_DIFF_FILE]);
         expect(fs.readdirSync(path.join(sharedDir, 'diff', 'base-head', 'files'))).toHaveLength(1);
     });
 });

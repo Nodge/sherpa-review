@@ -17,7 +17,7 @@ import {
 } from './chat-payload.js';
 import { walkPatch } from './route/diff-index.js';
 import { mediumDiff, mediumReadySnapshot } from './route/fixture-support.js';
-import { diffKeyOf, SharedPayloadStore } from './shared-payload.js';
+import { diffKeyOf, PR_DIFF_FILE, SharedPayloadStore } from './shared-payload.js';
 
 const META: PrMeta = {
     id: '4242',
@@ -331,12 +331,12 @@ describe('PR-level chat payload', () => {
 
         expect(input.contextFiles.map((file) => path.basename(file))).toEqual([
             expect.stringMatching(/^chat-guide-[0-9a-f]{8}\.md$/),
-            'pr-diff.md',
+            PR_DIFF_FILE,
             'question.md',
             'route-context.md',
             'history.md',
         ]);
-        expect(input.contextFiles[1]).toBe(path.join(sharedDir, 'diff', diffKeyOf(diff), 'pr-diff.md'));
+        expect(input.contextFiles[1]).toBe(path.join(sharedDir, 'diff', diffKeyOf(diff), PR_DIFF_FILE));
 
         const route = fs.readFileSync(input.contextFiles[3] ?? '', 'utf8');
         expect(route).toContain(snapshot.summary);
@@ -372,7 +372,7 @@ describe('PR-level chat payload', () => {
         expect(new Set(inputs.map((input) => input.contextFiles[1])).size).toBe(1);
         expect(sixth.contextFiles[1]).toBe(diffPath);
         expect(fs.readFileSync(diffPath, 'utf8')).toBe('replaced diff');
-        expect(fs.readdirSync(path.dirname(diffPath))).toEqual(['pr-diff.md']);
+        expect(fs.readdirSync(path.dirname(diffPath))).toEqual([PR_DIFF_FILE]);
         // Each question still has its own directory.
         expect(new Set(inputs.map((input) => path.dirname(input.contextFiles[2] ?? ''))).size).toBe(5);
     });
@@ -391,13 +391,15 @@ describe('PR-level chat payload', () => {
         expect(fs.readdirSync(path.join(sharedDir, 'diff'))).toHaveLength(1);
     });
 
-    it('the overall diff is trimmed to its own budget, not the budget for question files', () => {
+    it('truncates the shared diff to its own budget, separate from the question file budget', async () => {
         const fixture = mediumDiff();
         const small = fixture.files.find((file) => file.patch !== null && !file.generated);
         if (small === undefined) {
             throw new Error('medium fixture has no regular file with a text patch');
         }
-        const hugeLines = Array.from({ length: 20_000 }, (_, index) => `+const generated${String(index)} = ${String(index)};`);
+        // The large patch fits the shared file budget alone but not with its neighbour, so it is moved out.
+        const hugeLines = Array.from({ length: 1_000 }, (_, index) => `+const generated${String(index)} = ${String(index)};`);
+        const otherLines = Array.from({ length: 300 }, (_, index) => `+const other${String(index)} = ${String(index)};`);
         const diff: PrDiff = {
             ...fixture,
             files: [
@@ -412,22 +414,31 @@ describe('PR-level chat payload', () => {
                     deletions: 0,
                     patch: `@@ -0,0 +1,${String(hugeLines.length)} @@\n${hugeLines.join('\n')}\n`,
                 },
+                {
+                    ...small,
+                    fileId: 'other-chat-patch',
+                    path: 'src/other-chat-patch.ts',
+                    oldPath: null,
+                    changeType: 'add',
+                    additions: otherLines.length,
+                    deletions: 0,
+                    patch: `@@ -0,0 +1,${String(otherLines.length)} @@\n${otherLines.join('\n')}\n`,
+                },
             ],
         };
         const sharedBudgetBytes = 48 * 1024;
-        const payload = buildChatPayload(
-            {
-                question: 'What changes across the whole PR?',
-                anchor: null,
-                pr: META,
-                diff,
-                fileContent: null,
-                route: READY_ROUTE,
-                history: [],
-            },
-            { sharedBudgetBytes },
-        );
-        const context = payload.shared.find((entry) => entry.kind === 'pr-diff')?.content ?? '';
+        const chatContext = {
+            question: 'What changes across the whole PR?',
+            anchor: null,
+            pr: META,
+            diff,
+            fileContent: null,
+            route: READY_ROUTE,
+            history: [],
+        };
+        const payload = buildChatPayload(chatContext, { sharedBudgetBytes });
+        const input = await materialize(chatContext, { sharedBudgetBytes });
+        const context = fs.readFileSync(input.contextFiles[1] ?? '', 'utf8');
         const smallChangedLine = [...walkPatch(small.patch ?? '')].find((line) => line.changed);
 
         expect(Buffer.byteLength(context, 'utf8')).toBeLessThanOrEqual(sharedBudgetBytes);
@@ -435,8 +446,15 @@ describe('PR-level chat payload', () => {
         expect(context).toContain(`\`${small.path}\``);
         expect(context).toContain(smallChangedLine?.raw);
         expect(context).toContain('`src/huge-chat-patch.ts`');
-        expect(context).toContain('patch omitted');
         expect(context).not.toContain(hugeLines.at(-1));
+
+        // The truncated patch is preserved: chat writes it to a separate file and the placeholder gives its path.
+        const patchesDir = shared.prDiffPatchesDir(diffKeyOf(diff));
+        const moved = path.join(patchesDir, '02-huge-chat-patch.ts.md');
+        expect(context).toContain(`patch moved to \`${moved}\``);
+        expect(fs.readdirSync(patchesDir)).toEqual(['02-huge-chat-patch.ts.md']);
+        expect(fs.readFileSync(moved, 'utf8')).toContain(`| ${hugeLines.at(-1) ?? ''}`);
+        expect(fs.statSync(moved).mode & 0o777).toBe(0o600);
     });
 
     it('takes the last N completed exchanges, newest first', () => {

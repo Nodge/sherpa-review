@@ -35,6 +35,7 @@ import { asRawText, mediumRawResults, mediumRawResultsV2, mediumReadySnapshot } 
 import type { TaskRecord } from './queue.js';
 import type { SherpaServer } from './server.js';
 import { startServer } from './server.js';
+import { PR_DIFF_FILE } from './shared-payload.js';
 import { get, makeTempSherpaDir, postJson, removeTempSherpaDir } from './test-support.js';
 
 /**
@@ -1144,7 +1145,7 @@ describe('regeneration after a push: what changed context', () => {
 
         const skeleton = queued(server, 'route.skeleton').at(-1) ?? 0;
         expect(contextNames(server, skeleton)).toEqual([
-            'pr-diff.md',
+            PR_DIFF_FILE,
             'interdiff.md',
             'previous-route.md',
             'threads-since.md',
@@ -1178,7 +1179,7 @@ describe('regeneration after a push: what changed context', () => {
 
         expect(await server.route.generate()).toBe('started');
         const skeleton = queued(server, 'route.skeleton').at(-1) ?? 0;
-        expect(contextNames(server, skeleton)).toEqual(['pr-diff.md', 'previous-route.md', 'threads-since.md']);
+        expect(contextNames(server, skeleton)).toEqual([PR_DIFF_FILE, 'previous-route.md', 'threads-since.md']);
         complete(server, skeleton, mediumRawResults().skeleton);
         completeSections(server, mediumRawResults());
 

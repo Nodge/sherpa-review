@@ -29,7 +29,23 @@ const HASH_LENGTH = 8;
 /** Readable part of the filename. A hash follows anyway, and path length is finite. */
 const NAME_LENGTH = 60;
 
+/**
+ * Shared diff format version in its filename. A file under a key is never overwritten, so without a version,
+ * an updated server would pick up a diff in the old format, kept under the same key by
+ * open tasks. Increment on any change to diff formatting or overflow patches.
+ */
+const PR_DIFF_FORMAT = 'v2';
+/** Shared PR diff filename in the key directory. */
+export const PR_DIFF_FILE = `pr-diff-${PR_DIFF_FORMAT}.md`;
+const PR_DIFF_PATCHES_DIR = `patches-${PR_DIFF_FORMAT}`;
+
 export type FileSide = 'old' | 'new';
+
+/** A patch that didn't fit in the shared diff file: its filename under `prDiffPatchesDir` and its text. */
+export interface OverflowPatch {
+    readonly name: string;
+    readonly content: string;
+}
 
 /** Shared diff key: the PR commit pair. A new push means a new key and directory. */
 export function diffKeyOf(diff: PrDiff): string {
@@ -66,11 +82,34 @@ export class SharedPayloadStore {
         return file;
     }
 
-    /** Shared PR diff used by `route.skeleton`, `route.section` and unanchored chat questions. */
-    prDiff(key: string, content: string): string {
-        const file = path.join(this.startBuildDir(key), 'pr-diff.md');
+    /**
+     * Shared PR diff used by `route.skeleton`, `route.section` and unanchored chat questions.
+     * Overflow patches are written before the shared file: any path it names already exists, and
+     * a written shared file means its patches are on disk too.
+     */
+    prDiff(key: string, content: string, patches: readonly OverflowPatch[] = []): string {
+        for (const patch of patches) {
+            if (path.basename(patch.name) !== patch.name) {
+                throw new Error(`overflow patch name is not a filename: ${patch.name}`);
+            }
+        }
+        const file = path.join(this.startBuildDir(key), PR_DIFF_FILE);
+        if (fs.existsSync(file)) {
+            return file;
+        }
+        for (const patch of patches) {
+            this.write(path.join(this.prDiffPatchesDir(key), patch.name), patch.content);
+        }
         this.write(file, content);
         return file;
+    }
+
+    /**
+     * Directory for patches moved out of the shared diff file. Returns a path without writing: the diff formatter
+     * names it in placeholders before the files reach disk.
+     */
+    prDiffPatchesDir(key: string): string {
+        return path.join(this.sharedDir, 'diff', key, PR_DIFF_PATCHES_DIR);
     }
 
     /**
@@ -196,6 +235,7 @@ function safeName(id: string): string {
     return `${safeSegment(id).slice(0, NAME_LENGTH)}-${hashOf(id)}`;
 }
 
-function safeSegment(value: string): string {
+/** Path segment from an external string. Replaces everything except letters, digits and `._-` with `_`. */
+export function safeSegment(value: string): string {
     return value.replaceAll(/[^A-Za-z0-9._-]/g, '_');
 }

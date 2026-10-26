@@ -8,10 +8,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { IterationMap } from './iterations/index.js';
 import { buildIterationMap, identityMap } from './iterations/index.js';
-import type { RegenerationBudgets, RouteTaskContext } from './route-payload.js';
+import type { RegenerationBudgets, RoutePayloadContext, RouteTaskContext } from './route-payload.js';
 import {
     CONTEXT_BUDGET_BYTES,
-    prDiffContext,
+    interdiffContext,
     prDiffPayload,
     RoutePayloadWriter,
     sectionPlanContext,
@@ -26,7 +26,7 @@ import {
     mediumReadySnapshot,
     mediumThreadsV2,
 } from './route/fixture-support.js';
-import { SharedPayloadStore } from './shared-payload.js';
+import { diffKeyOf, PR_DIFF_FILE, SharedPayloadStore } from './shared-payload.js';
 
 /**
  * Route generation task payload on the `medium` fixture diff: 21 files, 868
@@ -50,6 +50,9 @@ const META: PrMeta = {
     viewer: { login: 'bob', displayName: null, bot: false, avatarUrl: null },
 };
 
+/** Directory for separate patch files when printing without disk access. Stubs only name it. */
+const PATCHES_DIR = '/payload/shared/diff/base-head/patches';
+
 /** Builder context: fixture diff and PR metadata. The default generation language is Russian. */
 function context(diff: PrDiff = mediumDiff(), locale: Locale = 'ru'): RouteTaskContext {
     return { diff, meta: META, locale };
@@ -60,9 +63,14 @@ function intents(): Map<number, string> {
     return new Map(mediumRawResults().skeleton.stops.map((stop, index) => [index + 1, stop.intent]));
 }
 
+/** Shared diff file text without separate patches or a cap. */
+function prDiffContext(payloadContext: RoutePayloadContext, budgetBytes: number, patchesDir: string): string {
+    return prDiffPayload(payloadContext, budgetBytes, patchesDir).content;
+}
+
 /** Full context size without truncation, the baseline for budget tests. */
 function fullSize(): number {
-    return Buffer.byteLength(prDiffContext(context(), CONTEXT_BUDGET_BYTES), 'utf8');
+    return Buffer.byteLength(prDiffContext(context(), CONTEXT_BUDGET_BYTES, PATCHES_DIR), 'utf8');
 }
 
 /** Patch line with a gutter: `old new | line`. */
@@ -96,14 +104,31 @@ function printedPatches(text: string): Map<string, string> {
     return blocks;
 }
 
+/** Files whose patches are marked truncated but not written separately. */
 function omittedPaths(text: string): string[] {
     return [...text.matchAll(/^### File \d+\. `([^`]+)` .*\n\npatch omitted/gm)].map((match) => match[1] ?? '');
 }
 
+/** Files whose patches are written to separate files. */
+function movedPaths(text: string): string[] {
+    return [...text.matchAll(/^### File \d+\. `([^`]+)` .*\n\npatch moved/gm)].map((match) => match[1] ?? '');
+}
+
+/** All files whose patches are absent from the shared diff file, both marked and written separately. */
+function droppedPaths(text: string): string[] {
+    return [...text.matchAll(/^### File \d+\. `([^`]+)` .*\n\npatch (omitted|moved)/gm)].map((match) => match[1] ?? '');
+}
+
+const TEST_FILES = [
+    'services/orders/src/api/__tests__/handlers.test.ts',
+    'services/orders/src/domain/__tests__/edit-policy.test.ts',
+    'services/orders/src/domain/__tests__/edit-window.test.ts',
+];
+
 describe('shared diff context', () => {
     it('includes PR metadata, the full file list and every complete patch', () => {
         const diff = mediumDiff();
-        const text = prDiffContext(context(diff), CONTEXT_BUDGET_BYTES);
+        const text = prDiffContext(context(diff), CONTEXT_BUDGET_BYTES, PATCHES_DIR);
 
         expect(text).toContain('- Title: Order editing window');
         expect(text).toContain('- Author: alice (Alice Ingram)');
@@ -123,7 +148,7 @@ describe('shared diff context', () => {
 
     it('prints patch line numbers for both sides, matching those accepted by the validator', () => {
         const diff = mediumDiff();
-        const text = prDiffContext(context(diff), CONTEXT_BUDGET_BYTES);
+        const text = prDiffContext(context(diff), CONTEXT_BUDGET_BYTES, PATCHES_DIR);
         const index = indexDiff(diff);
 
         expect(text).toContain('`old new | line`');
@@ -158,7 +183,7 @@ describe('shared diff context', () => {
     });
 
     it('builds context without PR metadata when the host does not provide it', () => {
-        const text = prDiffContext({ diff: mediumDiff(), meta: null }, CONTEXT_BUDGET_BYTES);
+        const text = prDiffContext({ diff: mediumDiff(), meta: null }, CONTEXT_BUDGET_BYTES, PATCHES_DIR);
 
         expect(text).toContain('no pull request metadata');
         expect(text).toContain('- Volume: 21 files');
@@ -168,10 +193,10 @@ describe('shared diff context', () => {
     it('truncates to fit the budget while keeping the complete file list', () => {
         const budget = 12_000;
         const diff = mediumDiff();
-        const text = prDiffContext(context(diff), budget);
+        const text = prDiffContext(context(diff), budget, PATCHES_DIR);
 
         expect(Buffer.byteLength(text, 'utf8')).toBeLessThanOrEqual(budget);
-        expect(omittedPaths(text).length).toBeGreaterThan(0);
+        expect(droppedPaths(text).length).toBeGreaterThan(0);
         // The coverage rule requires every file to be known, so never truncate the list.
         for (const file of diff.files) {
             expect(text).toContain(`| \`${file.path}\` |`);
@@ -179,7 +204,7 @@ describe('shared diff context', () => {
     });
 
     it('names the file, size and obligation to place its ranges in the truncation marker', () => {
-        const text = prDiffContext(context(), 12_000);
+        const text = prDiffContext(context(), 12_000, PATCHES_DIR);
         const lock = mediumDiff().files.find((file) => file.path === 'pnpm-lock.yaml');
 
         expect(omittedPaths(text)).toContain('pnpm-lock.yaml');
@@ -191,33 +216,32 @@ describe('shared diff context', () => {
 
     it('truncates generated files first because the team does not require their review', () => {
         // Set the budget 1 byte below full context to truncate exactly 1 file, the largest generated file.
-        const text = prDiffContext(context(), fullSize() - 1);
+        const text = prDiffContext(context(), fullSize() - 1, PATCHES_DIR);
 
         expect(omittedPaths(text)).toEqual(['pnpm-lock.yaml']);
     });
 
-    it('cuts the largest patch next to lose fewer files within the same budget', () => {
+    it('truncates tests after generated files, largest first, and keeps source files', () => {
         const diff = mediumDiff();
         const generated = diff.files.filter((file) => file.generated).map((file) => file.path);
-        // Shrink the budget byte by byte until all generated patches are cut. The largest goes next.
-        let text = prDiffContext(context(diff), fullSize() - 1);
-        while (omittedPaths(text).length <= generated.length) {
-            text = prDiffContext(context(diff), Buffer.byteLength(text, 'utf8') - 1);
+        // Reduce the budget byte by byte until all generated files are truncated. The largest test goes next.
+        let text = prDiffContext(context(diff), fullSize() - 1, PATCHES_DIR);
+        while (droppedPaths(text).length <= generated.length) {
+            text = prDiffContext(context(diff), Buffer.byteLength(text, 'utf8') - 1, PATCHES_DIR);
         }
 
-        const omitted = omittedPaths(text);
-        expect(omitted).toEqual(expect.arrayContaining(generated));
-        // Tests are protected, so the largest remaining file is the edit window documentation.
-        expect(omitted).toContain('services/orders/docs/edit-window.md');
-        expect(omitted).toHaveLength(generated.length + 1);
+        const dropped = droppedPaths(text);
+        expect(dropped).toEqual(expect.arrayContaining(generated));
+        expect(dropped).toContain('services/orders/src/domain/__tests__/edit-window.test.ts');
+        expect(dropped).toHaveLength(generated.length + 1);
     });
 
     it('keeps the file list but no patches when the budget is below the non-truncatable part', () => {
         const diff = mediumDiff();
-        const text = prDiffContext(context(diff), 10);
+        const text = prDiffContext(context(diff), 10, PATCHES_DIR);
 
         // Binary files have no patch, so there is nothing to truncate.
-        expect(omittedPaths(text)).toHaveLength(diff.files.filter((file) => file.patch !== null).length);
+        expect(droppedPaths(text)).toHaveLength(diff.files.filter((file) => file.patch !== null).length);
         expect(text).toContain('| `pnpm-lock.yaml` |');
     });
 });
@@ -271,41 +295,202 @@ describe('section task plan', () => {
         expect(plan).toContain('`"planIndex": 3`');
         // Only files retain two-digit numbering, and the columns have different names.
         expect(plan).toContain('| stop # | tier | title | |');
-        expect(prDiffContext(context(), CONTEXT_BUDGET_BYTES)).toContain('| file # | file | change | +/- | notes |');
+        expect(prDiffContext(context(), CONTEXT_BUDGET_BYTES, PATCHES_DIR)).toContain('| file # | file | change | +/- | notes |');
     });
 });
 
 describe('single truncation policy for the shared diff', () => {
-    it('cuts test files last because the digest needs their lines for anchors', () => {
-        // The budget fits the mandatory part and tests, but not the full diff.
-        const budget = 20_000;
-        const text = prDiffContext(context(), budget);
-        const omitted = omittedPaths(text);
+    it('keeps source files in the shared file longer than tests because the plan uses source files', () => {
+        const diff = mediumDiff();
+        const machine = diff.files.filter((file) => file.generated).length;
+        // Reduce the budget until the first file after generated files and tests is dropped. It is a source file.
+        let text = prDiffContext(context(diff), fullSize() - 1, PATCHES_DIR);
+        while (droppedPaths(text).length <= machine + TEST_FILES.length) {
+            const dropped = droppedPaths(text);
+            // Until all tests are truncated, no source files appear among truncated files.
+            expect(dropped.length - machine).toBeLessThanOrEqual(TEST_FILES.length);
+            expect(dropped.filter((file) => !TEST_FILES.includes(file) && !isGenerated(diff, file))).toEqual([]);
+            text = prDiffContext(context(diff), Buffer.byteLength(text, 'utf8') - 1, PATCHES_DIR);
+        }
 
-        expect(Buffer.byteLength(text, 'utf8')).toBeLessThanOrEqual(budget);
-        expect(omitted.length).toBeGreaterThan(0);
-        expect(omitted.filter((file) => file.includes('__tests__'))).toEqual([]);
+        const dropped = droppedPaths(text);
+        expect(dropped).toEqual(expect.arrayContaining(TEST_FILES));
+        // The largest source file by printed block size is the edit window documentation.
+        expect(dropped).toContain('services/orders/docs/edit-window.md');
     });
 
-    it('test protection overrides the generated flag: a snapshot test outlasts a regular file', () => {
+    it('treats a generated snapshot test as a test, truncating it after generated files and writing it separately', () => {
         // The host correctly marks the snapshot as generated, but the digest needs its lines for testPath/testLine.
         const diff = mediumDiff();
         const generatedTest = diff.files.map((file) =>
             file.path.includes('__tests__') ? { ...file, generated: true } : file,
         );
         const marked = { ...diff, files: generatedTest };
-        const budget = Buffer.byteLength(prDiffContext(context(marked), 1e9), 'utf8') - 1;
+        const budget = Buffer.byteLength(prDiffContext(context(marked), 1e9, PATCHES_DIR), 'utf8') - 1;
 
-        const omitted = omittedPaths(prDiffContext(context(marked), budget));
+        expect(droppedPaths(prDiffContext(context(marked), budget, PATCHES_DIR))).toEqual(['pnpm-lock.yaml']);
 
-        expect(omitted.filter((file) => file.includes('__tests__'))).toEqual([]);
-        expect(omitted).toEqual(['pnpm-lock.yaml']);
+        const tight = prDiffPayload(context(marked), 20_000, PATCHES_DIR);
+        expect(movedPaths(tight.content)).toEqual(expect.arrayContaining(TEST_FILES));
+        expect(omittedPaths(tight.content).filter((file) => file.includes('__tests__'))).toEqual([]);
+        expect(tight.cap.machineFiles).toBe(diff.files.filter((file) => file.generated).length);
     });
 });
 
+describe('separate patch files', () => {
+    const budget = 20_000;
+
+    it('writes a truncated non-generated patch to its own file and names the path in the stub', () => {
+        const built = prDiffPayload(context(), budget, PATCHES_DIR);
+        const moved = movedPaths(built.content);
+
+        expect(moved.length).toBeGreaterThan(0);
+        expect(built.patches).toHaveLength(moved.length);
+        for (const patch of built.patches) {
+            expect(path.basename(patch.name)).toBe(patch.name);
+            expect(built.content).toContain(`\`${path.join(PATCHES_DIR, patch.name)}\``);
+        }
+        expect(built.patches.map((patch) => patch.name)).toContain('08-edit-window.test.ts.md');
+        expect(built.content).toContain('read it when you need this file');
+    });
+
+    it('uses the same gutter line by line in the separate file as in the shared file', () => {
+        const full = printedPatches(prDiffContext(context(), CONTEXT_BUDGET_BYTES, PATCHES_DIR));
+        const built = prDiffPayload(context(), budget, PATCHES_DIR);
+        const moved = movedPaths(built.content);
+
+        for (const [index, patch] of built.patches.entries()) {
+            const filePath = moved[index] ?? '';
+            const printed = printedPatches(patch.content);
+            expect([...printed.keys()]).toEqual([filePath]);
+            expect(printed.get(filePath)).toBe(full.get(filePath));
+            // The gutter and anchor header matches the shared file.
+            expect(patch.content).toContain('`old new | line`');
+            expect(patch.content).toContain('Line anchors of a stop are validated against exactly these printed numbers');
+        }
+    });
+
+    it('does not give a generated non-test file a separate patch file because it needs no review', () => {
+        const diff = mediumDiff();
+        const generated = diff.files.filter((file) => file.generated).map((file) => file.path);
+        const built = prDiffPayload(context(diff), budget, PATCHES_DIR);
+
+        expect(omittedPaths(built.content)).toEqual(expect.arrayContaining(generated));
+        expect(omittedPaths(built.content)).toHaveLength(generated.length);
+        expect(movedPaths(built.content).filter((file) => generated.includes(file))).toEqual([]);
+        for (const patch of built.patches) {
+            expect(generated.some((file) => patch.content.includes(`\`${file}\``))).toBe(false);
+        }
+    });
+
+    it('keeps the shared file within budget including stubs', () => {
+        // The minimum is the header, file list and markers for all patches. A smaller budget is impossible.
+        const floor = Buffer.byteLength(prDiffContext(context(), 10, PATCHES_DIR), 'utf8');
+        for (const tight of [floor, floor + 2_000, 20_000, fullSize() - 1]) {
+            const built = prDiffPayload(context(), tight, PATCHES_DIR);
+            expect(Buffer.byteLength(built.content, 'utf8')).toBeLessThanOrEqual(tight);
+        }
+    });
+
+    it('reverts some stubs to markers without files when hundreds of patch stubs exceed the budget', () => {
+        const diff = mediumDiff();
+        const source = diff.files.find((file) => file.patch !== null && !file.generated && !TEST_FILES.includes(file.path));
+        if (source === undefined) {
+            throw new Error('medium fixture has no regular file with a text patch');
+        }
+        const files = Array.from({ length: 300 }, (_, index) => {
+            const count = 20 + (index % 40);
+            const lines = Array.from({ length: count }, (_, line) => `+export const value${String(line)} = ${String(line)};`);
+            return {
+                ...source,
+                fileId: `many-${String(index)}`,
+                path: `src/many/file-${String(index)}.ts`,
+                oldPath: null,
+                changeType: 'add' as const,
+                additions: count,
+                deletions: 0,
+                patch: `@@ -0,0 +1,${String(count)} @@\n${lines.join('\n')}\n`,
+            };
+        });
+        const additions = new Map(files.map((file) => [file.path, file.additions]));
+        const many = context({ ...diff, files });
+        // The path is as long as the real directory path, under a key made of 2 full commit hashes.
+        const patchesDir = path.join(
+            '/home/reviewer/.sherpa/prs/github-quillmart--quillmart--1/payload/shared/diff',
+            `${'a'.repeat(40)}-${'b'.repeat(40)}`,
+            'patches-v2',
+        );
+        const floor = Buffer.byteLength(prDiffContext(many, 10, patchesDir), 'utf8');
+        const budget = floor + 10_000;
+
+        const built = prDiffPayload(many, budget, patchesDir);
+
+        const moved = movedPaths(built.content).map((file) => additions.get(file) ?? 0);
+        const omitted = omittedPaths(built.content).map((file) => additions.get(file) ?? 0);
+        expect(Buffer.byteLength(built.content, 'utf8')).toBeLessThanOrEqual(budget);
+        expect(moved.length).toBeGreaterThan(0);
+        expect(omitted.length).toBeGreaterThan(0);
+        // Reverting saves about 1 path length per patch, so large patches keep their own files.
+        expect(Math.min(...moved)).toBeGreaterThanOrEqual(Math.max(...omitted));
+        // Only a patch whose stub remains in the shared file has its own file.
+        expect(built.patches).toHaveLength(moved.length);
+    });
+
+    it('marks a patch larger than the entire budget as truncated without a separate file', () => {
+        const diff = mediumDiff();
+        const source = diff.files.find((file) => file.patch !== null && !file.generated && !TEST_FILES.includes(file.path));
+        if (source === undefined) {
+            throw new Error('medium fixture has no regular file with a text patch');
+        }
+        const lines = Array.from({ length: 2_000 }, (_, index) => `+export const value${String(index)} = ${String(index)};`);
+        const huge = {
+            ...source,
+            fileId: 'huge-source',
+            path: 'src/huge-source.ts',
+            oldPath: null,
+            changeType: 'add' as const,
+            additions: lines.length,
+            deletions: 0,
+            patch: `@@ -0,0 +1,${String(lines.length)} @@\n${lines.join('\n')}\n`,
+        };
+        const built = prDiffPayload(context({ ...diff, files: [...diff.files, huge] }), budget, PATCHES_DIR);
+
+        expect(omittedPaths(built.content)).toContain(huge.path);
+        expect(movedPaths(built.content)).not.toContain(huge.path);
+        expect(built.patches.some((patch) => patch.content.includes(`\`${huge.path}\``))).toBe(false);
+        expect(built.cap.truncated).toBe(true);
+    });
+
+    it('does not write interdiff patches separately because they cannot provide anchors', () => {
+        const text = interdiffContext(mediumInterdiffV1V2(), 2_000);
+
+        expect(omittedPaths(text).length).toBeGreaterThan(0);
+        expect(movedPaths(text)).toEqual([]);
+    });
+
+    it('truncates generated files first and tests last in an interdiff', () => {
+        // The PR diff also works as a slice here. Only file roles matter.
+        const diff = mediumDiff();
+        const full = Buffer.byteLength(interdiffContext(diff, 1e9), 'utf8');
+        expect(omittedPaths(interdiffContext(diff, full - 1))).toEqual(['pnpm-lock.yaml']);
+
+        // Every non-test file that is eventually truncated goes before the first test.
+        const sources = omittedPaths(interdiffContext(diff, 10)).filter((file) => !TEST_FILES.includes(file));
+        let text = interdiffContext(diff, full - 1);
+        while (omittedPaths(text).every((file) => !TEST_FILES.includes(file))) {
+            text = interdiffContext(diff, Buffer.byteLength(text, 'utf8') - 1);
+        }
+        expect(omittedPaths(text)).toEqual(expect.arrayContaining(sources));
+    });
+});
+
+function isGenerated(diff: PrDiff, filePath: string): boolean {
+    return diff.files.find((file) => file.path === filePath)?.generated ?? false;
+}
+
 describe('generation cap', () => {
     it('covers everything without truncation when the entire diff fits', () => {
-        const cap = prDiffPayload(context(), CONTEXT_BUDGET_BYTES).cap;
+        const cap = prDiffPayload(context(), CONTEXT_BUDGET_BYTES, PATCHES_DIR).cap;
 
         expect(cap.filesTotal).toBe(mediumDiff().files.length);
         expect(cap.filesCovered).toBe(cap.filesTotal);
@@ -316,9 +501,9 @@ describe('generation cap', () => {
     it('counts the only dropped generated file as generated, without truncation', () => {
         // The generated lockfile is the first truncation candidate. The budget is short by exactly its size.
         const budget = fullSize() - 1;
-        const cap = prDiffPayload(context(), budget).cap;
+        const cap = prDiffPayload(context(), budget, PATCHES_DIR).cap;
 
-        expect(omittedPaths(prDiffContext(context(), budget))).toEqual(['pnpm-lock.yaml']);
+        expect(omittedPaths(prDiffContext(context(), budget, PATCHES_DIR))).toEqual(['pnpm-lock.yaml']);
         expect(cap.filesCovered).toBe(cap.filesTotal - 1);
         expect(cap.machineFiles).toBe(1);
         expect(cap.truncated).toBe(false);
@@ -326,8 +511,8 @@ describe('generation cap', () => {
 
     it('builds the plan from a partial diff when a non-generated file is truncated', () => {
         const budget = 20_000;
-        const cap = prDiffPayload(context(), budget).cap;
-        const omitted = omittedPaths(prDiffContext(context(), budget));
+        const cap = prDiffPayload(context(), budget, PATCHES_DIR).cap;
+        const omitted = droppedPaths(prDiffContext(context(), budget, PATCHES_DIR));
 
         expect(cap.filesCovered).toBe(cap.filesTotal - omitted.length);
         expect(cap.machineFiles).toBeLessThan(omitted.length);
@@ -373,7 +558,7 @@ describe('writing payload to disk', () => {
         const [guide, pr] = input.contextFiles;
         expect(guide).toMatch(/shared[/\\]guides[/\\]skeleton-guide-[0-9a-f]{8}\.md$/);
         expect(pr?.startsWith(sharedDir)).toBe(true);
-        expect(path.basename(pr ?? '')).toBe('pr-diff.md');
+        expect(path.basename(pr ?? '')).toBe(PR_DIFF_FILE);
         expect(fs.readFileSync(guide ?? '', 'utf8')).toContain('# Task: plan the review route');
         expect(fs.readFileSync(pr ?? '', 'utf8')).toContain('## Changed files (21, complete list)');
         expect(input.instructions).toContain('Plan the review route');
@@ -417,7 +602,7 @@ describe('writing payload to disk', () => {
         expect(first.contextFiles[1]).toBe(skeleton.contextFiles[1]);
         expect(second.contextFiles[1]).toBe(skeleton.contextFiles[1]);
         expect(first.contextFiles[0]).toBe(second.contextFiles[0]);
-        expect(fs.readdirSync(path.dirname(skeleton.contextFiles[1] ?? ''))).toEqual(['pr-diff.md']);
+        expect(fs.readdirSync(path.dirname(skeleton.contextFiles[1] ?? ''))).toEqual([PR_DIFF_FILE]);
     });
 
     it('truncates context on disk to the builder budget', () => {
@@ -426,6 +611,51 @@ describe('writing payload to disk', () => {
 
         expect(Buffer.byteLength(text, 'utf8')).toBeLessThanOrEqual(12_000);
         expect(text).toContain('patch omitted');
+    });
+
+    it('stores separate patches privately under the diff key next to the shared file', () => {
+        const builder = writer(12_000);
+        const input = builder.skeletonTask(context());
+        const prDiff = input.contextFiles[1] ?? '';
+        const text = fs.readFileSync(prDiff, 'utf8');
+        const patchesDir = path.join(path.dirname(prDiff), 'patches-v2');
+        const named = [...text.matchAll(/^patch moved to `([^`]+)`/gm)].map((match) => match[1] ?? '');
+
+        expect(named.length).toBe(movedPaths(text).length);
+        expect(named.length).toBeGreaterThan(0);
+        expect(fs.readdirSync(patchesDir).sort()).toEqual(named.map((file) => path.basename(file)).sort());
+        for (const file of named) {
+            expect(path.dirname(file)).toBe(patchesDir);
+            expect(fs.readFileSync(file, 'utf8')).toContain('## Patches');
+            expect(fs.statSync(file).mode & 0o777).toBe(0o600);
+        }
+        expect(fs.statSync(patchesDir).mode & 0o777).toBe(0o700);
+        // The task still includes only the shared file, which provides paths to the separate files.
+        expect(input.contextFiles.filter((file) => file.startsWith(patchesDir))).toEqual([]);
+        // Calculate the cap with the same stub paths as the written file.
+        expect(builder.generationCap(context())).toEqual(
+            prDiffPayload(context(), 12_000, patchesDir).cap,
+        );
+    });
+
+    it('does not reuse an older print under the same key because the filename includes the print version', () => {
+        // A task from the previous server holds the key, so cleanup kept the directory.
+        const stale = path.join(sharedDir, 'diff', diffKeyOf(mediumDiff()), 'pr-diff.md');
+        fs.mkdirSync(path.dirname(stale), { recursive: true });
+        fs.writeFileSync(stale, 'patch omitted — 120 lines, use the stats above');
+        const shared = new SharedPayloadStore(sharedDir, () => [stale]);
+        shared.sweepDiffKeys();
+        const builder = new RoutePayloadWriter({ payloadDir, shared, budgetBytes: 12_000 });
+
+        const prDiff = builder.skeletonTask(context()).contextFiles[1] ?? '';
+        const text = fs.readFileSync(prDiff, 'utf8');
+
+        expect(prDiff).not.toBe(stale);
+        expect(fs.existsSync(stale)).toBe(true);
+        expect(movedPaths(text).length).toBeGreaterThan(0);
+        // The cap and the file on disk come from the same print.
+        const cap = builder.generationCap(context());
+        expect(cap.filesCovered).toBe(cap.filesTotal - droppedPaths(text).length);
     });
 
     it('clears the previous subdirectory on new generation and keeps the shared diff', () => {
@@ -529,14 +759,14 @@ describe('regeneration context after a push', () => {
 
         expect(skeleton.contextFiles.map((file) => path.basename(file))).toEqual([
             path.basename(skeleton.contextFiles[0] ?? ''),
-            'pr-diff.md',
+            PR_DIFF_FILE,
             'interdiff.md',
             'previous-route.md',
             'threads-since.md',
         ]);
         expect(section.contextFiles.map((file) => path.basename(file))).toEqual([
             path.basename(section.contextFiles[0] ?? ''),
-            'pr-diff.md',
+            PR_DIFF_FILE,
             'interdiff.md',
             'previous-route.md',
             'threads-since.md',
@@ -669,7 +899,7 @@ describe('regeneration context after a push', () => {
 
         expect(files.map((file) => path.basename(file))).toEqual([
             path.basename(files[0] ?? ''),
-            'pr-diff.md',
+            PR_DIFF_FILE,
             'previous-route.md',
             'threads-since.md',
         ]);
@@ -745,7 +975,7 @@ describe('regeneration context after a push', () => {
 
         expect(after.contextFiles.map((file) => path.basename(file))).toEqual([
             path.basename(after.contextFiles[0] ?? ''),
-            'pr-diff.md',
+            PR_DIFF_FILE,
             'interdiff.md',
             'previous-route.md',
             'threads-since.md',

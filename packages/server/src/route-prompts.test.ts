@@ -101,6 +101,16 @@ describe('route guides', () => {
         }
     });
 
+    it('the skeleton plans without moved patches and sections read only their stops\' files', () => {
+        for (const locale of LOCALES) {
+            const [skeleton, section] = guides(locale);
+            expect(skeleton).toContain('Planning does not need it');
+            expect(skeleton).not.toContain('Read the moved files');
+            expect(section).toContain('Read the moved files of your target stops');
+            expect(section).toContain('do not count toward the research budget');
+        }
+    });
+
     it('both roles get second-pass instructions that preserve the plan and allow reasons only for affected stops', () => {
         for (const locale of LOCALES) {
             const [skeleton, section] = guides(locale);

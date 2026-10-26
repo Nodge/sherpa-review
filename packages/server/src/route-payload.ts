@@ -16,8 +16,8 @@ import {
     threadsSinceContext,
 } from './route-regeneration.js';
 import { walkPatch } from './route/diff-index.js';
-import type { SharedPayloadStore } from './shared-payload.js';
-import { diffKeyOf } from './shared-payload.js';
+import type { OverflowPatch, SharedPayloadStore } from './shared-payload.js';
+import { diffKeyOf, PR_DIFF_FILE, safeSegment } from './shared-payload.js';
 
 /**
  * Route generation task payload (docs/protocol.md §4): large context in files, short instructions in
@@ -155,7 +155,7 @@ export class RoutePayloadWriter {
             // The skeleton has no context of its own. Both the guide and diff use shared paths.
             contextFiles: [
                 this.shared.guide('skeleton-guide', skeletonGuide(locale)),
-                prDiff.file,
+                prDiff,
                 ...regeneration.files,
             ],
             resultSchemaFile: this.writeSchema('skeleton'),
@@ -168,7 +168,8 @@ export class RoutePayloadWriter {
      * must reach the route header from the snapshot even after a restart.
      */
     generationCap(context: RoutePayloadContext): UiGenerationCap {
-        return prDiffPayload(context, this.budgetBytes).cap;
+        const patchesDir = this.shared.prDiffPatchesDir(diffKeyOf(context.diff));
+        return prDiffPayload(context, this.budgetBytes, patchesDir).cap;
     }
 
     /**
@@ -193,7 +194,7 @@ export class RoutePayloadWriter {
             instructions: sectionInstructions(locale, planIndexes, regeneration.present),
             contextFiles: [
                 this.shared.guide('section-guide', sectionGuide(locale)),
-                prDiff.file,
+                prDiff,
                 ...regeneration.files,
                 plan,
             ],
@@ -238,9 +239,8 @@ export class RoutePayloadWriter {
     }
 
     /** Shared PR diff keyed by the commit pair. The skeleton, sections and PR chat question use the same one. */
-    private prDiff(context: RoutePayloadContext): { file: string; cap: UiGenerationCap } {
-        const built = prDiffPayload(context, this.budgetBytes);
-        return { file: this.shared.prDiff(diffKeyOf(context.diff), built.content), cap: built.cap };
+    private prDiff(context: RoutePayloadContext): string {
+        return writePrDiff(this.shared, context, this.budgetBytes);
     }
 
     /** A fresh generation subdirectory. Old contents are removed because their tasks were just cancelled. */
@@ -325,18 +325,30 @@ export class RoutePayloadWriter {
 /**
  * Shared diff context file with the PR header, full file list and patches within budget. All tasks share it.
  * The skeleton, sections and PR-wide chat questions read it, so they share a truncation policy
- * based on section needs: tests are trimmed last, since the digest must anchor to their actual lines.
+ * based on section needs. An over-budget patch moves to a separate file with the same gutter in `patchesDir`.
+ * The stub names its path, and anchors into it remain valid. Along with the file, this returns the moved
+ * patches and truncation metrics that the UI shows in the route header and banner. It computes everything
+ * in one pass. Pure function. `writePrDiff` writes the files.
  */
-export function prDiffContext(context: RoutePayloadContext, budgetBytes: number): string {
-    return prContext(context, budgetBytes).content;
+export function prDiffPayload(context: RoutePayloadContext, budgetBytes: number, patchesDir: string): PrDiffPayload {
+    const { diff, meta } = context;
+    // The budget covers the entire final file, including block separators. Otherwise "at most
+    // N bytes" stops being true exactly when it matters (docs/architecture.md §7.5).
+    return patchedContext(diff, [metaBlock(diff, meta), fileListBlock(diff)].join('\n\n'), budgetBytes, {
+        heading: PATCHES_HEADING,
+        rank: protectionRank,
+        patchesDir,
+    });
 }
 
 /**
- * The same file with truncation metrics, which the UI shows in the route header and the
- * banner. Calculated in the same pass as the text, since there is no reason to trim the diff twice.
+ * Writes the shared PR diff and moved patches under the diff key. Routes and chat use one path.
+ * The cap does not come from here. Skeleton acceptance recomputes it (`generationCap`).
  */
-export function prDiffPayload(context: RoutePayloadContext, budgetBytes: number): PatchedContext {
-    return prContext(context, budgetBytes);
+export function writePrDiff(shared: SharedPayloadStore, context: RoutePayloadContext, budgetBytes: number): string {
+    const key = diffKeyOf(context.diff);
+    const built = prDiffPayload(context, budgetBytes, shared.prDiffPatchesDir(key));
+    return shared.prDiff(key, built.content, built.patches);
 }
 
 /**
@@ -345,7 +357,11 @@ export function prDiffPayload(context: RoutePayloadContext, budgetBytes: number)
  * It has its own budget. The interdiff must not displace the PR diff used for anchors.
  */
 export function interdiffContext(interdiff: PrDiff, budgetBytes: number): string {
-    return patchedContext(interdiff, interdiffHead(interdiff), budgetBytes, INTERDIFF_PATCHES_HEADING).content;
+    return patchedContext(interdiff, interdiffHead(interdiff), budgetBytes, {
+        heading: INTERDIFF_PATCHES_HEADING,
+        rank: interdiffRank,
+        patchesDir: null,
+    }).content;
 }
 
 /** Slice header explaining which patches these are, which commits they compare and how to read them. */
@@ -437,39 +453,48 @@ const INTERDIFF_PATCHES_HEADING = [
 ].join('\n');
 
 /**
- * PR context within budget: header, full file list and patches. The budget covers the entire
- * output file, including block separators. Otherwise "no more than N bytes" stops being
- * true exactly when it matters (docs/architecture.md §7.5).
+ * The finished context file, patches moved out to separate files, and the content it lacks
+ * compared with the full diff.
  */
-function prContext(context: RoutePayloadContext, budgetBytes: number): PatchedContext {
-    const { diff, meta } = context;
-    return patchedContext(diff, [metaBlock(diff, meta), fileListBlock(diff)].join('\n\n'), budgetBytes);
-}
-
-/** The finished context file and what it lacks compared with the full diff. */
-interface PatchedContext {
+export interface PrDiffPayload {
     readonly content: string;
+    readonly patches: readonly OverflowPatch[];
     readonly cap: UiGenerationCap;
 }
 
-/**
- * Header and patches within a budget. Shared printer for the PR diff and slice between iterations. Their patch
- * headers differ because the PR diff supports anchors and the slice does not.
- */
-function patchedContext(
-    diff: PrDiff,
-    head: string,
-    budgetBytes: number,
-    patchesHeading: string = PATCHES_HEADING,
-): PatchedContext {
-    const sections = diff.files.map((file, index) => ({
-        file,
-        index,
-        full: patchBlock(file, index, false),
-        omitted: patchBlock(file, index, true),
-    }));
+/** How printing a PR diff differs from printing a slice. */
+interface PatchPolicy {
+    /** Patch block header. The PR diff supports anchors, the slice does not. */
+    readonly heading: string;
+    /** Truncation order. Lower ranks are truncated first. */
+    readonly rank: (file: FileDiff) => number;
+    /** Destination for moved truncated patches. `null` means only marking the truncated patch. */
+    readonly patchesDir: string | null;
+}
 
-    const fixed = [head, patchesHeading];
+/** Header and patches within budget. Shared printer for PR diffs and slices between iterations. */
+function patchedContext(diff: PrDiff, head: string, budgetBytes: number, policy: PatchPolicy): PrDiffPayload {
+    const { patchesDir } = policy;
+    // A moved file is read in one go with its header, whose bytes also count toward the budget.
+    const overflowHeadBytes = byteLength(overflowFile(diff, ''));
+    const sections = diff.files.map((file, index) => {
+        const full = patchBlock(file, index);
+        const marker = omittedBlock(file, index);
+        // Generated files and files larger than the budget are not moved because they cannot be read in one go.
+        if (
+            patchesDir === null ||
+            file.patch === null ||
+            isMachineFile(file) ||
+            overflowHeadBytes + byteLength(full) > budgetBytes
+        ) {
+            return { file, index, full, marker, stub: marker, overflowName: null };
+        }
+        const name = overflowName(file, index);
+        const stub = movedBlock(file, index, path.join(patchesDir, name));
+        return { file, index, full, marker, stub, overflowName: name };
+    });
+
+    const fixed = [head, policy.heading];
     const blockCount = fixed.length + sections.length;
     // `join('\n\n')` and the trailing newline also take bytes in the file.
     let size =
@@ -479,12 +504,12 @@ function patchedContext(
         1;
 
     const kept = new Set(sections.map((section) => section.index));
-    for (const section of dropOrder(sections)) {
+    for (const section of dropOrder(sections, policy.rank, 'first')) {
         if (size <= budgetBytes) {
             break;
         }
-        const saved = byteLength(section.full) - byteLength(section.omitted);
-        // The truncation note can be longer than the patch itself. Such files cannot be trimmed.
+        const saved = byteLength(section.full) - byteLength(section.stub);
+        // A stub can be longer than the patch itself, leaving nothing to truncate in these files.
         if (saved <= 0) {
             continue;
         }
@@ -492,43 +517,81 @@ function patchedContext(
         size -= saved;
     }
 
-    const patches = sections.map((section) => (kept.has(section.index) ? section.full : section.omitted));
+    // A moved-patch stub is longer than a marker. With hundreds of files, even stubs can exceed the budget.
+    // Those patches fall back to markers and get no separate files.
+    const marked = new Set<number>();
+    for (const section of dropOrder(sections, policy.rank, 'last')) {
+        if (size <= budgetBytes) {
+            break;
+        }
+        const current = kept.has(section.index) ? section.full : section.stub;
+        const saved = byteLength(current) - byteLength(section.marker);
+        if (saved <= 0) {
+            continue;
+        }
+        kept.delete(section.index);
+        marked.add(section.index);
+        size -= saved;
+    }
+
+    const patches = sections.map((section) => {
+        if (kept.has(section.index)) {
+            return section.full;
+        }
+        return marked.has(section.index) ? section.marker : section.stub;
+    });
     const dropped = sections.filter((section) => !kept.has(section.index));
     return {
         content: `${[...fixed, ...patches].join('\n\n')}\n`,
+        patches: dropped.flatMap(({ index, overflowName: name, full }) =>
+            name === null || marked.has(index) ? [] : [{ name, content: overflowFile(diff, full) }],
+        ),
         cap: {
             filesCovered: kept.size,
             filesTotal: sections.length,
-            // Rank 0 means exactly "generated and not a test": a generated snapshot test is trimmed like
-            // regular code, so counting it in the generated group would be false.
-            machineFiles: dropped.filter((section) => protectionRank(section.file) === 0).length,
-            truncated: dropped.some((section) => protectionRank(section.file) >= 1),
+            // A generated snapshot test is a test. Classifying it as just a generated file would be wrong.
+            machineFiles: dropped.filter((section) => isMachineFile(section.file)).length,
+            truncated: dropped.some((section) => !isMachineFile(section.file)),
         },
     };
 }
 
 /**
- * Truncation order. Generated files go first (the team does not require their review),
- * tests last. Within each group, trim the largest patch first to free up budget
- * while losing as few files as possible. The path breaks ties deterministically.
+ * Truncation candidates sort by rank, with the largest patch first within each rank.
+ * That frees budget by truncating the fewest files. Falling back to markers starts with the smallest patches.
+ * Each saves roughly one path length but loses the whole patch. The path is a deterministic tie-breaker.
  */
-function dropOrder<T extends { file: FileDiff; full: string }>(sections: readonly T[]): T[] {
+function dropOrder<T extends { file: FileDiff; full: string }>(
+    sections: readonly T[],
+    rankOf: (file: FileDiff) => number,
+    largest: 'first' | 'last',
+): T[] {
+    const sign = largest === 'first' ? 1 : -1;
     return [...sections].sort((left, right) => {
-        const rank = protectionRank(left.file) - protectionRank(right.file);
+        const rank = rankOf(left.file) - rankOf(right.file);
         if (rank !== 0) {
             return rank;
         }
-        const size = byteLength(right.full) - byteLength(left.full);
+        const size = sign * (byteLength(right.full) - byteLength(left.full));
         return size !== 0 ? size : left.file.path.localeCompare(right.file.path);
     });
 }
 
 /**
- * Protection rank: 0 is trimmed first, 2 last. Test protection overrides the generated flag:
- * the host correctly marks snapshot tests as generated, but the digest still needs their lines for
- * `testPath`/`testLine`.
+ * Protection rank in the PR diff: 0 is truncated first, 2 last. Generated files go first (the team does
+ * not require their review), then tests, then source files, which drive the plan. A test moved
+ * to a separate file still supports anchors. The host correctly marks snapshot tests as generated, but
+ * they are tests. The digest needs their lines for `testPath`/`testLine`.
  */
 function protectionRank(file: FileDiff): number {
+    if (isMachineFile(file)) {
+        return 0;
+    }
+    return isTestPath(file.path) ? 1 : 2;
+}
+
+/** Truncation rank for a slice between iterations. It has no anchors, and tests are truncated last. */
+function interdiffRank(file: FileDiff): number {
     if (isTestPath(file.path)) {
         return 2;
     }
@@ -540,6 +603,11 @@ const TEST_PATH = /(^|\/)(tests?|spec|specs|__tests__)(\/|$)|[._-](test|spec|tes
 
 function isTestPath(filePath: string): boolean {
     return TEST_PATH.test(filePath);
+}
+
+/** A generated file that is not a test. The team does not require its review. */
+function isMachineFile(file: FileDiff): boolean {
+    return file.generated && !isTestPath(file.path);
 }
 
 function metaBlock(diff: PrDiff, meta: PrMeta | null): string {
@@ -603,21 +671,68 @@ function fileNotes(file: FileDiff): string {
     return notes.join('; ');
 }
 
-function patchBlock(file: FileDiff, index: number, omit: boolean): string {
+function patchHeader(file: FileDiff, index: number): string {
     const stats = `+${String(file.additions)} / -${String(file.deletions)}`;
-    const header = `### File ${fileNumber(index)}. \`${file.path}\` — ${file.changeType}, ${stats}`;
+    return `### File ${fileNumber(index)}. \`${file.path}\` — ${file.changeType}, ${stats}`;
+}
+
+function patchBlock(file: FileDiff, index: number): string {
+    const header = patchHeader(file, index);
     if (file.patch === null) {
         const reason = file.binary ? 'binary file' : 'the host gave no textual patch';
         return `${header}\n\nno patch — ${reason}; use the stats above; the file still must be placed`;
-    }
-    if (omit) {
-        const lines = file.additions + file.deletions;
-        return `${header}\n\npatch omitted — ${String(lines)} lines, use the stats above; the file still must be placed`;
     }
 
     const body = numberedPatch(file.patch);
     const fence = '`'.repeat(fenceLength(body));
     return `${header}\n\n${fence}text\n${body}\n${fence}`;
+}
+
+/** Marker for a truncated patch without a separate file. */
+function omittedBlock(file: FileDiff, index: number): string {
+    if (file.patch === null) {
+        return patchBlock(file, index);
+    }
+    const lines = file.additions + file.deletions;
+    return `${patchHeader(file, index)}\n\npatch omitted — ${String(lines)} lines, use the stats above; the file still must be placed`;
+}
+
+/**
+ * Stub for a moved patch, giving its location and stating that its gutter still supports anchors. Kept short
+ * because a large PR has hundreds of stubs, each consuming the shared file's budget.
+ */
+function movedBlock(file: FileDiff, index: number, patchFile: string): string {
+    const lines = file.additions + file.deletions;
+    return (
+        `${patchHeader(file, index)}\n\npatch moved to \`${patchFile}\` (${String(lines)} lines): read it when ` +
+        'you need this file. Anchors off its gutter are validated like the ones here'
+    );
+}
+
+/**
+ * A moved patch is a separate file with a short header and the same block that would appear in the shared
+ * diff file, under the same gutter instructions. It matches the unmoved patch line for line.
+ */
+function overflowFile(diff: PrDiff, block: string): string {
+    const head = [
+        '# Pull request patch',
+        '',
+        `One patch of the pull request, moved out of the shared pull request file (\`${PR_DIFF_FILE}\`) because`,
+        'that file has a size budget. The metadata, the complete list of changed files and the other',
+        'patches are there.',
+        '',
+        `- Diff: base ${diff.baseCommit} -> head ${diff.headCommit}`,
+    ].join('\n');
+    return `${[head, PATCHES_HEADING, block].join('\n\n')}\n`;
+}
+
+/** Length of the readable part of a moved file's name. Every stub prints its path. */
+const OVERFLOW_NAME_LENGTH = 40;
+
+/** Moved file name. Its file-list number makes it unique, followed by the PR filename. */
+function overflowName(file: FileDiff, index: number): string {
+    const safe = safeSegment(path.posix.basename(file.path)).slice(-OVERFLOW_NAME_LENGTH);
+    return `${fileNumber(index)}-${safe}.md`;
 }
 
 /** Gutter column width. Reviews do not have six-digit line numbers. */

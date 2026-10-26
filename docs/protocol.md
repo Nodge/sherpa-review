@@ -87,7 +87,20 @@ Schemas are generated from the canonical zod definitions (`generateJsonSchemas` 
 
 **Context budget.** The server assembles context files within byte limits: the PR diff and shared chat file use `CONTEXT_BUDGET_BYTES` = 320 KB (`packages/server/src/route-payload.ts`). Regeneration context gets 128 KB for the interdiff and 64 KB each for the previous route and new threads. Chat history gets the last 8 exchanges at 8 KB each. `fitPayloadFiles` and `fitText` in `packages/server/src/payload-budget.ts` implement this. Spec order sets priority, and a minimum is reserved for files not yet assembled.
 
-Truncation is always marked in the text so the model does not mistake a partial input for a complete one: `[TRUNCATED: …]` where content was removed, `[UNAVAILABLE: …]` where context is missing entirely (binary file, host supplied no patch). The PR diff drops whole file patches, never their tails. Generated files go first, tests last, with the largest first within each rank. The changed-file list and PR header are never truncated. The UI shows what was left out separately (`UiGenerationCap`).
+Truncation is always marked in the text so the model doesn't mistake a fragment for complete context:
+
+- `[TRUNCATED: …]` marks removed content
+- `[UNAVAILABLE: …]` marks context that is missing entirely: a binary file or a host that didn't provide a patch
+
+In the PR diff, the server removes whole file patches instead of their tails. Generated files go first, then tests, then source files. Within each rank, the largest go first. The PR header and changed-file list are never truncated.
+
+A truncated patch usually stays available. It lives in a separate file with the same gutter in `payload/shared/diff/<key>/patches-<version>/`, and the stub in the diff gives its path. The skeleton opens these files only if it can't decide which stop a file belongs to. A section reads the extracted files for its own stops and no others. These cases get only a `patch omitted` marker, without a separate file:
+
+- a generated file, unless it is a test
+- a patch whose file is larger than the budget
+- patches reduced to a marker when even the stubs exceed the budget. A stub is longer than a marker, and reduction within a rank starts with the smallest
+
+The rendering version is also in the shared diff filename (`pr-diff-<version>.md`). Files under a key aren't overwritten, so without a version a new render would pick up the old one. The UI shows what was left out separately (`UiGenerationCap`).
 
 ## 5. Queue
 
