@@ -32,7 +32,7 @@ describe('route task instructions', () => {
 });
 
 describe('regeneration instructions', () => {
-    const files = { interdiff: true, previousRoute: true, threadsSince: true };
+    const files = { pushed: true, interdiff: true, previousRoute: true, threadsSince: true };
 
     it('list the second-pass context that is actually present', () => {
         for (const text of [skeletonInstructions('ru', files), sectionInstructions('ru', [2], files)]) {
@@ -52,12 +52,30 @@ describe('regeneration instructions', () => {
     });
 
     it('regeneration on the same iteration mentions no slice or push', () => {
-        const text = sectionInstructions('ru', [2], { ...files, interdiff: false });
+        const text = sectionInstructions('ru', [2], { ...files, pushed: false, interdiff: false });
 
         expect(text).not.toContain('interdiff');
         expect(text).not.toContain('pushed since');
         expect(text).toContain('previous-route.md');
         expect(text).toContain('the code has not\nmoved since');
+        expect(text).not.toContain('changeReason');
+    });
+
+    it('a push without a slice is stated, does not promise the same commit and forbids a change reason', () => {
+        const noInterdiff = { ...files, interdiff: false };
+        const skeleton = skeletonInstructions('ru', noInterdiff);
+        const section = sectionInstructions('ru', [2], noInterdiff);
+
+        for (const text of [skeleton, section]) {
+            expect(text).toContain('the author has pushed\nsince');
+            expect(text).toContain('could not get the interdiff');
+            expect(text).toContain('Compare the previous route with the current diff yourself');
+            expect(text).not.toContain('interdiff.md');
+            expect(text).not.toContain('same commit');
+            expect(text).not.toContain('has not');
+        }
+        expect(section).toContain('Do not write `changeReason`');
+        expect(skeleton).not.toContain('changeReason');
     });
 });
 
@@ -85,9 +103,15 @@ describe('route guides', () => {
             const [skeleton, section] = guides(locale);
             expect(skeleton).toContain('## Rebuilding an existing route');
             expect(skeleton).toContain('Keep the plan, its order and its titles wherever the code did not change');
-            // Both cases are covered, with and without a push, since the instructions are shared by all tasks.
+            // All three cases are covered because the guide serves every task: a push with a slice,
+            // a push without a slice and the same iteration.
             expect(skeleton).toContain('**With `interdiff.md`**');
-            expect(skeleton).toContain('**Without `interdiff.md`** — the code has not moved');
+            expect(skeleton).toContain('**A push without `interdiff.md`**');
+            expect(skeleton).toContain('compare the previous route with the current diff yourself');
+            expect(skeleton).toContain('**The same commit**');
+            // Without a slice, no change reason is written, even if there was a push.
+            expect(section).toContain('Without `interdiff.md` do not write `changeReason` at all');
+            expect(section).toContain('the author has pushed but the server could not get the interdiff');
             expect(section).toContain('## Why this stop changed');
             expect(section).toContain('changeReason');
             expect(section).toContain('[thread:<id>]');

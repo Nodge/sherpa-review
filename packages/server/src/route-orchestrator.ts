@@ -243,6 +243,7 @@ export class RouteOrchestrator {
 
         // Repair interrupted generation before automatic enqueueing. The `filling` phase without tasks means
         // the server restarted, so the existing generation must resume.
+        await this.restoreGeneration(diff);
         this.reconcile();
 
         const phase = this.store.read().phase;
@@ -784,6 +785,9 @@ export class RouteOrchestrator {
     /**
      * Regeneration context for the payload: the previous snapshot and everything the task uses to explain the push.
      * null means there is no previous route, and the task is built as for the first generation.
+     *
+     * A push means a change of iteration, regardless of slice availability. Fetching the slice may fail (host failure or no host),
+     * and the task must then describe the push without it, instead of claiming "the same commit".
      */
     private regenerationOf(context: GenerationContext | null): RouteRegenerationContext | null {
         const previousId = context?.previousSnapshotId ?? null;
@@ -793,6 +797,8 @@ export class RouteOrchestrator {
         }
         return {
             previous,
+            pushed: previous.diffId !== context.diff.diffId,
+            commit: context.diff.headCommit,
             interdiff: context.interdiff,
             map: context.map,
             threads: context.threads,
@@ -800,18 +806,14 @@ export class RouteOrchestrator {
     }
 
     private startSkeletonTask(): void {
-        // Rescheduling after a restart starts the plan again and uses the active iteration. The previous
-        // iteration was known by its task binding, which no longer exists at this point.
-        const diff = this.generation?.diff ?? this.activeDiff;
-        if (diff === null) {
-            // The server restarted during generation. There is no diff to build the payload from, so scheduling
-            // waits for it. Warmup finishes the work and calls reconciliation again at the end.
+        const generation = this.generation;
+        if (generation === null) {
+            // The server restarted during generation and lost its context. Enqueueing waits
+            // for warmup to restore the context, then warmup calls reconciliation again.
             this.warmupInBackground();
             return;
         }
-        // Server restart: the generation context was lost with the process. Only a map already saved
-        // in the slice cache remains.
-        this.generation ??= this.cachedContextFor(diff, this.store.current());
+        const diff = generation.diff;
         this.enqueueRouteTask(
             'skeleton',
             diff.diffId,
@@ -820,9 +822,33 @@ export class RouteOrchestrator {
                 diff,
                 meta: this.meta,
                 locale: this.skeletonLocale(),
-                regeneration: this.regenerationOf(this.generation),
+                regeneration: this.regenerationOf(generation),
             }),
         );
+    }
+
+    /**
+     * A restart during plan enqueueing rebuilds generation context through the same path as
+     * generation startup, with the host slice and threads. Use the active iteration, because only
+     * the task binding knew the previous one, and that binding is gone by now. The previous process wrote
+     * regeneration files for its own iteration, so rewrite them. While the generation has a live task,
+     * leave its context untouched.
+     */
+    private async restoreGeneration(diff: PrDiff): Promise<void> {
+        if (!this.needsRestoredGeneration()) {
+            return;
+        }
+        const context = await this.generationContextFor(diff);
+        // Another warmup may have restored context while the slice was being calculated.
+        if (this.isClosed() || !this.needsRestoredGeneration()) {
+            return;
+        }
+        this.payload.restoreRegeneration(this.regenerationOf(context));
+        this.generation = context;
+    }
+
+    private needsRestoredGeneration(): boolean {
+        return this.generation === null && this.store.read().phase === 'reading' && !this.hasOpenRouteTask();
     }
 
     /**

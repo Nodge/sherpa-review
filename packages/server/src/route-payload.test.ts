@@ -503,6 +503,8 @@ describe('regeneration context after a push', () => {
     function regeneration(overrides: Partial<RouteRegenerationContext> = {}): RouteRegenerationContext {
         return {
             previous: mediumReadySnapshot(),
+            pushed: true,
+            commit: mediumDiffV2().headCommit,
             interdiff: mediumInterdiffV1V2(),
             map: map(),
             threads: mediumThreadsV2(),
@@ -673,22 +675,50 @@ describe('regeneration context after a push', () => {
         ]);
     });
 
-    it('without a slice, the previous route does not describe a push or print an affected column', () => {
+    it('omits push wording and the touched column from the previous route when regenerating on the same iteration', () => {
         const builder = writer();
-        const same = regeneration({ interdiff: null, map: identityMap() });
-        builder.beginGeneration(same);
-        const files = builder.skeletonTask(contextV2({ interdiff: null, map: identityMap() })).contextFiles;
-        const previous = read(files[2]);
-        const threads = read(files[3]);
+        const sameCommit = { pushed: false, commit: mediumReadySnapshot().commit, interdiff: null, map: identityMap() };
+        builder.beginGeneration(regeneration(sameCommit));
+        const task = builder.skeletonTask(contextV2(sameCommit));
+        const previous = read(task.contextFiles[2]);
+        const threads = read(task.contextFiles[3]);
 
         expect(previous).toContain('The code has not moved since it was built');
         expect(previous).toContain('| stop # | tier | title | anchors |');
         // Omit the "touched by push" column. A column full of "no" would read as "do not touch anything".
         expect(previous).not.toContain('touched by the push');
         expect(previous).not.toContain('| no |');
+        expect(previous).not.toContain('Current diff is for commit');
         expect(threads).toContain('The code has not moved');
         expect(threads).not.toContain('the push');
-        expect(same.interdiff).toBeNull();
+        expect(task.instructions).toContain('rebuild on the same commit');
+    });
+
+    // The slice is unavailable, but the iteration changed. "The same commit" would be false here and cause the model
+    // to rewrite the route without checking it against the new code.
+    it('names both commits in the previous route and asks the model to compare them when a push has no slice', () => {
+        const builder = writer();
+        const noInterdiff = { interdiff: null, map: null };
+        builder.beginGeneration(regeneration(noInterdiff));
+        const skeleton = builder.skeletonTask(contextV2(noInterdiff));
+        const section = builder.sectionTask(contextV2(noInterdiff), [2], mediumReadySnapshot().stops, intents());
+        const previous = read(skeleton.contextFiles[2]);
+        const threads = read(skeleton.contextFiles[3]);
+
+        expect(previous).toContain(`- Built for commit: ${mediumReadySnapshot().commit}`);
+        expect(previous).toContain(`- Current diff is for commit: ${mediumDiffV2().headCommit}`);
+        expect(previous).toContain('The author has pushed since it was built');
+        expect(previous).toContain('compare this route with the current diff in `pr-diff.md`');
+        expect(previous).toContain('cannot carry what the reviewer\nhas already read');
+        expect(previous).not.toContain('touched by the push |');
+        expect(threads).toContain('could not tell which files the push touched');
+        for (const text of [previous, threads, skeleton.instructions, section.instructions]) {
+            expect(text).not.toContain('same commit');
+            expect(text).not.toContain('has not moved');
+        }
+        expect(skeleton.instructions).toContain('could not get the interdiff');
+        expect(section.instructions).toContain('Do not write `changeReason`');
+        expect(skeleton.instructions).not.toContain('changeReason');
     });
 
     it('omits reviewer drafts from discussion because the author has not seen them', () => {

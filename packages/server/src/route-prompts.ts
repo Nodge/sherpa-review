@@ -262,8 +262,8 @@ consequence → verification last. Every number appears exactly once.
 
 ## Rebuilding an existing route
 
-Some tasks carry \`previous-route.md\`: this pull request already had a route. What came with that
-file says why it is being rebuilt.
+Some tasks carry \`previous-route.md\`: this pull request already had a route. Its header and what
+came with it say why it is being rebuilt.
 
 **With \`interdiff.md\`** — the author has pushed since, and the interdiff is exactly what that push
 changed; \`threads-since.md\` is the discussion that came with it.
@@ -273,8 +273,14 @@ changed; \`threads-since.md\` is the discussion that came with it.
 - Rewrite only the stops the push actually touched; the previous route marks them for you.
 - Work that is genuinely new becomes a new stop — at the end, or where the story puts it.
 
-**Without \`interdiff.md\`** — the code has not moved: the route is being rebuilt on the same commit.
-A stop you keep keeps its number, and past that the previous route is context, not a text to copy.
+**A push without \`interdiff.md\`** — \`previous-route.md\` says the author has pushed, but the server
+could not get the interdiff. It names the commit of the previous route and of the current diff:
+compare the previous route with the current diff yourself, and keep the plan, its order and its
+titles wherever the code did not change.
+
+**The same commit** — \`previous-route.md\` says the code has not moved: the route is being rebuilt on
+the same commit. A stop you keep keeps its number, and past that the previous route is context, not
+a text to copy.
 
 Either way you plan the current diff, not a diff of plans: the result is a full route, and nothing
 in it refers to the previous one.
@@ -367,8 +373,9 @@ from your anchors; you never declare the kind, only the reason.
   in \`changeThreadIds\`. The reviewer sees the threads as links next to the reason, and every token
   is removed from your text — put it at the end of a sentence so the prose survives without it.
   Ids the server does not know are dropped.
-- Without \`interdiff.md\` the code has not moved since the previous route: there are no reasons
-  to write at all.
+- Without \`interdiff.md\` do not write \`changeReason\` at all. Either the code has not moved since
+  the previous route, or the author has pushed but the server could not get the interdiff and
+  cannot tell which stops the push touched — a reason would be dropped either way.
 
 ## Behavioural test digest
 
@@ -405,12 +412,15 @@ ${COMMON_RESULT}`;
  * instead of describing files the task does not have.
  */
 export interface RegenerationContextFiles {
+    /** The iteration has changed since the previous route, but the slice may be missing. */
+    readonly pushed: boolean;
     readonly interdiff: boolean;
     readonly previousRoute: boolean;
     readonly threadsSince: boolean;
 }
 
 const NO_REGENERATION: RegenerationContextFiles = {
+    pushed: false,
     interdiff: false,
     previousRoute: false,
     threadsSince: false,
@@ -429,18 +439,37 @@ function regenerationLines(files: RegenerationContextFiles): string[] {
     if (named.length === 0) {
         return [];
     }
-    // Without a slice there was no push. Do not tell the model the author pushed or ask it to change affected stops.
-    return files.interdiff
-        ? [
-              '',
-              'This is a rebuild: the pull request already had a route and the author has pushed since. The',
-              `task also carries ${listPhrase(named)}. Keep what the push did not touch, change what it did.`,
-          ]
-        : [
-              '',
-              'This is a rebuild on the same commit: the pull request already had a route and the code has not',
-              `moved since. The task also carries ${listPhrase(named)}. A stop you keep keeps its number.`,
-          ];
+    if (files.interdiff) {
+        return [
+            '',
+            'This is a rebuild: the pull request already had a route and the author has pushed since. The',
+            `task also carries ${listPhrase(named)}. Keep what the push did not touch, change what it did.`,
+        ];
+    }
+    if (files.pushed) {
+        return [
+            '',
+            'This is a rebuild after a push: the pull request already had a route and the author has pushed',
+            'since, but the server could not get the interdiff of that push. The task also carries',
+            `${listPhrase(named)}. Compare the previous route with the current diff yourself and keep the`,
+            'stops whose code did not change.',
+        ];
+    }
+    return [
+        '',
+        'This is a rebuild on the same commit: the pull request already had a route and the code has not',
+        `moved since. The task also carries ${listPhrase(named)}. A stop you keep keeps its number.`,
+    ];
+}
+
+/**
+ * A push without a slice. The server cannot tell which stops it affected and drops change reasons at acceptance,
+ * so sections are explicitly forbidden from writing one.
+ */
+function changeReasonLines(files: RegenerationContextFiles): string[] {
+    return files.pushed && !files.interdiff
+        ? ['', 'Do not write `changeReason`: without the interdiff the server cannot tell which stops the push touched.']
+        : [];
 }
 
 /**
@@ -500,6 +529,7 @@ export function sectionInstructions(
         'complete list of changed files and their patches. The last one carries the fixed route plan,',
         'with your target stops marked and the intent written for each of them.',
         ...regenerationLines(files),
+        ...changeReasonLines(files),
         '',
         `${sharedPhrase(files)}: these paths are the same in every task of this`,
         'session, so read each of them once. The plan belongs to this task alone and is always new.',

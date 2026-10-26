@@ -15,12 +15,25 @@ import { byteLength, fitText, unavailableBlock } from './payload-budget.js';
 export interface RouteRegenerationContext {
     /** The snapshot that was current when generation started. */
     readonly previous: RouteSnapshot;
+    /** The generation iteration differs from the previous snapshot's iteration because the author pushed. */
+    readonly pushed: boolean;
+    /** The commit under review in the generation iteration. */
+    readonly commit: string;
     /** Slice from the previous snapshot's iteration to the generation iteration. null means the same iteration or no slice available. */
     readonly interdiff: PrDiff | null;
     /** Line mapping for the same slice. null means no classification or "affected" markers. */
     readonly map: IterationMap | null;
     /** PR threads. null means the host did not return them (or context was restored after a restart). */
     readonly threads: readonly Thread[] | null;
+}
+
+type RegenerationKind = 'same_commit' | 'pushed' | 'pushed_without_interdiff';
+
+function regenerationKind(context: Pick<RouteRegenerationContext, 'pushed' | 'interdiff'>): RegenerationKind {
+    if (!context.pushed) {
+        return 'same_commit';
+    }
+    return context.interdiff === null ? 'pushed_without_interdiff' : 'pushed';
 }
 
 /** Filenames in the generation directory, also used to identify files after a server restart. */
@@ -32,18 +45,18 @@ export const THREADS_SINCE_FILE = 'threads-since.md';
  * where code has not changed. Stop paragraphs cost the most and matter least when the budget is tight.
  * They are truncated first, from the end of the plan. The table and summary go last.
  *
- * Text depends on whether a slice exists. Without one there was no push (regeneration in the same iteration), so
- * there is nothing to describe as "affected by the push".
+ * Text branches by pass type (`regenerationKind`). "Affected by the push" appears only for a push with a
+ * slice. A push without a slice names both commits and asks the model to compare the route with the diff itself.
  */
 export function previousRouteContext(context: RouteRegenerationContext, budgetBytes: number): string {
-    const { previous, map, interdiff } = context;
-    const pushed = interdiff !== null;
+    const { previous, map } = context;
+    const kind = regenerationKind(context);
     const stops = [...previous.stops].sort((left, right) => left.planIndex - right.planIndex);
     const head = [
-        headBlock(previous, pushed),
+        headBlock(previous, kind, context.commit),
         summaryBlock(previous),
-        stopTableBlock(stops, map, pushed),
-        textsHeading(pushed),
+        stopTableBlock(stops, map, kind),
+        textsHeading(kind),
     ].join('\n\n');
     const texts = stops.filter((stop) => stop.paragraph !== null).map((stop) => stopTextBlock(stop));
     const render = (kept: number): string =>
@@ -61,37 +74,48 @@ const DROPPED_TEXTS_NOTE =
     '[TRUNCATED: the remaining stop texts of the previous route were omitted by the payload budget; ' +
     'the plan table above is complete.]';
 
-function textsHeading(pushed: boolean): string {
-    return [
-        '## What each stop said',
-        '',
-        pushed
-            ? 'The prose is what the reviewer already read. Reuse the parts the push did not invalidate.'
-            : 'The prose is what the reviewer already read.',
-    ].join('\n');
+const TEXTS_LEAD: Record<RegenerationKind, string> = {
+    pushed: 'The prose is what the reviewer already read. Reuse the parts the push did not invalidate.',
+    pushed_without_interdiff:
+        'The prose is what the reviewer already read. Reuse the parts that still match the current diff.',
+    same_commit: 'The prose is what the reviewer already read.',
+};
+
+function textsHeading(kind: RegenerationKind): string {
+    return ['## What each stop said', '', TEXTS_LEAD[kind]].join('\n');
 }
 
-function headBlock(previous: RouteSnapshot, pushed: boolean): string {
+const HEAD_LEAD: Record<RegenerationKind, readonly string[]> = {
+    pushed: [
+        'The route this pull request already had, built before the push you see in the interdiff.',
+        'Stop numbers carry the progress of the reviewer: keep the plan, its order and its titles wherever',
+        'the code did not change, and rewrite only what the push touched.',
+    ],
+    pushed_without_interdiff: [
+        'The route this pull request already had. The author has pushed since it was built, but the server',
+        'could not get the interdiff of that push: compare this route with the current diff in `pr-diff.md`',
+        'yourself. Stop numbers carry the progress of the reviewer: keep the plan, its order and its titles',
+        'wherever the code did not change, and rewrite what did. The server cannot carry what the reviewer',
+        'has already read over to the new route.',
+    ],
+    same_commit: [
+        'The route this pull request already had. The code has not moved since it was built: this run',
+        'rebuilds the route on the same commit, and there is no push to account for.',
+        'Stop numbers carry the progress of the reviewer, so a stop you keep keeps its number. Past that,',
+        'the previous route is here for the numbering, not as a template to copy.',
+    ],
+};
+
+function headBlock(previous: RouteSnapshot, kind: RegenerationKind, commit: string): string {
     const { harness, model } = previous.provenance;
     const by = harness === null && model === null ? 'unknown agent' : `${harness ?? 'unknown'} / ${model ?? 'unknown'}`;
-    const lead = pushed
-        ? [
-              'The route this pull request already had, built before the push you see in the interdiff.',
-              'Stop numbers carry the progress of the reviewer: keep the plan, its order and its titles wherever',
-              'the code did not change, and rewrite only what the push touched.',
-          ]
-        : [
-              'The route this pull request already had. The code has not moved since it was built: this run',
-              'rebuilds the route on the same commit, and there is no push to account for.',
-              'Stop numbers carry the progress of the reviewer, so a stop you keep keeps its number. Past that,',
-              'the previous route is here for the numbering, not as a template to copy.',
-          ];
     return [
         '# Previous route',
         '',
-        ...lead,
+        ...HEAD_LEAD[kind],
         '',
         `- Built for commit: ${previous.commit} (base ${previous.baseCommit})`,
+        ...(kind === 'same_commit' ? [] : [`- Current diff is for commit: ${commit}`]),
         `- Built at: ${previous.createdAt}`,
         `- Built by: ${by}`,
         `- Stops: ${String(previous.stops.length)}`,
@@ -103,26 +127,35 @@ function summaryBlock(previous: RouteSnapshot): string {
 }
 
 /**
- * Previous pass plan: number, tier, title, anchors and, when there was a push, an "affected by this push"
- * flag. The server computes the flag from the interdiff. The model reads it instead of inferring it. Without a push,
- * there is no column. A column full of "no" would tell the model to leave everything alone.
+ * Previous pass plan: number, tier, title, anchors and, for a push with a slice, a marker
+ * saying "this stop was affected". The server computes the marker from the interdiff. The model reads it, not infers it.
+ * Without a slice, the column is absent. A column full of "no" would tell the model "change nothing", while dashes
+ * would tell it nothing.
  */
-function stopTableBlock(stops: readonly RouteStop[], map: IterationMap | null, pushed: boolean): string {
+function stopTableBlock(stops: readonly RouteStop[], map: IterationMap | null, kind: RegenerationKind): string {
+    const withColumn = kind === 'pushed';
     const rows = stops.map((stop) => {
         const cells = [String(stop.planIndex), stop.tier, stop.title, anchorList(stop)];
-        return row(pushed ? [...cells, map === null ? '—' : yesNo(touchedByPush(stop, map))] : cells);
+        return row(withColumn ? [...cells, map === null ? '—' : yesNo(touchedByPush(stop, map))] : cells);
     });
-    const lead = pushed
-        ? [
-              map === null
-                  ? 'The server could not compute which stops the push touched: judge by the interdiff yourself.'
-                  : 'The last column is the verdict of the server on whether the push touched the lines of that stop.',
-              '',
-              '| stop # | tier | title | anchors | touched by the push |',
-              '|---|---|---|---|---|',
-          ]
-        : ['| stop # | tier | title | anchors |', '|---|---|---|---|'];
-    return ['## Stops of the previous route', '', ...lead, ...rows].join('\n');
+    const plainHeader = ['| stop # | tier | title | anchors |', '|---|---|---|---|'];
+    const lead: Record<RegenerationKind, readonly string[]> = {
+        pushed: [
+            map === null
+                ? 'The server could not compute which stops the push touched: judge by the interdiff yourself.'
+                : 'The last column is the verdict of the server on whether the push touched the lines of that stop.',
+            '',
+            '| stop # | tier | title | anchors | touched by the push |',
+            '|---|---|---|---|---|',
+        ],
+        pushed_without_interdiff: [
+            'The server could not tell which stops the push touched: compare them with `pr-diff.md` yourself.',
+            '',
+            ...plainHeader,
+        ],
+        same_commit: plainHeader,
+    };
+    return ['## Stops of the previous route', '', ...lead[kind], ...rows].join('\n');
 }
 
 function stopTextBlock(stop: RouteStop): string {
@@ -157,11 +190,11 @@ function anchorList(stop: RouteStop): string {
  * it answers to make sense. New comments are marked. Drafts are never printed.
  *
  * The file is always written, even if nothing was found, to avoid another branch in the task
- * for this file too. The header depends on the slice. Without a push, "on an affected file" has no meaning.
+ * instructions. The header branches by pass type. "On an affected file" applies only to a push with a slice.
  */
 export function threadsSinceContext(context: RouteRegenerationContext, budgetBytes: number): string {
-    const { threads, previous, map, interdiff } = context;
-    const heading = threadsHeading(interdiff !== null);
+    const { threads, previous, map } = context;
+    const heading = threadsHeading(regenerationKind(context));
     if (threads === null) {
         return `${[heading, '', THREADS_UNAVAILABLE].join('\n')}\n`;
     }
@@ -186,20 +219,26 @@ export function threadsSinceContext(context: RouteRegenerationContext, budgetByt
     return fitText(render(kept), budgetBytes, unavailableBlock('New comments', THREADS_UNAVAILABLE_BUDGET));
 }
 
-function threadsHeading(pushed: boolean): string {
-    const scope = pushed
-        ? [
-              'Discussions with a comment written after the previous route was built, on a file the push',
-              'touched or on the pull request itself.',
-          ]
-        : [
-              'Discussions with a comment written after the previous route was built. The code has not moved',
-              'since, so this is the only thing that is new.',
-          ];
+const THREADS_SCOPE: Record<RegenerationKind, readonly string[]> = {
+    pushed: [
+        'Discussions with a comment written after the previous route was built, on a file the push',
+        'touched or on the pull request itself.',
+    ],
+    pushed_without_interdiff: [
+        'Discussions with a comment written after the previous route was built. The author has pushed',
+        'since, and the server could not tell which files the push touched, so every such discussion is here.',
+    ],
+    same_commit: [
+        'Discussions with a comment written after the previous route was built. The code has not moved',
+        'since, so this is the only thing that is new.',
+    ],
+};
+
+function threadsHeading(kind: RegenerationKind): string {
     return [
         '# New comments since the previous route',
         '',
-        ...scope,
+        ...THREADS_SCOPE[kind],
         'Threads are printed whole: the new comments are marked `(new)`, the older ones are there so that',
         'the answer makes sense. Unsent drafts of the reviewer are not shown at all.',
         '',

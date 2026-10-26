@@ -1188,6 +1188,93 @@ describe('route orchestration', () => {
             expect(route.phase).toBe('filling');
         });
 
+        it('a push without a slice makes the skeleton task describe the push with both heads, not "the same commit"', async () => {
+            const first = await startWithWorker();
+            await completeRoute(first);
+            const previousCommit = (await readRoute(first)).route.snapshot?.commit ?? '';
+            await first.close();
+
+            // The author pushed, but the host did not provide the slice.
+            const pushed = makeFixtureHost('medium');
+            pushed.advanceIteration();
+            const getDiff = pushed.getDiff.bind(pushed);
+            pushed.getDiff = (slice) =>
+                slice === undefined ? getDiff() : Promise.reject(new Error('slice not provided'));
+            const second = await startWithPushedHost(pushed);
+            const active = (await pushed.listIterations()).find((iteration) => iteration.status === 'active');
+            expect(await second.route.generate()).toBe('started');
+
+            const skeleton = second.queue.getTask(routeTasks(second, 'route.skeleton').at(-1) ?? 0);
+            // The guide is shared by all passes and names all three cases, so we do not check it.
+            const context = (skeleton?.contextFiles ?? []).slice(1);
+            const text = [skeleton?.instructions ?? '', ...context.map((file) => fsSync.readFileSync(file, 'utf8'))].join(
+                '\n',
+            );
+            expect(context.map((file) => file.split('/').at(-1))).not.toContain('interdiff.md');
+            expect(text).not.toContain('same commit');
+            expect(text).not.toContain('has not moved');
+            expect(text).toContain('could not get the interdiff');
+            expect(previousCommit).not.toBe('');
+            expect(text).toContain(previousCommit);
+            expect(text).toContain(active?.headCommit ?? 'no active iteration');
+            expect(active?.headCommit).not.toBe(previousCommit);
+        });
+
+        it('rewrites regeneration files for a push while the server was down during a rebuild on the same commit', async () => {
+            const first = await startWithWorker();
+            await completeRoute(first);
+            const previousCommit = (await readRoute(first)).route.snapshot?.commit ?? '';
+            expect(await first.route.generate()).toBe('started');
+            await first.close();
+            // The server died before applying the plan: the tasks are gone, the phase remains, and the author pushed.
+            dropTasks(sherpaDir, MEDIUM_PR);
+
+            const pushed = makeFixtureHost('medium');
+            pushed.advanceIteration();
+            const getDiff = pushed.getDiff.bind(pushed);
+            pushed.getDiff = (slice) =>
+                slice === undefined ? getDiff() : Promise.reject(new Error('slice not provided'));
+            const second = await startWithPushedHost(pushed);
+            const active = (await pushed.listIterations()).find((iteration) => iteration.status === 'active');
+
+            const skeletons = routeTasks(second, 'route.skeleton');
+            expect(skeletons).toHaveLength(1);
+            const skeleton = second.queue.getTask(skeletons[0] ?? 0);
+            const contextFile = (name: string): string =>
+                fsSync.readFileSync((skeleton?.contextFiles ?? []).find((file) => file.endsWith(`/${name}`)) ?? '', 'utf8');
+            const text = contextFile('previous-route.md');
+            expect(text).not.toContain('same commit');
+            expect(text).not.toContain('has not moved');
+            expect(text).toContain('could not get the interdiff');
+            expect(previousCommit).not.toBe('');
+            expect(text).toContain(previousCommit);
+            expect(text).toContain(active?.headCommit ?? 'no active iteration');
+            expect(skeleton?.instructions).toContain('rebuild after a push');
+            // The restored context fetches discussion from the host instead of declaring it unavailable.
+            const threads = contextFile('threads-since.md');
+            expect(threads).toContain('could not tell which files the push touched');
+            expect(threads).not.toContain('UNAVAILABLE');
+        });
+
+        it('restored context fetches the slice from the host after a push during rebuild downtime', async () => {
+            const first = await startWithWorker();
+            await completeRoute(first);
+            expect(await first.route.generate()).toBe('started');
+            await first.close();
+            dropTasks(sherpaDir, MEDIUM_PR);
+
+            const pushed = makeFixtureHost('medium');
+            pushed.advanceIteration();
+            const second = await startWithPushedHost(pushed);
+
+            const skeletons = routeTasks(second, 'route.skeleton');
+            expect(skeletons).toHaveLength(1);
+            const skeleton = second.queue.getTask(skeletons[0] ?? 0);
+            expect((skeleton?.contextFiles ?? []).map((file) => file.split('/').at(-1))).toContain('interdiff.md');
+            expect(skeleton?.instructions).toContain('the author has pushed since');
+            expect(skeleton?.instructions).not.toContain('could not get the interdiff');
+        });
+
         it('a lost route iteration patch stops generation with a reason instead of repeating warmup', async () => {
             const first = await startWithWorker();
             completeTask(first, routeTasks(first, 'route.skeleton')[0] ?? 0, mediumRawResults().skeleton);

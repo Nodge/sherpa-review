@@ -116,6 +116,24 @@ export class RoutePayloadWriter {
      */
     beginGeneration(regeneration: RouteRegenerationContext | null = null): void {
         this.startGeneration();
+        this.writeRegeneration(regeneration);
+    }
+
+    /**
+     * Rewrite regeneration context in the current generation directory without clearing it.
+     * Needed after a restart. The previous process wrote files for the iteration where generation started,
+     * but the task uses the active iteration, so the task text and files would disagree about whether a push occurred.
+     * Called only when the directory has no live tasks.
+     */
+    restoreRegeneration(regeneration: RouteRegenerationContext | null): void {
+        const dir = this.currentDir();
+        for (const name of [PREVIOUS_ROUTE_FILE, THREADS_SINCE_FILE]) {
+            fs.rmSync(path.join(dir, name), { force: true });
+        }
+        this.writeRegeneration(regeneration);
+    }
+
+    private writeRegeneration(regeneration: RouteRegenerationContext | null): void {
         if (regeneration === null) {
             return;
         }
@@ -185,8 +203,8 @@ export class RoutePayloadWriter {
 
     /**
      * Task regeneration context. The slice is written to the shared directory (idempotently), while
-     * `beginGeneration` has already placed the previous route and discussion in the generation directory.
-     * After a server restart, generation context is lost and files are read from disk as they are.
+     * the previous route and discussion are already in the generation directory, written by `beginGeneration`
+     * or, after a server restart, `restoreRegeneration`.
      */
     private regenerationFiles(context: RoutePayloadContext): {
         files: string[];
@@ -205,6 +223,7 @@ export class RoutePayloadWriter {
         return {
             files: [interdiffFile, previousRoute, threadsSince].filter((file): file is string => file !== null),
             present: {
+                pushed: context.regeneration?.pushed ?? false,
                 interdiff: interdiffFile !== null,
                 previousRoute: previousRoute !== null,
                 threadsSince: threadsSince !== null,

@@ -30,9 +30,10 @@ export interface ReviewHost {
 
     /**
      * Iteration diff. Without arguments, the host's active iteration. `{base, head}` gives a slice
-     * between 2 listed iterations (interdiff: what changed from `base` to `head`),
-     * with their `diffId` values as arguments. A slice with an unknown iteration or without
-     * `capabilities.iterations` is rejected with a clear error. The slice's file paths are
+     * between two iterations (interdiff: what changed from `base` to `head`), with their
+     * `diffId` as arguments. Either end may be an iteration the host knows but does not
+     * include in `listIterations` (unpublished or dropped from the list). A slice with an iteration absent from the PR,
+     * or without `capabilities.iterations`, is rejected with a clear error. File paths in the slice are
      * a subset of the union of both iterations' paths.
      */
     getDiff(slice?: { base: HostId; head: HostId }): Promise<PrDiff>;
