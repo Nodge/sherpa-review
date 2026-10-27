@@ -13,3 +13,13 @@ export type Locale = z.infer<typeof localeSchema>;
  */
 export const localeSettingSchema = z.enum(['auto', ...localeSchema.options]);
 export type LocaleSetting = z.infer<typeof localeSettingSchema>;
+
+/**
+ * Text in each UI language. Needed when the server supplies a label and only the UI knows
+ * the tab language. The server does not choose a language, and templates cannot inflect labels like "Open in <host>".
+ */
+export const localizedTextSchema = z.object({
+    ru: z.string().min(1),
+    en: z.string().min(1),
+}) satisfies z.ZodType<Record<Locale, string>>;
+export type LocalizedText = z.infer<typeof localizedTextSchema>;

@@ -18,7 +18,7 @@ const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 /** Built once in globalSetup (`src/bundle.global-setup.ts`). Only runs here. */
 const bundlePath = path.join(packageRoot, 'dist', 'sherpa.mjs');
 
-const PR_KEY = 'github-quillmart--quillmart--909';
+const PR_KEY = 'pr-909';
 /** How the CLI names itself in printed commands. Worker processes run the bundle at this path. */
 const TARGET: CommandTarget = { cliPath: bundlePath, prKey: PR_KEY };
 /** Short long-poll window. The bundle loops `next` through frequent `idle` responses, as a real server does every four minutes. */
@@ -43,13 +43,15 @@ describe('worker session scenarios', () => {
         workDir = await fs.mkdtemp(path.join(os.tmpdir(), 'sherpa-scenario-work-'));
         nowMs = Date.now();
         server = await startServer({
+            updateChannel: null,
+            feedbackChannel: null,
             prKey: PR_KEY,
             sherpaDir,
             longPollSeconds: LONG_POLL_SECONDS,
             now: () => new Date(nowMs),
-            // Tests must not call a live review host, and these scenarios do not need route tasks:
+            // Live hosts are forbidden in tests, and these scenarios need no route tasks:
             // without a host, automatic scheduling stays off and the queue contains only what the test enqueues.
-            reviewHostFactory: () => null,
+            hosts: [],
         });
         worker = new FakeWorker({ bundlePath, sherpaDir, prKey: PR_KEY, workDir });
     });

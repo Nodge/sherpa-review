@@ -1,5 +1,5 @@
 import type {
-    UiFeedbackAvailability,
+    UiFeedbackChannel,
     UiFeedbackRequest,
     UiFeedbackResponse,
     UiRoutePhase,
@@ -11,9 +11,6 @@ import type { Translate } from '../i18n/index.js';
 import { useT } from '../i18n/index.js';
 import { useEscapeLayer } from '../shortcuts/context.tsx';
 
-/** Sherpa discussion for questions and conversation when no issue is needed or the channel is unavailable. */
-export const SHERPA_CHAT_URL = 'https://github.com/quillmart/quillmart/discussions';
-
 export interface FeedbackPreviewContext {
     readonly uiVersion: string;
     readonly prKey: string;
@@ -22,30 +19,51 @@ export interface FeedbackPreviewContext {
     readonly worker: WorkerStatus;
 }
 
+type IssuesChannel = Extract<UiFeedbackChannel, { kind: 'issues' }>;
+
 export interface FeedbackButtonProps {
-    readonly availability: UiFeedbackAvailability;
+    readonly channel: UiFeedbackChannel;
     readonly context: FeedbackPreviewContext;
     readonly onSend: (request: UiFeedbackRequest) => Promise<UiFeedbackResponse>;
 }
 
-/** Top bar button and feedback form that preserves text on error. */
-export function FeedbackButton({ availability, context, onSend }: FeedbackButtonProps) {
+/** Top-bar Feedback button. Link channels open externally, issues channels open a form. */
+export function FeedbackButton({ channel, context, onSend }: FeedbackButtonProps) {
+    if (channel.kind === 'link') {
+        return (
+            <a className="ctl ctl--ghost ctl--topbar feedback-button" href={channel.url} target="_blank" rel="noreferrer">
+                Feedback
+            </a>
+        );
+    }
+    return <FeedbackForm channel={channel} context={context} onSend={onSend} />;
+}
+
+interface FeedbackFormProps {
+    readonly channel: IssuesChannel;
+    readonly context: FeedbackPreviewContext;
+    readonly onSend: (request: UiFeedbackRequest) => Promise<UiFeedbackResponse>;
+}
+
+/** Feedback popover form that preserves text on error. */
+function FeedbackForm({ channel, context, onSend }: FeedbackFormProps) {
     const t = useT();
     const [open, setOpen] = useState(false);
     const [text, setText] = useState('');
     const [includeContext, setIncludeContext] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [created, setCreated] = useState<{ key: string; url: string } | null>(null);
+    const [created, setCreated] = useState<{ key: string | null; url: string | null } | null>(null);
     const [serverUnavailable, setServerUnavailable] = useState<string | null>(null);
     const [copyStatus, setCopyStatus] = useState<string | null>(null);
     const wrapperRef = useRef<HTMLDivElement | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
-    const unavailableReason = availability.available ? serverUnavailable : availability.reason;
+    // A channel without an unavailability reason is still unavailable. The form must not offer to send.
+    const unavailableReason = channel.available ? serverUnavailable : (channel.reason ?? t('feedback.unavailable'));
 
-    // An "unavailable" response applies to one attempt. The server retries acquiring the token, so
-    // closing the form enables submission again while keeping the text.
+    // An unavailable response applies to one attempt. The channel checks availability on each submission,
+    // so closing the form restores the send action and preserves the text.
     const close = useCallback((): void => {
         setOpen(false);
         setError(null);
@@ -96,10 +114,6 @@ export function FeedbackButton({ availability, context, onSend }: FeedbackButton
             });
             if (response.outcome === 'unavailable') {
                 setServerUnavailable(response.message ?? t('feedback.unavailable'));
-                return;
-            }
-            if (response.issueKey === null || response.issueUrl === null) {
-                setError(t('feedback.noLink'));
                 return;
             }
             setCreated({ key: response.issueKey, url: response.issueUrl });
@@ -221,21 +235,30 @@ export function FeedbackButton({ availability, context, onSend }: FeedbackButton
                                     {t('feedback.cancel')}
                                 </button>
                             </div>
-                            <p className="feedback-popover__chat">
-                                {t('feedback.chat')}{' '}
-                                <a href={SHERPA_CHAT_URL} target="_blank" rel="noreferrer">
-                                    {t('feedback.chat.link')}
-                                </a>
-                            </p>
+                            {channel.discussionUrl === null ? null : (
+                                <p className="feedback-popover__chat">
+                                    {t('feedback.chat')}{' '}
+                                    <a href={channel.discussionUrl} target="_blank" rel="noreferrer">
+                                        {t('feedback.chat.link')}
+                                    </a>
+                                </p>
+                            )}
                         </form>
                     ) : (
                         <div className="feedback-popover__success" role="status">
                             <div className="feedback-popover__title">{t('feedback.thanks')}</div>
                             <p>
-                                {t('feedback.ticket')}{' '}
-                                <a href={created.url} target="_blank" rel="noreferrer">
-                                    {created.key}
-                                </a>
+                                {t('feedback.ticket')}
+                                {created.url === null ? (
+                                    created.key === null ? null : <> {created.key}</>
+                                ) : (
+                                    <>
+                                        {' '}
+                                        <a href={created.url} target="_blank" rel="noreferrer">
+                                            {created.key ?? created.url}
+                                        </a>
+                                    </>
+                                )}
                                 .
                             </p>
                             <button type="button" className="ctl ctl--primary feedback-popover__primary" onClick={close}>

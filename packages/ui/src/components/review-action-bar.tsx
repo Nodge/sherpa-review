@@ -1,7 +1,6 @@
-import type { DraftBufferEntry, PrDiff, PrMeta, PublishResult, Verdict } from '@sherpa/protocol';
+import type { DraftBufferEntry, PrDiff, PrMeta, PublishResult, UiReviewHost, Verdict } from '@sherpa/protocol';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
-import { draftDestinationOf } from '../app/review-state.js';
 import type { DraftDestination } from '../app/review-state.js';
 import type { DiffViewStore } from '../diff-view/store.js';
 import { Icon } from '../icons/icon.tsx';
@@ -52,7 +51,7 @@ import './review-action-bar.css';
 
 const EMPTY_DRAFT_BUFFER: readonly DraftBufferEntry[] = [];
 
-// The sticky description does not promise revocation by CODEOWNERS zone from docs/design/README.md §5. It publishes a regular
+// The sticky description makes no promise of ownership-zone revocation from docs/design/README.md §5. It publishes regular
 // host sticky ship. There is no zone-specific mechanism.
 
 /**
@@ -83,8 +82,8 @@ export interface ReviewCompletion {
     readonly prId: string;
     readonly headCommit: string;
     readonly hostName: string;
-    /** Adapter name (`uiState.reviewHost`). Local review has its own delivery message. */
-    readonly reviewHost: string;
+    /** Draft destination (`UiReviewHost.drafts`): local review has its own delivery text. */
+    readonly draftDestination: DraftDestination;
     readonly publishedComments: number;
     readonly publishedReplies: number;
     readonly progress: ReviewProgressSummary;
@@ -99,9 +98,10 @@ export interface ReviewActionBarProps {
     readonly diffStore: DiffViewStore;
     readonly threadStore: ThreadStore;
     readonly connection: ConnectionState;
+    /** Host label (`UiReviewHost.label`) for the publishing summary. */
     readonly hostName: string;
-    /** Adapter name: included in the publication result and determines where drafts go. `hostName` is the host label. */
-    readonly reviewHost: string;
+    /** Draft destination (`UiReviewHost.drafts`), which determines counter and publishing consequence text. */
+    readonly draftDestination: DraftDestination;
     readonly route?: RouteProgress | null;
     readonly composerTransport: ComposerTransport;
     /** Thread actions for the comments modal: Resolve, edit and delete published comments. */
@@ -142,7 +142,7 @@ export function reviewActionBarVisible({
     dataReady,
 }: {
     readonly completed: boolean;
-    readonly reviewHost: string | null;
+    readonly reviewHost: UiReviewHost | null;
     readonly pr: PrMeta | null;
     readonly dataReady: boolean;
 }): boolean {
@@ -157,7 +157,7 @@ export function ReviewActionBar({
     threadStore,
     connection,
     hostName,
-    reviewHost,
+    draftDestination: destination,
     route = null,
     composerTransport,
     draftBuffer = EMPTY_DRAFT_BUFFER,
@@ -184,7 +184,6 @@ export function ReviewActionBar({
     const shipModes = shipModesOf(publishVerdicts);
     // One mode (local review, own PR on GitHub) gives a button without a caret or menu.
     const hasShipMenu = shipModes.length > 1;
-    const destination = draftDestinationOf(reviewHost);
     const settings = useUiSettingsStore();
     // Ship mode is global (docs/design/SPEC-elements.md §2.8). An unavailable mode falls back to one the PR supports.
     const shipMode = useUiSettings().shipMode;
@@ -336,7 +335,7 @@ export function ReviewActionBar({
                     prId: pr.id,
                     headCommit: diff.headCommit,
                     hostName,
-                    reviewHost,
+                    draftDestination: destination,
                     publishedComments: publishedIds.length,
                     publishedReplies: countPublishedReplies(currentThreads, publishedIds),
                     progress: reviewProgressSummary(diff.files, diffStore.getSnapshot().readState),
@@ -353,6 +352,7 @@ export function ReviewActionBar({
         [
             diff.files,
             diff.headCommit,
+            destination,
             diffStore,
             disabledReason,
             hostName,
@@ -360,7 +360,6 @@ export function ReviewActionBar({
             onPublish,
             pr.id,
             retryDisabledReason,
-            reviewHost,
             routeCompletion,
             setFailure,
             setMenuOpen,

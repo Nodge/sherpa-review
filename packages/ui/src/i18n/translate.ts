@@ -1,4 +1,4 @@
-import type { Locale, LocaleSetting } from '@sherpa/protocol';
+import type { Locale, LocaleSetting, LocalizedText } from '@sherpa/protocol';
 
 import { en } from './en.js';
 import { formatRelativeSpan, relativeSpan } from './format.js';
@@ -8,8 +8,18 @@ import { ru } from './ru.js';
 /** Key parameters: string entries have none, functions use their own arguments. */
 type MessageArgs<K extends MessageKey> = Dictionary[K] extends (...args: infer A) => string ? A : [];
 
-/** Translation by dictionary key. Extra, missing or mismatched arguments are compile errors. */
-export type Translate = <K extends MessageKey>(key: K, ...args: MessageArgs<K>) => string;
+/**
+ * Translate a dictionary key. Extra, missing or invalid arguments cause a compile error.
+ * `locale` is the dictionary language. It selects the string from the server's `LocalizedText`.
+ */
+export type Translate = (<K extends MessageKey>(key: K, ...args: MessageArgs<K>) => string) & {
+    readonly locale: Locale;
+};
+
+/** Server label in the dictionary language. */
+export function localized(text: LocalizedText, t: Translate): string {
+    return text[t.locale];
+}
 
 /**
  * Language priority: explicit choice in settings → agent hint
@@ -54,10 +64,13 @@ export function createT(locale: Locale): Translate {
         return cached;
     }
     const dictionary: Dictionary = locale === 'ru' ? ru : en;
-    const translate = ((key: MessageKey, ...args: unknown[]): string => {
-        const message = dictionary[key];
-        return typeof message === 'function' ? (message as (...rest: unknown[]) => string)(...args) : message;
-    }) as Translate;
+    const translate = Object.assign(
+        (key: MessageKey, ...args: unknown[]): string => {
+            const message = dictionary[key];
+            return typeof message === 'function' ? (message as (...rest: unknown[]) => string)(...args) : message;
+        },
+        { locale },
+    ) as Translate;
     translators.set(locale, translate);
     return translate;
 }

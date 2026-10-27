@@ -8,6 +8,7 @@ import { TopBar } from '../../components/top-bar.tsx';
 import { UpdateToast } from '../../components/update-toast.tsx';
 import { useT } from '../../i18n/index.js';
 import { breadcrumbFor } from '../../pr-key.js';
+import { GALLERY_FEEDBACK_ISSUES } from './feedback-channels.js';
 
 /**
  * Update toast and version button in the top bar. The data is static.
@@ -17,23 +18,38 @@ import { breadcrumbFor } from '../../pr-key.js';
 const CURRENT = '0.4.0';
 const LATEST = '0.5.0';
 
+/** The server update channel supplies the instructions link. The gallery uses a placeholder. */
+const README_URL = 'https://example.com/sherpa/README.md';
+
 const WHATS_NEW = 'Update toast, shortcuts sheet and English UI. The language comes from the agent.';
 
-const SOURCE_CHECKOUT: UiUpdate = {
+const WITH_COMMAND: UiUpdate = {
     current: CURRENT,
     latest: LATEST,
     releasedAt: '2026-09-01T09:00:00.000Z',
     whatsNew: WHATS_NEW,
     install: {
-        
-        dir: '/Users/x/projects/quillmart',
-        command: "cd '/Users/x/projects/quillmart' && git pull",
+        dir: '/Users/x/tools/sherpa',
+        command: "cd '/Users/x/tools/sherpa' && sherpa-update",
+        readmeUrl: README_URL,
     },
 };
 
 const COPY: UiUpdate = {
-    ...SOURCE_CHECKOUT,
-    install: { kind: 'copy', dir: '/Users/x/tools/sherpa/skill', command: null },
+    ...WITH_COMMAND,
+    install: { dir: '/Users/x/tools/sherpa/skill', command: null, readmeUrl: README_URL },
+};
+
+/** A channel that supplies neither a command nor an instructions link. */
+const COPY_NO_LINK: UiUpdate = {
+    ...WITH_COMMAND,
+    install: { dir: '/Users/x/tools/sherpa/skill', command: null, readmeUrl: null },
+};
+
+/** A channel without an installation directory (npm package) supplies only an instructions link. */
+const LINK_ONLY: UiUpdate = {
+    ...WITH_COMMAND,
+    install: { dir: null, command: null, readmeUrl: README_URL },
 };
 
 const MEDIUM = fixtureIteration('medium');
@@ -60,7 +76,7 @@ function UpdateTopBarState() {
     return (
         <TopBar
             version={CURRENT}
-            update={SOURCE_CHECKOUT}
+            update={WITH_COMMAND}
             onOpenUpdate={() => undefined}
             breadcrumb={breadcrumbFor('fixture-medium', MEDIUM.pr)}
             agent={agentPillView(WORKER, [], t)}
@@ -72,7 +88,7 @@ function UpdateTopBarState() {
             onOpenSearch={() => undefined}
             agentConnected
             onReplayTour={() => undefined}
-            feedback={{ available: true, reason: null }}
+            feedback={GALLERY_FEEDBACK_ISSUES}
             feedbackContext={{
                 uiVersion: CURRENT,
                 prKey: 'fixture-medium',
@@ -90,11 +106,11 @@ function UpdateTopBarState() {
 export const UPDATE_TOAST_STATES: readonly { readonly id: string; readonly title: string; readonly render: () => ReactNode }[] =
     [
         {
-            id: 'update-toast-checkout',
-            title: 'repository checkout',
+            id: 'update-toast-command',
+            title: 'checkout with an update command',
             render: () => (
                 <Framed>
-                    <UpdateToast update={SOURCE_CHECKOUT} onLater={() => undefined} onDismissVersion={() => undefined} />
+                    <UpdateToast update={WITH_COMMAND} onLater={() => undefined} onDismissVersion={() => undefined} />
                 </Framed>
             ),
         },
@@ -113,7 +129,35 @@ export const UPDATE_TOAST_STATES: readonly { readonly id: string; readonly title
             render: () => (
                 <Framed>
                     <UpdateToast
-                        update={SOURCE_CHECKOUT}
+                        update={WITH_COMMAND}
+                        onLater={() => undefined}
+                        onDismissVersion={() => undefined}
+                        howToOpen
+                    />
+                </Framed>
+            ),
+        },
+        {
+            id: 'update-toast-copy-no-link',
+            title: 'copy without an instructions link',
+            render: () => (
+                <Framed>
+                    <UpdateToast
+                        update={COPY_NO_LINK}
+                        onLater={() => undefined}
+                        onDismissVersion={() => undefined}
+                        howToOpen
+                    />
+                </Framed>
+            ),
+        },
+        {
+            id: 'update-toast-link-only',
+            title: 'instructions link only',
+            render: () => (
+                <Framed>
+                    <UpdateToast
+                        update={LINK_ONLY}
                         onLater={() => undefined}
                         onDismissVersion={() => undefined}
                         howToOpen
@@ -127,7 +171,7 @@ export const UPDATE_TOAST_STATES: readonly { readonly id: string; readonly title
             render: () => (
                 <Framed>
                     <UpdateToast
-                        update={SOURCE_CHECKOUT}
+                        update={WITH_COMMAND}
                         onLater={() => undefined}
                         onDismissVersion={() => undefined}
                         noMotion

@@ -30,7 +30,7 @@ import type {
     FeedbackRound,
     FeedbackRoundContext,
     FeedbackThread,
-} from '../select.js';
+} from '../plugin.js';
 
 import { localInterdiff } from './interdiff.js';
 import type { LocalIterationRecord, LocalIterationsStore } from './iterations-store.js';
@@ -41,7 +41,7 @@ import type { LocalComment, LocalReviewData, LocalThread, LocalThreadsStore } fr
 import type { LocalVcs } from './vcs.js';
 
 /**
- * Host adapter for a local git checkout: reviews the project directory working tree against
+ * Host adapter for a local checkout of any VCS: reviews the project directory working tree against
  * a base commit. One iteration is the current tree state. A new one appears when the diff
  * actually changes (`diffId` is its content fingerprint, also used as `headCommit`).
  *
@@ -53,7 +53,7 @@ import type { LocalVcs } from './vcs.js';
  * - comments have no remote host: they live beside the PR state, and `publishBatch`
  *   clears the draft flag, saves the verdict and opens a round. The orchestrator uses it to queue
  *   an agent task (`feedback-orchestrator.ts`).
- * - CODEOWNERS review rules are not reproduced locally: `generated: false`, and the reviewer owns the whole diff.
+ * - host review rules (ownership file) are not reproduced locally: `generated: false`, the reviewer owns the entire diff.
  * - the checkout branch is part of the review key: when it changes, the host fails instead of silently reviewing something else.
  */
 
@@ -618,6 +618,7 @@ export class LocalHost implements ReviewHost, FeedbackHost {
             available: true,
             note: null,
             zones: null,
+            audit: null,
         };
     }
 

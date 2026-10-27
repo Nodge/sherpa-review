@@ -27,8 +27,8 @@ export interface ThreadGroups {
 
 /**
  * The iteration whose diff is currently rendered, when it is not the active PR iteration.
- * `fileId` belongs to an iteration (fixtures use `makeFileId(diffId, path)`, the review host uses `entry_id`
- * from the diff set). Threads arrive once for the active iteration. In a previous iteration, the thread file is found
+ * `fileId` belongs to an iteration (`makeFileId(diffId, path)` in fixtures, an
+ * opaque id on the host), while threads arrive once for the active iteration. In an old iteration, the thread file is found
  * by `anchor.path`, and a thread sits at its lines only in the iteration it is pinned to.
  */
 export interface IterationLayout {
@@ -158,7 +158,7 @@ export function threadHasDraft(thread: Thread): boolean {
 }
 
 /**
- * Per-comment resolution rule: a thread is resolved if it has at least one comment
+ * Per-comment resolution: a thread is resolved if it has at least one comment
  * with issue set and all such comments are resolved. `null` means the host does not track per-comment resolution (`Comment.resolved`
  * is `null` for all comments), so only `Thread.resolved` from the adapter determines the thread state.
  *

@@ -123,7 +123,7 @@ describe('complete', () => {
 describe('discovery manifest', () => {
     it('accepts a valid manifest and rejects an invalid port', () => {
         const manifest = {
-            prKey: 'github-quillmart--quillmart--12345',
+            prKey: 'github-acme--sherpa--12345',
             port: 49152,
             pid: 999,
             token: 'secret',
@@ -482,26 +482,40 @@ describe('iterations and snapshots in the UI contract', () => {
 });
 
 describe('locale, onboarding, update', () => {
-    it('a patch preserves fields that are absent', () => {
-        expect(uiSettingsSchema.parse({ theme: 'light', textSize: 'l' })).toMatchObject({
+    it('extra style is independent of the theme, missing fields in a patch are not reset', () => {
+        expect(uiSettingsSchema.parse({ theme: 'light', style: 'sample', textSize: 'l' })).toMatchObject({
             theme: 'light',
-            
+            style: 'sample',
             textSize: 'l',
         });
-        
-        
+        expect(uiSettingsPatchSchema.parse({ style: 'sample' })).toEqual({ style: 'sample' });
+        expect(uiSettingsPatchSchema.parse({ style: null })).toEqual({ style: null });
         expect(uiSettingsPatchSchema.parse({ theme: 'auto' })).toEqual({ theme: 'auto' });
-        
-        
-        
-        
+        expect(uiSettingsSchema.safeParse({ theme: 'sample-dark' }).success).toBe(false);
+        expect(uiSettingsPatchSchema.safeParse({ theme: 'sample-dark' }).success).toBe(false);
+    });
+
+    it.each(['', 'Sample', '1st', 'a"b', 'a b', '<x>', 'x'.repeat(33), true])(
+        'rejects a style id outside the format: %j',
+        (style) => {
+            expect(uiSettingsSchema.safeParse({ style }).success).toBe(false);
+            expect(uiSettingsPatchSchema.safeParse({ style }).success).toBe(false);
+        },
+    );
+
+    it('discards legacy settings file fields, falls back to the default style', () => {
+        expect(uiSettingsSchema.parse({ theme: 'light', legacyStyleFlag: true })).toMatchObject({
+            theme: 'light',
+            style: null,
+        });
+        expect(uiSettingsSchema.parse({ theme: 'light', legacyStyleFlag: true })).not.toHaveProperty('legacyStyleFlag');
     });
 
     it('settings: new fields get defaults, patches have no defaults and replace fields as a whole', () => {
         expect(uiSettingsSchema.parse({})).toMatchObject({
             locale: 'auto',
             theme: 'auto',
-            
+            style: null,
             textSize: 'm',
             onboarding: { completedAt: null, step: 0 },
             updates: { dismissedVersion: null },
@@ -562,21 +576,24 @@ describe('locale, onboarding, update', () => {
         expect(distributionVersionSchema.safeParse({ ...built, version: '0.5' }).success).toBe(false);
     });
 
-    it('snapshot update: checkout installation has a command, a copy has none', () => {
+    it('update in a snapshot: installation with and without a command, link field is required', () => {
         const update = {
             current: '0.4.0',
             latest: '0.5.0',
             releasedAt: '2026-09-10T10:00:00.000Z',
             whatsNew: 'Onboarding and English UI',
-            
+            install: { dir: '/home/me/src', command: 'sherpa-update', readmeUrl: 'https://example.com/readme' },
         };
         expect(uiUpdateSchema.parse(update)).toEqual(update);
         expect(
-            uiUpdateSchema.safeParse({ ...update, install: { kind: 'copy', dir: '/opt/sherpa', command: null } }).success,
+            uiUpdateSchema.safeParse({ ...update, install: { dir: '/opt/sherpa', command: null, readmeUrl: null } }).success,
         ).toBe(true);
-        expect(uiUpdateSchema.safeParse({ ...update, install: { kind: 'zip', dir: '/opt', command: null } }).success).toBe(
-            false,
-        );
+        expect(uiUpdateSchema.safeParse({ ...update, install: { dir: '/opt', command: null } }).success).toBe(false);
+        // The link becomes the toast href: http(s) only.
+        expect(
+            uiUpdateSchema.safeParse({ ...update, install: { dir: '/opt', command: null, readmeUrl: 'javascript:alert(1)' } })
+                .success,
+        ).toBe(false);
         expect(
             uiDevUpdateAvailableRequestSchema.safeParse({ version: '0.5.0', releasedAt: null, whatsNew: null }).success,
         ).toBe(true);

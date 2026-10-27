@@ -138,6 +138,7 @@ describe('GitHub adapter: ownership lens from CODEOWNERS', () => {
             available: false,
             note: 'This repository has no CODEOWNERS file.',
             zones: null,
+            audit: null,
         });
     });
 

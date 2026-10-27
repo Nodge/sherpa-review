@@ -29,7 +29,7 @@ const BUFFERED: DraftBufferEntry = {
     draft: { body: 'This needs a check for an empty list.', parentId: null, anchor: null },
     commentId: null,
     state: 'failed',
-    error: 'review host: 502 Bad Gateway',
+    error: 'Host: 502 Bad Gateway',
     attempts: 2,
     createdAt: '2026-09-03T11:58:00.000Z',
     updatedAt: '2026-09-03T12:00:00.000Z',
@@ -107,7 +107,7 @@ function BufferedBarState() {
             threadStore={threadStore}
             connection="online"
             hostName="FixtureHost"
-            reviewHost="fixture"
+            draftDestination="pr"
             composerTransport={TRANSPORT}
             draftBuffer={[BUFFERED]}
             onPublish={() => Promise.reject(new Error('gallery does not write to the host'))}

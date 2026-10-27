@@ -368,7 +368,7 @@ An anchor is a range of **changed lines**, not a file: a file may be split acros
   from the \`@@\` header: an anchor off by two lines is a dead anchor.
 - A patch moved out of the pull request file to a separate file is anchored the same way: read
   that file (its path stands where the patch would be) and take the numbers off its gutter. Never
-  take them from \`git diff\` or your own numbering.
+  take them from a VCS diff (\`git diff\` and the like) or your own numbering.
 - \`collapsed: true\` — a display directive "fold this by default": boilerplate, lock files,
   generated code, mechanical renames. The reviewer still sees the fold and its line count.
 

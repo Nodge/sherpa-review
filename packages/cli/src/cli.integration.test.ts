@@ -7,16 +7,18 @@ import { fileURLToPath } from 'node:url';
 import { PROGRESS_TEXT_MAX_CHARS, RESULT_MAX_BYTES } from '@sherpa/protocol';
 import type { SherpaServer } from '@sherpa/server';
 import { selectReviewHost, startServer } from '@sherpa/server';
+import { fixtureHostPlugin, hostPluginOf } from '@sherpa/server/testkit';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CliIo } from './cli.js';
 import { run } from './cli.js';
 import type { CommandTarget } from './format.js';
 import { taskCompleteCommand, workerNextCommand } from './format.js';
+import { gitCliHost } from './hosts/git.js';
 import { localPrKey } from './local.js';
 import { taskResultDirFor, taskResultFileFor, taskResultRootFor } from './paths.js';
 
-const PR_KEY = 'github-quillmart--quillmart--777';
+const PR_KEY = 'pr-777';
 
 /** Built CLI (`src/bundle.global-setup.ts`). Its own `up` spawns it as a daemon. */
 const CLI_BUNDLE = path.resolve(import.meta.dirname, '..', 'dist', 'sherpa.mjs');
@@ -25,7 +27,7 @@ const CLI_BUNDLE = path.resolve(import.meta.dirname, '..', 'dist', 'sherpa.mjs')
 const TEST_ENTRY = fileURLToPath(import.meta.url);
 const TARGET: CommandTarget = { cliPath: TEST_ENTRY, prKey: PR_KEY };
 
-/** A command without the CLI path cannot run outside the skill directory and a checkout. */
+/** A command without a CLI path cannot run outside the skill directory. */
 const BARE_COMMAND = /(^|[^/\w.-])sherpa (up|worker|task)\b/mu;
 
 interface Invocation {
@@ -53,11 +55,20 @@ describe('CLI against server', () => {
     });
 
     async function start(longPollSeconds = 0.2): Promise<SherpaServer> {
-        // Tests must not call a live review host. Without a host, route warm-up makes no network requests,
+        // Live hosts are forbidden in tests. Without a host, route warmup doesn't access the network,
         // and this suite only needs the CLI↔server protocol.
-        server = await startServer({ prKey: PR_KEY, sherpaDir, longPollSeconds, reviewHostFactory: () => null });
+        server = await startServer({ updateChannel: null, feedbackChannel: null, prKey: PR_KEY, sherpaDir, longPollSeconds, hosts: [] });
         return server;
     }
+
+    /** git that recognises the working directory: it is the root, and the branch is `feature`. */
+    const git: NonNullable<CliIo['runCommand']> = (_command, args) =>
+        Promise.resolve({
+            exitCode: 0,
+            stdout: args.includes('--abbrev-ref') ? 'feature\n' : `${workDir}\n`,
+            stderr: '',
+            failure: null,
+        });
 
     async function sherpa(...argv: string[]): Promise<Invocation> {
         return sherpaWithEnv({}, ...argv);
@@ -85,6 +96,7 @@ describe('CLI against server', () => {
         const stderr: string[] = [];
         const io: CliIo = {
             env: { SHERPA_DIR: sherpaDir, SHERPA_PR: PR_KEY, ...overrides.extraEnv },
+            hosts: [gitCliHost],
             out: (text) => stdout.push(text),
             err: (text) => stderr.push(text),
             // There is no server module beside the test file. An already running server doesn't need it.
@@ -168,21 +180,13 @@ describe('CLI against server', () => {
     it('up --local starts a directory review and names the directory in output', async () => {
         const localKey = localPrKey('git', await fs.realpath(workDir), 'feature', 'main~3');
         server = await startServer({
+            updateChannel: null,
+            feedbackChannel: null,
             prKey: localKey,
             sherpaDir,
             longPollSeconds: 0.2,
-            reviewHostFactory: () => null,
+            hosts: [],
         });
-        const git: NonNullable<CliIo['runCommand']> = (_command, args) =>
-            Promise.resolve({
-                exitCode: 0,
-                stdout:
-                    args[0] === 'root'
-                        ? `${workDir}\n`
-                        : JSON.stringify({ branch: 'feature', user_login: 'alice', hash: 'a'.repeat(40) }),
-                stderr: '',
-                failure: null,
-            });
 
         const result = await sherpaWith({ runCommand: git }, 'up', '--local', workDir, '--base', 'main~3');
 
@@ -198,29 +202,26 @@ describe('CLI against server', () => {
     it('up --local passes the instruction to a live server, worker register leaves it alone', async () => {
         const localKey = localPrKey('git', await fs.realpath(workDir), 'feature');
         const calls: (string | null)[] = [];
-        const fixture = selectReviewHost('fixture-small');
+        const fixture = selectReviewHost('fixture-small', {}, [fixtureHostPlugin]);
         if (fixture === null) {
             throw new Error('fixture host was not selected');
         }
         server = await startServer({
+            updateChannel: null,
+            feedbackChannel: null,
             prKey: localKey,
             sherpaDir,
             longPollSeconds: 0.2,
-            reviewHostFactory: () => ({
-                ...fixture,
-                setLocalVerdicts: (instruction) => {
-                    calls.push(instruction);
-                    return true;
-                },
-            }),
+            hosts: [
+                hostPluginOf({
+                    ...fixture,
+                    setLocalVerdicts: (instruction) => {
+                        calls.push(instruction);
+                        return true;
+                    },
+                }),
+            ],
         });
-        const git: NonNullable<CliIo['runCommand']> = (_command, args) =>
-            Promise.resolve({
-                exitCode: 0,
-                stdout: args[0] === 'root' ? `${workDir}\n` : JSON.stringify({ branch: 'feature' }),
-                stderr: '',
-                failure: null,
-            });
 
         const withVerdicts = await sherpaWith(
             { runCommand: git },
@@ -246,14 +247,7 @@ describe('CLI against server', () => {
     // A server without verdict mode simulates a live older build. It drops the field and returns no echo.
     it('up --local --verdicts fails when the server has not applied the mode and promises no verdicts', async () => {
         const localKey = localPrKey('git', await fs.realpath(workDir), 'feature');
-        server = await startServer({ prKey: localKey, sherpaDir, longPollSeconds: 0.2, reviewHostFactory: () => null });
-        const git: NonNullable<CliIo['runCommand']> = (_command, args) =>
-            Promise.resolve({
-                exitCode: 0,
-                stdout: args[0] === 'root' ? `${workDir}\n` : JSON.stringify({ branch: 'feature' }),
-                stderr: '',
-                failure: null,
-            });
+        server = await startServer({ updateChannel: null, feedbackChannel: null, prKey: localKey, sherpaDir, longPollSeconds: 0.2, hosts: [] });
 
         const withVerdicts = await sherpaWith({ runCommand: git }, 'up', '--local', workDir, '--verdicts', 'on ship, merge');
         const without = await sherpaWith({ runCommand: git }, 'up', '--local', workDir);

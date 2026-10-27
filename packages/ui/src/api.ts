@@ -406,7 +406,7 @@ export async function sendFeedback(token: string, request: UiFeedbackRequest): P
 
 /**
  * Forces a new-version check, ignoring the cache TTL. `null` means there is no update.
- * A check that could not reach the review host returns an error instead of "no updates".
+ * A check that cannot reach the update channel returns an error, not "no updates".
  */
 export async function updateCheck(token: string): Promise<UiUpdate | null> {
     return (await post(UI_ENDPOINTS.updateCheck, token, {}, uiUpdateCheckResponseSchema)).update;

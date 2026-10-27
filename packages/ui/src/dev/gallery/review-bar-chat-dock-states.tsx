@@ -79,7 +79,7 @@ function IssueDraftsState() {
             threadStore={threadStore}
             connection="online"
             hostName="FixtureHost"
-            reviewHost="fixture"
+            draftDestination="pr"
             composerTransport={TRANSPORT}
             onPublish={() => Promise.reject(new Error('gallery does not write to the host'))}
             onComplete={() => undefined}
@@ -135,7 +135,7 @@ function DockState({ overlay }: { overlay: boolean }) {
                 threadStore={threadStore}
                 connection="online"
                 hostName="FixtureHost"
-                reviewHost="fixture"
+                draftDestination="pr"
                 composerTransport={TRANSPORT}
                 onPublish={() => Promise.reject(new Error('the gallery does not write to the host'))}
                 onComplete={() => undefined}

@@ -1,34 +1,31 @@
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 
 import type { Locale, ReviewUser } from '@sherpa/protocol';
 import { generateJsonSchemas, UI_ENDPOINTS, uiSettingsSchema } from '@sherpa/protocol';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { SherpaDatabase } from './db.js';
 import { openDatabase } from './db.js';
 import { FeedbackOrchestrator } from './feedback-orchestrator.js';
 import { buildFeedbackPayload } from './feedback-payload.js';
 import { FeedbackStore } from './feedback-store.js';
-
-
-import { memoryIterationsStore } from './hosts/local/iterations-store.js';
-import { LocalHost } from './hosts/local/local-host.js';
-import { memoryThreadsStore } from './hosts/local/threads-store.js';
+import { gitAvailable } from './hosts/local/git-fixture.js';
+import { localGitHostPlugin } from './hosts/local/git-plugin.js';
+import { disposeGitProjectTemplate, GIT_PR_KEY, GitProject } from './hosts/local/git-project.js';
 import type {
     FeedbackHost,
     FeedbackReply,
     FeedbackRound,
     FeedbackRoundContext,
     FeedbackThread,
-} from './hosts/select.js';
+} from './hosts/plugin.js';
 import type { TaskRecord } from './queue.js';
 import { TaskQueue } from './queue.js';
 import type { SherpaServer } from './server.js';
 import type { SettingsStore } from './settings-store.js';
 import { startServer } from './server.js';
-import { makeTempSherpaDir, postJson, removeTempSherpaDir } from './test-support.js';
+import { hostPluginOf, makeTempSherpaDir, postJson, removeTempSherpaDir } from './test-support.js';
 
 /**
  * Local review round orchestration with a fake `FeedbackHost`: task creation,
@@ -517,7 +514,7 @@ describe('round payload', () => {
     });
 
     it('prints instructions with quotes, a backslash and a newline verbatim', () => {
-        const instruction = 'on ship, commit with message "#61: done" in C:\\work\nthen open a PR';
+        const instruction = 'on ship, commit with message "PROJ-61: done" in C:\\work\nthen open a PR';
         const instructions = buildFeedbackPayload({ ...context, verdict: 'ship', instruction }, 'en').instructions;
 
         expect(instructions).toContain(`outcome of this review: "${instruction}". Carry out`);
@@ -533,43 +530,46 @@ describe('round payload', () => {
     });
 });
 
-describe('publishing a local review queues a task for the agent', () => {
-    const PREFIX = 'app';
+// The host uses real `git`: each endpoint spawns several processes, so the test timeout exceeds the default.
+describe.skipIf(!gitAvailable)('publishing a local review enqueues an agent task', { timeout: 30_000 }, () => {
     let sherpaDir: string;
-    let checkout: string;
+    let project: GitProject;
     let server: SherpaServer | null;
 
     beforeEach(async () => {
         sherpaDir = await makeTempSherpaDir();
-        checkout = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sherpa-feedback-')));
+        project = new GitProject('sherpa-feedback-');
         server = null;
     });
 
     afterEach(async () => {
         await server?.close();
-        fs.rmSync(checkout, { recursive: true, force: true });
+        project.cleanup();
         await removeTempSherpaDir(sherpaDir);
     });
 
+    afterAll(() => {
+        disposeGitProjectTemplate();
+    });
+
     it('enqueues a review.feedback task for the new round through the publish endpoint', async () => {
-        const fake = new FakeVcs({ root: checkout, prefix: PREFIX });
-        fake.commit(`${PREFIX}/src/a.ts`, 'const a = 1;\n');
-        fake.writeDisk(`${PREFIX}/src/a.ts`, 'const a = 2;\n');
-        const host = new LocalHost({
-            prKey: 'local-git-app-0badc0de',
-            vcs: scriptedVcs(fake.runner),
-            projectDir: fake.projectDir,
-            base: null,
-            branch: fake.branch,
-            threads: memoryThreadsStore(),
-            iterations: memoryIterationsStore(),
-            pollIntervalMs: 600_000,
-        });
+        project.seedOneFile();
+        const host = project.makeHost();
         server = await startServer({
-            prKey: 'local-git-app-0badc0de',
+            updateChannel: null,
+            feedbackChannel: null,
+            prKey: GIT_PR_KEY,
             sherpaDir,
             longPollSeconds: 0.1,
-            reviewHostFactory: () => ({ name: 'local-git', host, refresh: () => host.refresh(), feedback: host }),
+            hosts: [
+                hostPluginOf({
+                    name: localGitHostPlugin.name,
+                    ui: localGitHostPlugin.ui,
+                    host,
+                    refresh: () => host.refresh(),
+                    feedback: host,
+                }),
+            ],
         });
 
         const diff = await host.getDiff();
@@ -594,11 +594,12 @@ describe('publishing a local review queues a task for the agent', () => {
         await waitUntil(
             () => queue.listTasks().some((task) => task.type === 'review.feedback'),
             'round task',
+            15_000,
         );
         const task = queue.listTasks().find((candidate) => candidate.type === 'review.feedback');
         expect(task?.priority).toBe('interactive');
         const context = fs.readFileSync(task?.contextFiles[0] ?? '', 'utf8');
-        expect(context).toContain(path.join(fake.projectDir, 'src/a.ts'));
+        expect(context).toContain(path.join(project.dir, 'src/a.ts'));
         expect(context).toContain(`## Thread ${comment.id}`);
         expect(context).toContain('extract the constant');
     });

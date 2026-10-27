@@ -7,6 +7,7 @@ import type {
     PrDiff,
     RouteSnapshot,
     Thread,
+    UiReviewHost,
     UiReviewLensesResponse,
     UiReviewProgressResponse,
     UiRoutePhase,
@@ -14,9 +15,9 @@ import type {
     UiSnapshotSummary,
     UiTask,
 } from '@sherpa/protocol';
-import { LOCAL_VCS_KINDS, localHostName } from '@sherpa/protocol';
 
 import type { Translate } from '../i18n/index.js';
+import { localized } from '../i18n/translate.js';
 
 /** A generation or cancellation endpoint failed. The phase is the one when the reviewer clicked. */
 export interface RouteActionFailure {
@@ -153,50 +154,17 @@ export function errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
 }
 
-const LOCAL_HOSTS: readonly string[] = LOCAL_VCS_KINDS.map(localHostName);
-
-/**
- * Local review (`local-git`) in `uiState.reviewHost` has no PR,
- * so the UI uses its own wording for gone iterations, stale routes and comment delivery.
- * The reviewer does not need to know which VCS the checkout uses.
- */
-export function isLocalHost(host: string | null): boolean {
-    return host !== null && LOCAL_HOSTS.includes(host);
+export function hostDisplayName(host: UiReviewHost, t: Translate): string {
+    return localized(host.label, t);
 }
 
-export function hostDisplayName(host: string, t: Translate): string {
-    if (host === 'github') {
-        return t('host.github');
-    }
-    if (isLocalHost(host)) {
-        return t('host.local');
-    }
-    if (host === 'github') {
-        return t('host.github');
-    }
-    return host === 'fixture' ? 'FixtureHost' : host;
+/** Label for the action that opens a file on the host, either host-specific or generic. */
+export function fileWebActionLabel(host: UiReviewHost | null, t: Translate): string {
+    const action = host?.webAction ?? null;
+    return action === null ? t('file.menu.openWeb') : localized(action, t);
 }
 
-/**
- * The file menu item label for opening `blameUrl` names GitHub explicitly.
- * Other hosts (fixtures and local checkouts without a link) use generic wording.
- */
-export function fileWebActionLabel(host: string | null, t: Translate): string {
-    if (host === 'github') {
-        
-    }
-    if (host === 'github') {
-        return t('file.menu.openGithub');
-    }
-    return t('file.menu.openWeb');
-}
-
-/** Where published drafts go: to the hosted PR or into an agent task (local review has no PR). */
-export type DraftDestination = 'pr' | 'agent';
-
-export function draftDestinationOf(reviewHost: string): DraftDestination {
-    return isLocalHost(reviewHost) ? 'agent' : 'pr';
-}
+export type DraftDestination = UiReviewHost['drafts'];
 
 export function emptySnapshots(key: string): SnapshotsState {
     return { key, list: null, loaded: false };

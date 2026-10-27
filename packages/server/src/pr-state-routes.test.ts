@@ -6,8 +6,8 @@ import type { SherpaServer } from './server.js';
 import { startServer } from './server.js';
 import { get, makeTempSherpaDir, patchJson, removeTempSherpaDir } from './test-support.js';
 
-const PR_KEY = 'github-quillmart--quillmart--4242';
-const OTHER_PR_KEY = 'github-quillmart--quillmart--4343';
+const PR_KEY = 'pr-4242';
+const OTHER_PR_KEY = 'pr-4343';
 
 /** Per-PR UI state endpoint: folds and palette history live in this PR's database. */
 describe('UI state endpoint for this PR', () => {
@@ -29,11 +29,12 @@ describe('UI state endpoint for this PR', () => {
     /** No review host on purpose: UI state must also work on a server without one. */
     async function start(prKey = PR_KEY): Promise<SherpaServer> {
         const server = await startServer({
+            updateChannel: null,
+            feedbackChannel: null,
             prKey,
             sherpaDir,
             longPollSeconds: 0.3,
-            reviewHostFactory: () => null,
-            feedback: { env: {} },
+            hosts: [],
         });
         servers.push(server);
         return server;

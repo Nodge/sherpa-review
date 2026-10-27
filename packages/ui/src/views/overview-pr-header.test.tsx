@@ -69,9 +69,27 @@ describe('PR header in Overview', () => {
             throw new Error('medium fixture has no pci lens');
         }
 
-        expect(render()).toContain('pr-header__pci-tag');
-        expect(render({ extraLenses: [{ ...pci, paths: [] }] })).not.toContain('pr-header__pci-tag');
-        expect(render({ extraLenses: [{ ...pci, available: false }] })).not.toContain('pr-header__pci-tag');
+        expect(render()).toContain('pr-header__audit-tag');
+        expect(render({ extraLenses: [{ ...pci, paths: [] }] })).not.toContain('pr-header__audit-tag');
+        expect(render({ extraLenses: [{ ...pci, available: false }] })).not.toContain('pr-header__audit-tag');
+        expect(render({ extraLenses: [{ ...pci, audit: null }] })).not.toContain('pr-header__audit-tag');
+    });
+
+    it('uses the lens description name in the UI language for the audit scope marker', () => {
+        const pci = DATA.extraLenses.find((lens) => lens.audit !== null);
+        if (pci === undefined) {
+            throw new Error('medium fixture has no audit lens');
+        }
+        const sox: Lens = {
+            ...pci,
+            id: 'sox',
+            audit: { name: { en: 'SOX', ru: 'SOX-audit' }, short: { en: 'SOX', ru: 'SOX' }, tag: 'sox' },
+        };
+
+        const html = render({ extraLenses: [sox] });
+
+        expect(html).toContain('<span class="pr-header__audit-tag">SOX</span>');
+        expect(html).not.toContain('PCI DSS');
     });
 
     it('author row: login, relative time, branches and check status', () => {

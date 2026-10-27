@@ -29,10 +29,6 @@ export const ru = {
     'app.noToken.hint': 'http://127.0.0.1:<порт>/#t=<токен>',
     'app.closeChat': 'Закрыть чат',
 
-    
-    'host.local': 'локальный чекаут',
-    'host.github': 'GitHub',
-
     'command.hint': 'Запусти в любом харнесе — сессия станет воркером.',
     'command.copy': 'Скопировать',
     'command.copied': 'Скопировано',
@@ -46,7 +42,6 @@ export const ru = {
     'settings.kicker': 'НАСТРОЙКИ',
     'settings.auto': 'Авто',
     'settings.theme': 'Тема',
-    
     'settings.theme.dark': 'Тёмная',
     'settings.theme.light': 'Светлая',
     'settings.language': 'Язык',
@@ -549,7 +544,6 @@ export const ru = {
     'image.failed': (reason: string) => `не загрузилось: ${reason}`,
     'image.retry': 'Повторить',
     'image.tooLarge': (size: string) => `слишком большая: ${size}`,
-    'image.openAtHost': 'Открыть на сервере',
     'image.alt.before': (path: string) => `${path} — было`,
     'image.alt.after': (path: string) => `${path} — стало`,
     'image.swipe.aria': 'Разделитель сравнения',
@@ -597,11 +591,10 @@ export const ru = {
 
     'lens.all': 'Все файлы',
     'lens.mine': (source: string | null) => (source === null ? 'Мои файлы' : `Мои файлы · ${source}`),
-    'lens.pci': 'Файлы PCI DSS',
+    'lens.audit': (name: string) => `Файлы ${name}`,
     'lens.generated': 'Сгенерированные',
     'lens.all.short': 'Все',
     'lens.mine.short': 'Мои',
-    'lens.pci.short': 'PCI',
     'lens.generated.short': 'Машинные',
     'lens.mine.empty': 'в этом PR нет ваших файлов',
     'lens.zeroResult': (label: string) => `В этом PR нет файлов фильтра «${label}».`,
@@ -651,13 +644,14 @@ export const ru = {
     'audit.scope.more': (listed: string, rest: number) => `Скоуп: ${listed} и ещё ${num(rest)}. `,
     'audit.line': (files: number, changed: number, total: number) =>
         `${form(files, 'Показан', 'Показаны', 'Показаны')} только ${num(files)} ${form(files, 'файл', 'файла', 'файлов')} аудит-скоупа — ${num(changed)} из ${num(total)} ${form(total, 'изменённой строки', 'изменённых строк', 'изменённых строк')}. Остальное скрыто, не удалено.`,
-    'audit.note': 'Изменения здесь требуют аудиторского сайнофа — без него шип не засчитан.',
+    'audit.note': 'Изменения здесь требуют подписи аудитора.',
     'audit.dismiss': 'Скрыть баннер аудит-скоупа',
     'audit.dismiss.title': 'Скрыть баннер; фильтр останется включённым',
 
     'pr.files': (files: number) => `${num(files)} ${form(files, 'файл', 'файла', 'файлов')}`,
-    'pr.pci.title': 'Показать только файлы аудит-скоупа PCI DSS',
-    'pr.pci.label': (files: number) => `PCI DSS · ${num(files)} ${form(files, 'файл', 'файла', 'файлов')}`,
+    'pr.audit.title': (name: string) => `Показать только файлы аудит-скоупа ${name}`,
+    'pr.audit.label': (name: string, files: number) =>
+        `${name} · ${num(files)} ${form(files, 'файл', 'файла', 'файлов')}`,
     'pr.checks.passed': 'проверки пройдены',
     'pr.checks.failed': 'проверки провалены',
     'pr.checks.pending': 'проверки идут',
@@ -691,14 +685,13 @@ export const ru = {
     'feedback.copy.disabled': 'Сначала напиши текст фидбека.',
     'feedback.cancel': 'Отмена',
     'feedback.thanks': 'Спасибо за фидбек',
-    'feedback.ticket': 'Создан тикет',
+    'feedback.ticket': 'Создана задача',
     'feedback.close': 'Закрыть',
     'feedback.context.aria': 'Контекст фидбека',
     'feedback.context.none': 'Контекст не будет приложен.',
     'feedback.unavailable': 'Канал фидбека сейчас недоступен.',
     'feedback.chat': 'Спросить или обсудить можно в',
     'feedback.chat.link': 'чате Шерпы',
-    'feedback.noLink': 'Сервер создал тикет, но не вернул ссылку. Текст сохранён, повтори отправку.',
     'feedback.copied': 'Текст скопирован.',
     'feedback.copyFailed': 'Не удалось скопировать автоматически. Текст выделен.',
     'feedback.worker.none': 'Воркер: не зарегистрирован',
@@ -807,8 +800,6 @@ export const ru = {
     'file.menu.copyPath': 'Скопировать путь',
     'file.menu.copyLink': 'Скопировать ссылку на файл',
     'file.menu.copyLinkUnavailable': 'у этого файла нет веб-ссылки',
-    
-    'file.menu.openGithub': 'Открыть на GitHub',
     'file.menu.openWeb': 'Открыть в вебе',
     'file.menu.commentFile': 'Комментарий к файлу',
     'file.menu.markViewed': 'Просмотрено',
@@ -964,7 +955,7 @@ export const ru = {
     'ship.drafts.pinned': (drafts: number) =>
         `· ${num(drafts)} ${form(drafts, 'закреплён', 'закреплены', 'закреплены')} за прошлыми коммитами`,
     'ship.publishing': 'Публикуется…',
-    // `issue` is the review host's term and stays unchanged in Russian, just like the `draft` chip.
+    // `issue` is a host term. It stays unchanged in Russian text, as does the `draft` chip.
     'ship.drafts.issues': (drafts: number) => `· ${num(drafts)} ${form(drafts, 'issue', 'issues', 'issues')}`,
     'ship.drafts.buffered': (drafts: number) =>
         `· ${num(drafts)} ${form(drafts, 'ещё не отправлен', 'ещё не отправлены', 'ещё не отправлены')}`,
@@ -1035,7 +1026,7 @@ export const ru = {
     'shortcut.route.regenerate': 'Перегенерировать маршрут',
     'shortcut.route.generate.consequence': 'сбросит отметки остановок, когда новый маршрут приедет',
     'shortcut.update.check': 'Проверить обновления',
-    'shortcut.update.check.consequence': 'проверит наличие нового релиза',
+    'shortcut.update.check.consequence': 'проверит новый релиз',
     'shortcut.locale.ru': 'Язык интерфейса: русский',
     'shortcut.locale.en': 'Язык интерфейса: английский',
     'shortcut.locale.auto': 'Язык: авто (от агента или браузера)',

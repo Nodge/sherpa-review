@@ -4,30 +4,22 @@ import type { DistributionVersion, UiUpdate, UiUpdateInstall } from '@sherpa/pro
 import { distributionVersionSchema } from '@sherpa/protocol';
 
 import { describeFetchError } from './errors.js';
-
-
-
 import { updateCheckPathFor } from './paths.js';
 import type { SettingsStore } from './settings-store.js';
+import type { UpdateChannel } from './update-channel.js';
 import { SERVER_VERSION } from './version.js';
 
 /**
- * Check for a newer version in main. Notification only. Sherpa does not
- * it downloads or installs nothing, and reports new versions with an update command.
+ * Checks for a new version through the build update channel. Notification only: Sherpa does not
+ * download or install anything. It reports a release and tells you how to update.
  */
 
-/** Distribution path: used to build the `version.json` URL and checkout path suffix. */
-export const DISTRIBUTION_PATH = 'tools/sherpa';
-
-/** Cache freshness duration: server restarts must not hammer the API. */
+/** How long the cache stays fresh: server restarts must not hammer the channel. */
 const CACHE_TTL_MS = 30 * 60 * 1000;
 
 const REQUEST_TIMEOUT_MS = 5000;
 
-
-const SOURCE_CHECKOUT_TAIL = `/${DISTRIBUTION_PATH}/skill`;
-
-/** Placeholder version for a non-release build: comparing it with main makes no sense. */
+/** Placeholder version for a non-release build: comparing it with a published version makes no sense. */
 const DEV_VERSION = '0.0.0';
 
 export interface UpdateCheckOptions {
@@ -38,20 +30,21 @@ export interface UpdateCheckOptions {
     readonly now?: () => Date;
     /** Result cache file. Defaults to `<sherpaDir>/update-check.json`. */
     readonly cacheFile?: string;
-    /** Distribution path in main. Defaults to `tools/sherpa`. */
-    readonly distributionPath?: string;
-    
-    readonly token?: TokenSource;
     /** Embedded server version. Overridden only in tests, where `SERVER_VERSION` is zero. */
     readonly currentVersion?: string;
 }
 
 export interface UpdateCheckerOptions extends UpdateCheckOptions {
+    /** Build channel. null disables checks entirely, and `get()` always returns null. */
+    readonly channel: UpdateChannel | null;
     /** State root used to derive the cache path when `cacheFile` is not set. */
     readonly sherpaDir: string;
     /** Reads the dismissed version when assembling the snapshot, because settings live on disk. */
     readonly settings: SettingsStore;
-    /** `false` disables checks entirely (fixture host): a dev endpoint supplies the state. */
+    /**
+     * `false` means no network requests (host with `disablesUpdateCheck`): the dev endpoint supplies the version,
+     * and the channel supplies the update hint.
+     */
     readonly enabled?: boolean;
 }
 
@@ -66,17 +59,19 @@ export interface UpdateForceResult {
 }
 
 type LoadResult =
-    | { readonly ok: true; readonly latest: DistributionVersion }
+    | { readonly ok: true; readonly latest: DistributionVersion | null }
     | { readonly ok: false; readonly reason: string };
 
-/** Cache file contents. `latest: null` means a check ran and failed. */
+/** Cache file contents. `latest: null` means the check failed or the channel does not know the version. */
 interface UpdateCheckCache {
+    /** `UpdateChannel.id`: a record from another channel (or without a channel) counts as a missing cache. */
+    readonly channel: string;
     readonly checkedAt: string;
     readonly latest: DistributionVersion | null;
 }
 
 /**
- * Reads the distribution's `skill/version.json` from main and keeps the result for the UI snapshot.
+ * Asks the channel for the latest version and holds the result for the UI snapshot.
  * `get()` is synchronous for the same reason as in `PrMetaCache`: snapshots are assembled in a timer
  * and a microtask, where a network call has no place.
  *
@@ -88,13 +83,13 @@ export class UpdateChecker {
     private readonly fetchImpl: typeof fetch;
     private readonly now: () => Date;
     private readonly cacheFile: string;
-    private readonly distributionPath: string;
-    private readonly token: TokenSource;
     private readonly currentVersion: string;
-    private readonly install: UiUpdateInstall;
+    private readonly channel: UpdateChannel | null;
+    /** Channel hint. null means no channel. */
+    private readonly install: UiUpdateInstall | null;
     private readonly enabled: boolean;
     private readonly listeners = new Set<() => void>();
-    /** Last known distribution version in main. null means no check ran or it failed. */
+    /** Latest known published version. null means unknown, not checked or a failed check. */
     private latest: DistributionVersion | null = null;
     private closed = false;
     /** Last issued check number, increasing in request start order. */
@@ -107,17 +102,16 @@ export class UpdateChecker {
         this.fetchImpl = options.fetch ?? ((input, init) => globalThis.fetch(input, init));
         this.now = options.now ?? (() => new Date());
         this.cacheFile = options.cacheFile ?? updateCheckPathFor(options.sherpaDir);
-        this.distributionPath = options.distributionPath ?? DISTRIBUTION_PATH;
-        this.token = options.token ?? (() => resolveHostToken());
         this.currentVersion = options.currentVersion ?? SERVER_VERSION;
-        this.install = classifyInstall(options.installDir);
+        this.channel = options.channel;
+        this.install = options.channel?.install(options.installDir ?? null) ?? null;
         this.enabled = options.enabled ?? true;
     }
 
     /** Synchronous source for `buildState`. */
     get(): UiUpdate | null {
         const latest = this.latest;
-        if (latest === null || compareVersions(latest.version, this.currentVersion) <= 0) {
+        if (this.install === null || latest === null || compareVersions(latest.version, this.currentVersion) <= 0) {
             return null;
         }
         if (this.settings.read().updates.dismissedVersion === latest.version) {
@@ -140,22 +134,24 @@ export class UpdateChecker {
     }
 
     /**
-     * First check after `listen`: reads a fresh cache from disk, or requests
-     * main if the cache expired. Server startup does not wait for it.
+     * First check after `listen`: reads a fresh cache from disk, asks the channel if the cache
+     * is stale. Server startup does not wait for it.
      */
     start(): void {
-        if (!this.checkable()) {
+        const channel = this.checkable();
+        if (channel === null) {
             return;
         }
-        void this.check(false);
+        void this.check(channel, false);
     }
 
     /**
-     * Recheck from a palette command, ignoring TTL. Disabled checks (fixture,
-     * dev build) return existing state without network calls.
+     * Recheck from a command palette action: ignores TTL. A disabled check (no channel,
+     * host without checks, dev build) returns the current value without network requests.
      */
     async force(): Promise<UpdateForceResult> {
-        const failure = this.checkable() ? await this.check(true) : null;
+        const channel = this.checkable();
+        const failure = channel === null ? null : await this.check(channel, true);
         return { update: this.get(), failure };
     }
 
@@ -182,39 +178,40 @@ export class UpdateChecker {
         this.listeners.clear();
     }
 
-    /** Whether a network call makes sense: fixtures and dev builds must not compare themselves with main. */
-    private checkable(): boolean {
-        return this.enabled && !this.closed && this.currentVersion !== DEV_VERSION;
+    /** Channel when network requests make sense. null for no channel, a host without checks or a dev build. */
+    private checkable(): UpdateChannel | null {
+        return this.enabled && !this.closed && this.currentVersion !== DEV_VERSION ? this.channel : null;
     }
 
     /** Returns the failure reason or null. The caller needs this only for `force()`. */
-    private async check(force: boolean): Promise<string | null> {
+    private async check(channel: UpdateChannel, force: boolean): Promise<string | null> {
         // Checks finish out of start order: a request from `start()` can easily outlive
         // a forced command palette check, and its timeout would overwrite the fresh result.
         const generation = ++this.started;
-        const cached = force ? null : this.readCache();
+        const cached = force ? null : this.readCache(channel.id);
         if (cached !== null) {
             this.applied = generation;
             this.apply(cached.latest);
             return null;
         }
 
-        const loaded = await this.load();
+        const loaded = await this.load(channel);
         const failure = loaded.ok ? null : loaded.reason;
         if (this.closed || generation < this.applied) {
             return failure;
         }
         this.applied = generation;
         if (this.apply(loaded.ok ? loaded.latest : null)) {
-            this.writeCache({ checkedAt: this.now().toISOString(), latest: this.latest });
+            this.writeCache({ channel: channel.id, checkedAt: this.now().toISOString(), latest: this.latest });
         }
         return failure;
     }
 
     /**
-     * Puts the check result in state. A failure (`null`) does not erase a known version:
-     * a failed recheck must not hide the toast or top bar dot, or reach
-     * the cache that restarted servers would read for the next half hour. `false` means nothing to write.
+     * Stores the check result in state. A failure or "channel does not know the version" (`null`) preserves
+     * an already known version: a failed recheck must not remove the toast and the top bar dot
+     * or enter the cache, which restarts would read for the next half hour.
+     * `false` means there is nothing to write.
      */
     private apply(latest: DistributionVersion | null): boolean {
         if (latest === null && this.latest !== null) {
@@ -226,19 +223,13 @@ export class UpdateChecker {
     }
 
     /** The failure reason is already in stderr. Only a forced command palette check returns it to the caller. */
-    private async load(): Promise<LoadResult> {
-        
+    private async load(channel: UpdateChannel): Promise<LoadResult> {
         try {
-            const token = await this.token();
-            const response = await this.fetchImpl(url, {
-                headers: { authorization: `Bearer ${token}` },
+            const latest = await channel.latest({
+                fetch: this.fetchImpl,
                 signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
             });
-            if (!response.ok) {
-                throw new Error(`response ${String(response.status)}`);
-            }
-            
-            return { ok: true, latest: distributionVersionSchema.parse(await response.json()) };
+            return { ok: true, latest };
         } catch (error) {
             const reason = describeFetchError(error);
             process.stderr.write(`sherpa-server: update check failed: ${reason}\n`);
@@ -246,8 +237,8 @@ export class UpdateChecker {
         }
     }
 
-    /** `null` means the cache is absent, invalid or expired: a request is needed. */
-    private readCache(): UpdateCheckCache | null {
+    /** `null` means the cache is missing, corrupt, stale or from another channel: a request is needed. */
+    private readCache(channelId: string): UpdateCheckCache | null {
         let raw: string;
         try {
             raw = fs.readFileSync(this.cacheFile, 'utf8');
@@ -262,7 +253,7 @@ export class UpdateChecker {
             return null;
         }
         const cache = parseCache(parsed);
-        if (cache === null) {
+        if (cache?.channel !== channelId) {
             return null;
         }
         const checkedAt = Date.parse(cache.checkedAt);
@@ -291,29 +282,6 @@ export class UpdateChecker {
     }
 }
 
-/**
- * Where the distribution was installed from. A path ending in `/tools/sherpa/skill` is a checkout,
- * updated with `git pull` at the repository root. Anything else is a directory copy without a command.
- */
-export function classifyInstall(installDir?: string): UiUpdateInstall {
-    if (installDir === undefined) {
-        return { kind: 'copy', dir: process.cwd(), command: null };
-    }
-
-    const normalized = installDir.replaceAll('\\', '/').replace(/\/+$/u, '');
-    if (normalized.endsWith(SOURCE_CHECKOUT_TAIL)) {
-        const root = normalized.slice(0, normalized.length - SOURCE_CHECKOUT_TAIL.length);
-        const dir = root === '' ? '/' : root;
-        
-    }
-    return { kind: 'copy', dir: installDir, command: null };
-}
-
-/** The command is copied into a terminal: an unquoted path with a space would become two arguments. */
-function shellQuote(value: string): string {
-    return `'${value.replaceAll("'", String.raw`'\''`)}'`;
-}
-
 /** `>0` means `a` is newer than `b`. There are no prereleases, so comparing 3 numbers is enough. */
 export function compareVersions(a: string, b: string): number {
     const left = parseTriple(a);
@@ -335,14 +303,14 @@ function parseCache(payload: unknown): UpdateCheckCache | null {
     if (typeof payload !== 'object' || payload === null) {
         return null;
     }
-    const { checkedAt, latest } = payload as { checkedAt?: unknown; latest?: unknown };
-    if (typeof checkedAt !== 'string' || Number.isNaN(Date.parse(checkedAt))) {
+    const { channel, checkedAt, latest } = payload as { channel?: unknown; checkedAt?: unknown; latest?: unknown };
+    if (typeof channel !== 'string' || typeof checkedAt !== 'string' || Number.isNaN(Date.parse(checkedAt))) {
         return null;
     }
     if (latest === null) {
-        return { checkedAt, latest: null };
+        return { channel, checkedAt, latest: null };
     }
     const parsed = distributionVersionSchema.safeParse(latest);
-    return parsed.success ? { checkedAt, latest: parsed.data } : null;
+    return parsed.success ? { channel, checkedAt, latest: parsed.data } : null;
 }
 

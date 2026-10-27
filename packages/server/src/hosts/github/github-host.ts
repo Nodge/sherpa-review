@@ -1769,6 +1769,7 @@ function mineLens(paths: readonly string[], note: string | null, zones: readonly
         available: paths.length > 0,
         note,
         zones: zones === null ? null : zones.map((zone) => ({ ...zone, paths: [...zone.paths] })),
+        audit: null,
     };
 }
 

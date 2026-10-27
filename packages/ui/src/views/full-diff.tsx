@@ -45,8 +45,7 @@ import {
     ALL_FILTER_ID,
     buildFileFilters,
     filterFiles,
-    findFilter,
-    PCI_FILTER_ID,
+    findAuditFilter,
     selectFilter,
     zeroResultText,
 } from '../filters/lens-filters.js';
@@ -330,7 +329,7 @@ export function FullDiffView({
 const SKELETON_DELAY_MS = PENDING_DELAY_MS;
 
 /**
- * The host calculates the slice (2.8–3.7 s on the review host), so text explains the wait. The host
+ * The host computes the slice, which can take seconds, so words explain the wait. The host
  * is unnamed here: the UI does not distinguish hosts, and the name only lives in App state.
  */
 const SLICE_LOADING_NOTE: MessageKey = 'fullDiff.slice.loading';
@@ -358,9 +357,9 @@ function StatusFrame({
                 <PrHeader
                     pr={pr}
                     counts={counts}
-                    pci={null}
-                    pciActive={false}
-                    onTogglePci={NO_PCI_TOGGLE}
+                    audit={null}
+                    auditActive={false}
+                    onToggleAudit={NO_AUDIT_TOGGLE}
                     aside={headerAside}
                 />
             )}
@@ -386,8 +385,8 @@ export function EmptyPrNotice() {
     );
 }
 
-/** No PCI chip in the status frame, since lenses have not loaded yet. */
-const NO_PCI_TOGGLE = (): void => undefined;
+/** The status frame has no audit chip: lenses are not ready yet. */
+const NO_AUDIT_TOGGLE = (): void => undefined;
 
 function ActiveIterationAction({ onActiveIteration }: { onActiveIteration: () => void }) {
     const t = useT();
@@ -935,10 +934,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         };
     }, [advanceFrom, shown, store]);
 
-    const pci = findFilter(filters, PCI_FILTER_ID);
-    // The reference must stay stable because rebuilding the tree depends on it.
-    const emptyIds = useMemo(() => new Set<string>(), []);
-    const pciFileIds = pci?.fileIds ?? emptyIds;
+    const audit = findAuditFilter(filters);
     const mineFileIds = useMemo(() => {
         const { ownership } = lenses;
         if (ownership?.available !== true) {
@@ -1469,10 +1465,12 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                 ref={setScrollMarginElement}
                 pr={pr}
                 counts={prHeaderCounts(diff)}
-                pci={pci?.available === true ? pci : null}
-                pciActive={filter.id === PCI_FILTER_ID}
-                onTogglePci={() => {
-                    changeFilter(filter.id === PCI_FILTER_ID ? ALL_FILTER_ID : PCI_FILTER_ID);
+                audit={audit?.available === true ? audit : null}
+                auditActive={audit !== null && filter.id === audit.id}
+                onToggleAudit={() => {
+                    if (audit !== null) {
+                        changeFilter(filter.id === audit.id ? ALL_FILTER_ID : audit.id);
+                    }
                 }}
                 {...(props.headerAside === undefined ? {} : { aside: props.headerAside })}
             />
@@ -1502,7 +1500,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                     filters={filters}
                     activeFilter={filter}
                     onFilter={changeFilter}
-                    pciFileIds={pciFileIds}
+                    auditFilter={audit}
                     mineFileIds={mineFileIds}
                     readState={snapshot.readState}
                     route={routeMargin}

@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { GALLERY_HOSTS } from '@sherpa/fixtures';
+import type { UiReviewHost } from '@sherpa/protocol';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -46,7 +48,7 @@ function mount(
     file: FileMenuTarget = FILE,
     viewed = false,
     onCommentFile?: () => void,
-    reviewHost: string | null = 'github',
+    reviewHost: UiReviewHost | null = GALLERY_HOSTS.github,
 ): Mounted {
     const host = document.createElement('div');
     document.body.append(host);
@@ -373,11 +375,19 @@ describe('file context menu', () => {
 
 describe('label for opening the file on the web', () => {
     it('says "Open on GitHub" for GitHub', () => {
-        const { trigger } = mount(FILE, false, undefined, 'github');
+        const { trigger } = mount(FILE, false, undefined, GALLERY_HOSTS.github);
         act(() => {
             trigger.click();
         });
         expect(items().map((item) => item.textContent)).toContain('Open on GitHub');
+    });
+
+    it('uses generic wording for a host without its own label', () => {
+        const { trigger } = mount(FILE, false, undefined, GALLERY_HOSTS.fixture);
+        act(() => {
+            trigger.click();
+        });
+        expect(items().map((item) => item.textContent)).toContain('Open on the web');
     });
 
     it('uses generic wording without a host', () => {

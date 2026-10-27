@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fixtureIteration } from '@sherpa/fixtures';
+import { fixtureIteration, PCI_AUDIT } from '@sherpa/fixtures';
 import type { Lens } from '@sherpa/protocol';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -22,6 +22,7 @@ const EMPTY_PCI: Lens = {
     available: true,
     note: null,
     zones: null,
+    audit: PCI_AUDIT,
 };
 const FILTERS = buildFileFilters({ files: FILES, ownership: EDGE.ownership, extra: [EMPTY_PCI], t, zoneSource: 'CODEOWNERS' });
 const ACTIVE = selectFilter(FILTERS, 'all');

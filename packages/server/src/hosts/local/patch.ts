@@ -1,12 +1,12 @@
 /**
- * Patch for a file `git diff` does not show. Untracked files are absent from the working-tree
+ * Patch for a file absent from the VCS diff. Untracked files do not appear in the working-tree
  * diff, but the reviewer needs them too, so the adapter writes a full-file addition patch itself.
  */
 
 /** How many content bytes to check for a null byte: binary data is detectable at the start of the file. */
 const BINARY_PROBE_BYTES = 8 * 1024;
 
-/** Binary file markers in a `git` patch. */
+/** Binary file markers in the VCS patch. */
 const BINARY_PATCH_MARKER = /^(?:Binary files |GIT binary patch)/mu;
 
 export function isBinaryContent(content: Uint8Array): boolean {
@@ -19,7 +19,7 @@ export function isBinaryContent(content: Uint8Array): boolean {
     return false;
 }
 
-/** A `git` patch for a binary file contains no text to display. */
+/** A VCS patch for a binary file has no text to display. */
 export function isBinaryPatch(patch: string): boolean {
     return BINARY_PATCH_MARKER.test(patch);
 }

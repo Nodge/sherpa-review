@@ -1,6 +1,6 @@
 # Structural/semantic diff: difftastic and alternatives
 
-> Research dated 2026-08-18. Facts come from difftastic source (`src/display/json.rs`, `src/options.rs`), issues and discussions. No hands-on measurements (the binary is not installed). Two intended uses: (A) input for the AI agent when building a route, (B) a display for the reviewer in the full diff.
+> Research dated 2026-08-18. Facts come from difftastic source (`src/display/json.rs`, `src/options.rs`), repository issues and discussions. No hands-on measurements (the binary is not installed). Two target uses: (A) input for the AI agent building a route, (B) presentation for a person in the full diff.
 
 ## Brief conclusion
 
@@ -34,7 +34,7 @@ Gotchas: `highlight` is a highlighting class, not AST. JSON loses the NovelWord/
 
 ## 3. Performance and trust
 
-Limits: `DFT_BYTE_LIMIT` 1 MB, `DFT_GRAPH_LIMIT` 3M vertices, `DFT_PARSE_ERROR_LIMIT` **0**. Exceeding any of them triggers a **silent fallback to a line-by-line diff** (indicated only in `language`). Actual figures from issues: pnpm-lock 13 s/9 GiB (fixed later), a 500 KB jest snapshot >70 s, composer.lock consumes 64 GB (#373 open since 2022). The author says >100 MiB RAM is normal for ordinary programs. In one user's C project, 88 of 90 fragments fell back to a text diff (preprocessor + error limit of 0).
+Limits: `DFT_BYTE_LIMIT` 1 MB, `DFT_GRAPH_LIMIT` 3M vertices, `DFT_PARSE_ERROR_LIMIT` **0**. Exceeding any of them causes a **silent fallback to a line diff**, marked only in `language`. Actual figures from issues: pnpm-lock 13 s/9 GiB (later fixed), a 500 KB jest snapshot >70 s, composer.lock consumes 64 GB (#373 open since 2022). The author says >100 MiB RAM on ordinary programs is normal. In one user's C project, 88 of 90 fragments fell back to text diff (preprocessor + error limit 0).
 
 **Three things that break trust:**
 1. Silent fallback (see above). Consumers must check `language` for the `Text (` prefix.

@@ -86,7 +86,7 @@ function row(): HTMLElement {
     return line;
 }
 
-describe('pointer monitor', () => {
+describe('pointer tracking', () => {
     it('has no pointer target before the first mouse movement', () => {
         const h = harness();
         h.under = row();
@@ -200,7 +200,7 @@ describe('pointer monitor', () => {
         card.remove();
     });
 
-    it('removing the pointer monitor unsubscribes all listeners', () => {
+    it('dispose removes all listeners', () => {
         const h = harness();
         expect(h.listenerCount()).toBe(5);
 

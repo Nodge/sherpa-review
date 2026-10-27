@@ -17,8 +17,8 @@ import type { UpdateChecker } from './update-check.js';
  * Server dev endpoints (`UI_DEV_ENDPOINTS`) provide an operation no real host can offer:
  * a "push" to a fixture PR. It makes the second pass visible both manually and in e2e.
  *
- * Registered only when a fixture host is selected (`hosts/select.ts` provides `advanceIteration`).
- * These endpoints do not exist at all for a non-fixture prKey, rather than existing and refusing requests.
+ * Registered only when the fixture host is selected (`hosts/fixture/plugin.ts` provides `advanceIteration`).
+ * These routes do not exist at all for other hosts' prKey values, rather than existing and rejecting requests.
  * Authentication uses the same bearer token as UI endpoints. Dev endpoints have no separate mode.
  */
 

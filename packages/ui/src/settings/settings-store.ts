@@ -23,7 +23,7 @@ const SETTINGS_FIELDS = [
     'composerLayout',
     'locale',
     'theme',
-    
+    'style',
     'textSize',
     // Nested objects use reference equality for "same value", so the patch is always sent.
     // Each has one writer: the onboarding tour and "do not remind me about this version".

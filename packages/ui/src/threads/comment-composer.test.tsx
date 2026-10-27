@@ -318,7 +318,7 @@ describe('comment composer', () => {
                     draft: { body: 'waiting for connection', parentId: null, anchor: null },
                     commentId: null,
                     state: 'failed',
-                    error: 'review host: 502',
+                    error: 'Host: 502',
                     attempts: 1,
                     createdAt: '2026-09-03T10:00:00.000Z',
                     updatedAt: '2026-09-03T10:00:00.000Z',
@@ -328,7 +328,7 @@ describe('comment composer', () => {
 
         const status = host.querySelector('.thread-composer__status');
         expect(status?.textContent).toBe('we will save it once the connection is back · retry');
-        expect(status?.getAttribute('title')).toBe('review host: 502');
+        expect(status?.getAttribute('title')).toBe('Host: 502');
         // The text stays editable. The buffer holds it without locking it.
         expect(host.querySelector<HTMLTextAreaElement>('.thread-composer__markdown')?.disabled).toBe(false);
     });

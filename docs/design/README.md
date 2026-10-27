@@ -10,7 +10,7 @@
 
 > **2026-09-20 addition: customer-requested changes and controls.** The spec is `SPEC-changes-2026-09-20.md`. It adds an "Open issue" switch above the composer editor. Stop descriptions support paragraphs, lists, links and inline code within the validator's budget. Code threads collapse entirely into a marker on the card's left edge, with a ○ Resolve / ✓ Resolved button and Reply/Edit/Delete below the text. The "Comments from" filter is removed. The PR comments modal has width `clamp(620px, 68vw, 1120px)` and contains threads. Basic controls share one state rule (hover = background up one step, pressed = another step). The combined page is `Sherpa Changes 2026-09-20.dc.html`. The reference for (2), (3) is `Sherpa.dc.html`, stop 02. Overrides §3 (threads), 1c/1d of the 08-26 spec and the SPEC-elements state matrix wherever they differ. Departures accepted during implementation are in `../decisions.md`, the "Threads, issues and composer" section.
 
-> **2026-09-26 addition: theme settings.** The "Theme" setting selects Auto · Dark · Light. Auto follows the system. The original dark and light themes keep their palette and geometry. The Design tokens section below describes the original themes. See `theme.md` for their colours and font scale.
+> **2026-09-26 addition (clarified 2026-10-10): extra visual styles.** The Theme setting selects Auto · Dark · Light. The UI build can include extra styles (`packages/ui/src/styles/extra/<id>/`). Each adds its own switch to the settings menu and applies its own fonts, density and dark or light palette. Auto follows the system even with a style enabled. With no extra styles, there is no switch. §Design tokens below describes the base style. Its palettes and font scale are in `theme.md`, and an extra style is described in the README in its directory.
 
 ## Overview
 
@@ -23,7 +23,7 @@ Product principles that shape the UI (do not design them away during implementat
 3. **AI prioritises attention, never silently hides code.** Everything collapsed is visible as a collapsed block with a counter; coverage of the diff is guaranteed structurally by a validator, and ranges left without explanation are explicitly marked.
 4. **Importance ≠ size.** A 6-line CODEOWNERS change can outrank a 200-line refactor.
 5. **One viewer, two orders.** Route and full diff share one state (viewed marks, comments, notes).
-6. **Canonical state lives in the review backend** (review host): a comment draft is saved immediately, the accumulated batch is published on ship / request-changes.
+6. **Canonical state lives in the review backend**: a comment draft is saved immediately, the accumulated batch is published on ship / request-changes.
 7. **The human decides.** Nothing is posted or shipped without an explicit action, and every AI artefact shows its provenance (harness, model, commit).
 
 ## About the design files
@@ -55,13 +55,13 @@ Sticky, height 46px, background `#0d0e10`, bottom border `1px solid #333741`, ho
 | Agent status | Ghost button, height 28px, border `1px solid #363b44`, radius 7px. 6px status dot: connected `#6cc38f`, working `#e2954c`, failed `#e0736c`, disconnected `#e7f1ff`. Label: "Agent · claude-code" / "Agent working · 1 in queue" / "Agent disconnected". Click toggles the chat panel. |
 | Search | Ghost button "Search" + ⌘K key hint (11px mono, border `1px solid #434954`, radius 4px). Opens the command palette. |
 | Feedback | Ghost button "Feedback" — opens the report-a-problem form (free text, optional category, auto-attached context: Sherpa version, PR, snapshot, active screen; context shown before sending). |
-| Settings | 28×28 icon button, sliders icon 15px, border `1px solid #363b44`, radius 7px. Open: bg `#262b34`, border `#4a515c`. Opens the settings menu (252px panel under the trigger): Theme Auto · Dark · Light, Language, Text size M · L, Replay onboarding, Commands ⌘K. See `SPEC-theming-2026-09-12.md` §7. There is no avatar or account: the skill runs locally. |
+| Settings | 28×28 icon button, sliders icon 15px, border `1px solid #363b44`, radius 7px; open: bg `#262b34`, border `#4a515c`. Opens the settings menu (252px panel under the trigger): Theme Auto · Dark · Light, a separate switch per extra style of the build (none in a build without extra styles; see `theme.md`), Language, Text size M · L, Replay onboarding, Commands ⌘K — `SPEC-theming-2026-09-12.md` §7. There is no avatar or account: the skill runs locally. |
 
 ### 1. Route — triage (the main screen; `view:'route', preset:'triage', gen:'ready'`)
 
 Two columns in one scrollable document. **Not a stepper**: no next/prev, no takeover.
 
-**PR header** (padding 26px clamp(30px, 2.4vw, 60px) 0): meta line 11.5px mono: `+806` `#86d9a8`, `−56` `#e8a29c`, "18 files", branch, then the **PCI DSS filter chip** (see Filters). Title 22px/600, letter-spacing −.015em, line-height 1.25, `text-wrap:pretty`. Author row 13px `#ffffff` with an 18px avatar: the person's photo when the host provides one, initials otherwise or when the photo fails to load. On the right, a snapshot selector: height 30px, `#1d2020`, border `1px solid #363b44`, radius 7px, 11.5px mono label `snapshot 9f3c1ab · current` (or `· stale`).
+**PR header** (padding 26px clamp(30px, 2.4vw, 60px) 0): meta line 11.5px mono — `+806` `#86d9a8`, `−56` `#e8a29c`, "18 files", branch, then the **PCI DSS filter chip** (see Filters). Title 22px/600, letter-spacing −.015em, line-height 1.25, `text-wrap:pretty`. Author row 13px `#ffffff` with an 18px avatar: the person's photo when the host provides one (e.g. the GitHub avatar), initials otherwise or when the photo fails to load. On the right, a snapshot selector: height 30px, `#1d2020`, border `1px solid #363b44`, radius 7px, 11.5px mono label `snapshot 9f3c1ab · current` (or `· stale`).
 
 **Sticky toolbar** (top:46px, z-index 30, background `rgba(13,14,16,.92)`, `backdrop-filter:blur(8px)`, bottom border `1px solid #2c3038`, padding 10px clamp(30px, 2.4vw, 60px) 11px):
 
@@ -98,7 +98,7 @@ Right column: one card per hunk, border `1px solid #363b44`, radius 9px, bg `#11
 
 ### 3. Comment threads (inside hunk cards)
 
-Rows appended under the diff, top border `1px solid #2c3038`. Person threads bg `#1a1b1e` opacity 1. Bot threads bg `#16171b` opacity .72 with a source chip ("AI review · bot", 11px mono, border `#4a515c`). Resolved threads bg `#121315` opacity .72 with a `resolved` status chip. Author row: 18px round avatar, bots included: the photo when the host provides one, initials otherwise. Name 12.5px/500, meta 11px mono (`order_service.py:148 · 2h ago`), status/reply toggle on the right.
+Rows appended under the diff, top border `1px solid #2c3038`. Person threads bg `#1a1b1e` opacity 1; bot threads bg `#16171b` opacity .72 with a source chip ("ai-review · bot", 11px mono, border `#4a515c`); resolved threads bg `#121315` opacity .72 with a `resolved` status chip. Author row: 18px round avatar, bots included — the photo when the host provides one, initials otherwise; name 12.5px/500, meta 11px mono (`order_service.py:148 · 2h ago`), status/reply toggle on the right.
 
 **Replies support arbitrary nesting.** The reply tree is flattened for rendering: each reply carries a depth; indent = `min(depth−1,3)×15px` plus a 12px padding and a `1px solid #333741` left rule. Beyond depth 4 the indent stops growing and a `↳ replying to <author>` hint (11px mono `#dae4f3`) is shown instead, so the code column never gets squeezed. The reply count on the toggle counts the whole tree ("4 replies ›"). A reviewer's own unpublished reply carries a `draft · publishes on ship` chip (`#e2b878` on `#241f14`).
 
@@ -106,7 +106,7 @@ Rows appended under the diff, top border `1px solid #2c3038`. Person threads bg 
 
 `position:sticky; top:46px; width:clamp(392px, 26vw, 560px); height:calc(100vh - 46px)`, left border `1px solid #333741`, bg `#121315`. Header: "Agent" + "claude-code · sonnet-5" + "Notes 3" + close. When the agent is busy, a queue banner (bg `#1a1b2d`, 12.5px `#aeb6ff`): "Generating the route · your question is next in the queue". Messages: author 12px/600 (you `#ffffff`, agent `#aeb6ff`), body 13px/1.65 `#ffffff`; a question asked from a selection shows an anchor chip (`↳ order_service.py:148–151 · stop 02`), and the answer shows "◆ Pinned as a note at order_service.py:148–151". Composer: anchor chip (`order_service.py:148–151`, only when the question has an anchor; no PR chip — the whole screen is about one PR) + input + two-line hint (Enter — send / Shift+Enter — new line).
 
-**AI note at the code** (the other half of the same mechanic): inside the hunk card, bg `#131424`, top border `1px solid #262a45`, 11px accent diamond. Title "Agent note · asked from lines 148–151", provenance "model answer · not published to review host", body 13px `#c9cdf0`, actions "Open in chat", "Turn into a comment draft", "Collapse". Notes are never published to the review backend.
+**AI note at the code** (the other half of the same mechanic): inside the hunk card, bg `#131424`, top border `1px solid #262a45`, 11px accent diamond. Title "Agent note · asked from lines 148–151", provenance "model answer · not published to the PR", body 13px `#c9cdf0`, actions "Open in chat", "Turn into a comment draft", "Collapse". Notes are never published to the review backend.
 
 **Selection popover** — appears immediately below the selected rows (never at the end of the card): bg `#262b34`, border `1px solid #515a6a`, radius 8px, shadow `0 8px 24px rgba(0,0,0,.5)`; "4 lines selected" + primary **Ask the agent** (`#7f8cff`, ink `#101223`) + "Comment" + "Copy link".
 
@@ -118,7 +118,7 @@ The menu has a third row, **Comment** ("Publishes N drafts without a verdict"; o
 
 ### 6. Overview — PR card, phase A: reading the diff (`gen:'generating', genPhase:'reading'`)
 
-The first 10–30 seconds, before the route skeleton exists. Content max-width 1700px. two columns (`minmax(0,1fr) 356px`, gap 22px). Left: streaming **Summary** card (provenance "claude-code · sonnet-5 · 9f3c1ab", a blinking 2px caret `#7f8cff`) and **Files by ownership** — header "CODEOWNERS · 12 of 18 files · 570 of 862 lines are yours" plus the `My zone 12 / All 18` segmented control. one row per zone with path, owner chip (yours `#86d9a8`/`#182e20`. other `#ffffff`. generated `#e7f1ff`), "N files · N lines", `+N/−M` and a one-line note.
+The first 10–30 seconds, before the route skeleton exists. Content max-width 1700px; two columns (`minmax(0,1fr) 356px`, gap 22px). Left: streaming **Summary** card (provenance "claude-code · sonnet-5 · 9f3c1ab", a blinking 2px caret `#7f8cff`) and **Files by ownership** — header "CODEOWNERS · 12 of 18 files · 570 of 862 lines are yours" plus the `My zone 12 / All 18` segmented control; one row per zone with path, owner chip (yours `#86d9a8`/`#182e20`; other `#ffffff`; generated `#e7f1ff`), "N files · N lines", `+N/−M` and a one-line note.
 
 Right rail, top card (bg `#131424`, border `1px solid #262a45`): spinner + **"Reading the diff, planning the route"** + "~40s". **No counter and no segment bar** — the number of stops is not known yet. Three progress lines ("Reading all 18 files of the diff" active, "Deciding how many stops there are and in what order", "Filling the stops in, one by one"), then the honest note "The plan comes first — until it is ready there is no stop count to show. The diff is already open below; nothing waits on the agent." CTA "Open the route skeleton" + hint "placeholders now, stops as they land". Below: Discussion card and Snapshots card.
 
@@ -136,7 +136,7 @@ Stale banner (bg `#231e14`, border `1px solid #3d3524`): "Route was built for 9f
 
 ### 10. Full diff (`view:'diff'`)
 
-Left panel `clamp(320px, 22vw, 560px)`, sticky, bg `#121315`, right border `1px solid #333741`, padding 12px 10px: filter input, the file filter chips, then a **file tree**. Chains of single-child directories collapse into one row (`domain/policies`, like VS Code compact folders); a click folds the whole chain. Directory rows (`⌄`/`›` 11px mono `#dae4f3`, label 12px mono `#ffffff`/500) and file rows alike indent by `26 + depth×10` px — the left 26px hold the route-stop label. Siblings start in one column: a directory's chevron and a file's read-state box; a collapsed chain is one level, so its children sit exactly one step deeper. Row order: chevron (directories only, files keep no slot for it) · stop label `01`…`07` (absolute, left 3px, 17×13, radius 3, 10px mono `#7b8390`, border `#2c3038`, `title` "explained in stop 02") or a hatched 17×13 `not placed` slot without text (`title` "no route stop covers this file") · read-state box 10×10 (unread / partial / read) · file name (`flex:1`, ellipsis at the end) · optional `pci` tag (11px mono `#c9a464`, border `#3d3a2c`) · `+N` right-aligned in a 30px column. Row `title`: `<path> · N of M changed lines seen` — a deviation from `SPEC-theming-2026-09-12.md` §6a (`<name> · …`) recorded in `docs/decisions.md`: the name is already on the row, and the full path has nowhere else to live since it left the label. Foreign roots (`front/checkout`) are dimmed to `#ffffff`, generated (`gen`) to `#dae4f3`. A read file, or a directory whose visible files are all read, dims its label to `--tree-read-color` (`#848b97`). This colour wins over the foreign and generated tints. Read dimming skips the active row. Footer note: "Hatched marks mean the range has no route stop. 34 lines in 3 files."
+Left panel `clamp(320px, 22vw, 560px)`, sticky, bg `#121315`, right border `1px solid #333741`, padding 12px 10px: filter input, the file filter chips, then a **file tree**. Chains of single-child directories collapse into one row (`domain/policies`, like VS Code compact folders); a click folds the whole chain. Directory rows (`⌄`/`›` 11px mono `#dae4f3`, label 12px mono `#ffffff`/500) and file rows alike indent by `26 + depth×10` px — the left 26px hold the route-stop label. Siblings start in one column: a directory's chevron and a file's read-state box; a collapsed chain is one level, so its children sit exactly one step deeper. Row order: chevron (directories only, files keep no slot for it) · stop label `01`…`07` (absolute, left 3px, 17×13, radius 3, 10px mono `#7b8390`, border `#2c3038`, `title` "explained in stop 02") or a hatched 17×13 `not placed` slot without text (`title` "no route stop covers this file") · read-state box 10×10 (unread / partial / read) · file name (`flex:1`, ellipsis at the end) · optional audit-scope tag, e.g. `pci` (11px mono `#c9a464`, border `#3d3a2c` — token `--tag-audit-border`; the tag text comes from the host's audit lens) · `+N` right-aligned in a 30px column. Row `title`: `<path> · N of M changed lines seen` — a deviation from `SPEC-theming-2026-09-12.md` §6a (`<name> · …`) recorded in `docs/decisions.md`: the name is already on the row, and the full path has nowhere else to live since it left the label. Foreign roots (`front/checkout`) are dimmed to `#ffffff`, generated (`gen`) to `#dae4f3`. A read file, or a directory whose visible files are all read, dims its label to `--tree-read-color` (`#848b97`). This colour wins over the foreign and generated tints. Read dimming skips the active row. Footer note: "Hatched marks mean the range has no route stop. 34 lines in 3 files."
 
 Right side (side paddings `clamp(30px, 2.4vw, 60px)`; the header row and the cards are capped by `max-width: var(--diff-max)` — 1280px unified, 1920px side by side — and left-aligned): header "Full diff" + "Classic reader. The route no longer sets the order — it stays in the margin." + the quiet diff-mode toggle + "ignore whitespace". Cards are the same diff component as the route, with a margin badge per file: "explained in 02 · cache dropped after the write" or a hatched "no route stop"; unexplained ranges get a hatched footer strip "no route stop covers lines 18–26" + "Ask the agent to place it". File-level **Expand context** and **Mark viewed** behave and share state with the route.
 
@@ -150,7 +150,7 @@ Red-tinted card (bg `#1f1719`, border `1px solid #3d2a2c`): reason in one senten
 
 ### 13. Review complete (`view:'done'`)
 
-Centered 620px card. Header: 22px `#1f3d2c` circle with ✓ `#86d9a8` + "Shipped · PR 4821" (or "Sticky ship · PR 4821"), provenance on the right ("ship · 9f3c1ab" / "sticky ship · carries to the next pushes · 9f3c1ab"). First row: "2 comments published as one batch" + "delivered to review host" (`#6cc38f`). Then one row per counter, value 12px mono `#ffffff`: Stops viewed "7 of 7 · Other read as raw diff" · Diff you actually saw "100% of 862 lines" · Of that, read outside the route "34 lines the model did not place" · Comments published "2 · 1 replying to ai-review-bot" · Signed off on snapshot "9f3c1ab · PR head 9f3c1ab · sonnet-5". Amber footer: "1 thread from kai is still open — it does not block the ship, but it stays on your list." + "Open thread". Single action "Back to the route" (there is no "next review" — v1 opens one PR per session).
+Centered 620px card. Header: 22px `#1f3d2c` circle with ✓ `#86d9a8` + "Shipped · PR 4821" (or "Sticky ship · PR 4821"), provenance on the right ("ship · 9f3c1ab" / "sticky ship · carries to the next pushes · 9f3c1ab"). First row: "2 comments published as one batch" + "delivered to the PR" (`#6cc38f`). Then one row per counter, value 12px mono `#ffffff`: Stops viewed "7 of 7 · Other read as raw diff" · Diff you actually saw "100% of 862 lines" · Of that, read outside the route "34 lines the model did not place" · Comments published "2 · 1 replying to review-bot" · Signed off on snapshot "9f3c1ab · PR head 9f3c1ab · sonnet-5". Amber footer: "1 thread from morgan is still open — it does not block the ship, but it stays on your list." + "Open thread". Single action "Back to the route" (there is no "next review" — v1 opens one PR per session).
 
 After Publish without a verdict nothing was approved or blocked, so the card says only what happened: header "Comments published · PR 4821", provenance "comment · 9f3c1ab", the snapshot row reads "Snapshot reviewed" instead of "Signed off on snapshot", and the amber footer drops the ship clause ("2 threads are still open"). The ship clause stays only after Ship and Sticky ship.
 
@@ -199,7 +199,7 @@ A single file-filter drives the route, the tree and the full diff:
 | `pci` | PCI DSS files | 3 |
 | `generated` | Generated files | 3 |
 
-The toolbar control is a select (button + 250px dropdown, active row bg `#2d323b`, accent ✓ `#8f9bff`). the full-diff sidebar shows the same options as chips. **The list must be extensible** — new filters are expected. The `PCI DSS · 3 files` chip in the PR header is a shortcut into the `pci` filter. while it is active an amber banner explains the audit scope ("Showing only the 3 files inside audit scope — 95 of 862 changed lines. Everything else is hidden, not gone." plus the file list from CODEOWNERS and "Changes here need an audit sign-off before the ship counts."). When a filter hides stops, the route simply shows fewer stops — numbers stay plan-fixed.
+The toolbar control is a select (button + 250px dropdown, active row bg `#2d323b`, accent ✓ `#8f9bff`); the full-diff sidebar shows the same options as chips. **The list must be extensible** — new filters are expected. The `PCI DSS · 3 files` chip in the PR header is a shortcut into the audit filter — any lens the host marks as an audit scope (`Lens.audit`), PCI DSS being the example; the UI never recognizes it by id. While it is active an amber banner explains the audit scope ("Showing only the 3 files inside audit scope — 95 of 862 changed lines. Everything else is hidden, not gone." plus the list of files in the audit lens and "Changes here need an auditor sign-off."). When a filter hides stops, the route simply shows fewer stops — numbers stay plan-fixed.
 
 ## Interactions & behaviour
 
@@ -226,9 +226,9 @@ Route stop shape used by the UI: `{ id, planIndex, tier: high|medium|low|other, 
 
 ## Design tokens
 
-The following values apply to the original dark/light themes.
+The following values apply to the main style (dark/light). An extra build style can change fonts and density. Its directory's README lists those values, and the theme's lightness determines the palette.
 
-Below is the original dark theme. See `theme.md` for every colour token in both palettes and the light-theme rules the table does not express. The original design table is in `SPEC-theming-2026-09-12.md` §1–2. The resulting palette is the `data-theme` attribute on `<html>`, together with `color-scheme`. Auto follows the system theme and is the default.
+The original dark theme is below. See `theme.md` for each colour token's dark and light values and the light-theme rules that the table does not capture. The original design table is in `SPEC-theming-2026-09-12.md` §1–2. The final palette uses the `data-theme` attribute on `<html>` together with `color-scheme`. Auto follows the system theme and is the default.
 
 **Surfaces** — app `#0d0e10`; panels `#121315`, `#16171b`; diff card `#111214`; card header `#1a1b1e`; inputs/chips `#1b1e24`, `#18191d`, `#1d2020`; raised (menus, floating bar) `#212429`, `#262b34`; selected row `#2d323b`.
 
@@ -268,19 +268,18 @@ sizes from its container's CSS.
 
 ## Assets
 
-- **Fonts**: the original themes use IBM Plex Sans + IBM Plex Mono from locally built npm packages. Fonts are served from the build at runtime.
+- **Fonts**: the main style uses IBM Plex Sans + IBM Plex Mono from locally built npm packages. An extra style keeps its fonts in its directory. At runtime, fonts are served from the build.
 - **Thumbs-up icon** on the ship button: 16×16 `fill="currentColor"` SVG supplied by the team (already inlined in the prototype). Use the design-system icon set for it and for the small glyphs (⌄ › ⇄ ↕ ↳ ✓ ✕), which the prototype renders as text characters.
 - **Product mark**: a rotated 15px accent square — placeholder, not final branding.
 - No imagery anywhere; this UI is text, code and controls only.
 
 ## Files
 
-
 - `SPEC-changes-2026-09-20.md` covers the **current phase's spec changes**: issue switch, stop description markup, collapsing threads into markers, a wide PR modal with threads, shared control-state rules. Includes contracts, removals, an acceptance checklist and open questions.
 - `Sherpa Changes 2026-09-20.dc.html` is the 09-20 iteration overview page: a table of base control states in both themes and interactive mockups 2a–2e.
 - `Sherpa Additions.dc.html` is the interactive mockup for the 08-26 additions and 09-20 changes. Section `#t3` (3 thread marker positions, recommending 3a) is a rejected exploration. The marker on the card's left edge was accepted per SPEC-changes §3.
 - `SPEC-theming-2026-09-12.md` covers the theme phase's spec changes: theme model and tokens, light palette, revised dark palette, settings menu, language, typography in rem, responsive width, acceptance checklist and open questions.
-- `theme.md` contains the **colour token table for both palettes**: the original dark/light themes, value sources and theme rules. A test checks it against `tokens.css`.
+- `theme.md` is the **main style's colour token table** (dark/light), with value sources, theme rules and extra style structure. A test checks it against `tokens.css`.
 - `SPEC-elements.md` — **element-level spec**: state matrix for every control (hover, active, focus, disabled, loading, error), per-component behaviour, data edge cases, loading timings, keyboard map, accessibility and the acceptance checklist. Read it together with this document: the README defines *what* each screen is, SPEC-elements defines *how every part behaves*.
 - `Sherpa.dc.html` — the clickable prototype (all 13 states + the onboarding tour; `SCENARIOS` menu switches between them).
 - `SPEC-onboarding-2026-09-02.md` — **onboarding handoff spec**: card and ring anatomy, the eight steps with final copy and anchors, placement algorithm, states, show-once and resume model, degradation, keyboard/a11y, telemetry, open questions, acceptance checklist.

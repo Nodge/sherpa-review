@@ -9,7 +9,6 @@ import {
     EMPTY_ITERATIONS,
     EMPTY_THREADS,
     hostDisplayName,
-    isLocalHost,
     reviewStateForKeys,
     sliceReviewState,
 } from './app/review-state.js';
@@ -44,13 +43,7 @@ import { ReviewHostProvider } from './app/review-host-context.tsx';
 import { BlobLoaderProvider } from './diff-view/blob-loader.tsx';
 import { expandFileContext } from './diff-view/expand.js';
 import { findAgentNote, flashAgentNote, revealWhenReady } from './diff-view/line-target.js';
-import {
-    buildFileFilters,
-    filterFiles,
-    filterStats,
-    findFilter,
-    PCI_FILTER_ID,
-} from './filters/lens-filters.js';
+import { activeAuditFilter, buildFileFilters, filterFiles, filterStats } from './filters/lens-filters.js';
 import { updateFragment } from './fragment.js';
 import { useLocale, useT } from './i18n/index.js';
 import { useLocaleCommands } from './i18n/locale-commands.js';
@@ -149,9 +142,15 @@ export function App({ store, session, token }: AppProps) {
     // The browser tab identifies the PR (#37). Before metadata arrives, it uses the number from the key, so it is never empty.
     const documentTitle = state === null ? null : documentTitleFor(state.prKey, state.pr);
     const reviewHost = state?.reviewHost ?? null;
-    /** Local review has no PR. The UI uses its own wording for a missing iteration. */
-    const localHost = isLocalHost(reviewHost);
-    const reviewKey = `${token}\u0000${reviewHost ?? 'none'}`;
+    // Keys and effects use the adapter name, not the host description object.
+    const reviewHostId = reviewHost?.id ?? null;
+    /**
+     * Iterations are working-tree snapshots. The UI uses specific wording for a previous iteration.
+     * Read the field here instead of in a helper. React Compiler treats an object passed to a function
+     * as mutable and stops memoizing the callbacks below.
+     */
+    const localHost = reviewHost?.iterations === 'tree';
+    const reviewKey = `${token}\u0000${reviewHostId ?? 'none'}`;
     const chatKey = [reviewKey, state?.prKey ?? 'none'].join(':');
 
     // --- Iteration selection: snapshot list, selection resolution, tab data key ---
@@ -164,7 +163,7 @@ export function App({ store, session, token }: AppProps) {
         applyActiveRoute,
         reviewState,
         setReviewState,
-    } = useReviewState(reviewKey, reviewHost);
+    } = useReviewState(reviewKey, reviewHostId);
     const snapshotsLoaded = snapshotsState.key === reviewKey && snapshotsState.loaded;
     const snapshots = useMemo(
         () => (snapshotsState.key === reviewKey ? snapshotsState.list : null) ?? fallbackSnapshots(facts.snapshot),
@@ -296,7 +295,7 @@ export function App({ store, session, token }: AppProps) {
         reviewKey,
         viewKey,
         reviewReady,
-        reviewHost,
+        reviewHost: reviewHostId,
         routeRevision: snapshot.routeRevision,
         progressRevision: snapshot.progressRevision,
         threadsRevision: snapshot.threadsRevision,
@@ -419,7 +418,7 @@ export function App({ store, session, token }: AppProps) {
      */
     const [draftBuffer, setDraftBuffer] = useState<readonly DraftBufferEntry[]>(EMPTY_DRAFT_BUFFER);
     useEffect(() => {
-        if (!reviewReady || reviewHost === null) {
+        if (!reviewReady || reviewHostId === null) {
             return;
         }
         let alive = true;
@@ -434,7 +433,7 @@ export function App({ store, session, token }: AppProps) {
         return () => {
             alive = false;
         };
-    }, [reviewHost, reviewReady, snapshot.threadsRevision, token]);
+    }, [reviewHostId, reviewReady, snapshot.threadsRevision, token]);
     // Buffered entries return to composers at their own anchors. After a tab reload,
     // the text must appear on the same line.
     // Threads are not a dependency for rendering. Both a draft edit and a reply are restored
@@ -500,10 +499,10 @@ export function App({ store, session, token }: AppProps) {
                   }),
         [currentDiff, currentReview.lenses, t],
     );
-    const pci = findFilter(filters, PCI_FILTER_ID);
-    const pciStats = currentDiff === null || pci === null ? null : filterStats(currentDiff.files, pci);
-    const pciPaths =
-        currentDiff === null || pci === null ? [] : filterFiles(currentDiff.files, pci).map((file) => file.path);
+    const audit = activeAuditFilter(filters, filterId);
+    const auditStats = currentDiff === null || audit === null ? null : filterStats(currentDiff.files, audit);
+    const auditPaths =
+        currentDiff === null || audit === null ? [] : filterFiles(currentDiff.files, audit).map((file) => file.path);
     const auditKey = `${reviewKey}\u0000${filterId}`;
     const [dismissedAuditKey, setDismissedAuditKey] = useState<string | null>(null);
     useEffect(() => {
@@ -517,8 +516,9 @@ export function App({ store, session, token }: AppProps) {
     const auditVisible = auditScopeBannerVisible(
         view,
         filterId,
+        audit?.id ?? null,
         dismissedAuditKey === auditKey,
-        pciStats?.files ?? 0,
+        auditStats?.files ?? 0,
     );
 
     // --- Route generation: endpoints, long-running task, default view for a small PR ---
@@ -645,7 +645,7 @@ export function App({ store, session, token }: AppProps) {
         token,
         uiLocale,
         session,
-        reviewHost,
+        reviewHost: reviewHostId,
         reviewReady,
         chatRevision: snapshot.chatRevision,
         view,
@@ -678,7 +678,7 @@ export function App({ store, session, token }: AppProps) {
 
     const bannerSources = buildBannerSources({
         view,
-        reviewHost,
+        localHost,
         session,
         now,
         readOnly,
@@ -716,9 +716,9 @@ export function App({ store, session, token }: AppProps) {
         },
         auditVisible,
         auditKey,
-        pci,
-        pciStats,
-        pciPaths,
+        audit,
+        auditStats,
+        auditPaths,
         showAllAuditFiles,
         onDismissAudit: setDismissedAuditKey,
     });
@@ -1215,7 +1215,7 @@ export function App({ store, session, token }: AppProps) {
                         threadStore={threadStore}
                         connection={snapshot.connection}
                         hostName={hostDisplayName(reviewHost, t)}
-                        reviewHost={reviewHost}
+                        draftDestination={reviewHost.drafts}
                         route={routeSummary === null ? null : { ...routeSummary, viewed: stopViewed }}
                         composerTransport={composerTransport}
                         {...(prThreadActions === null ? {} : { threadActions: prThreadActions })}

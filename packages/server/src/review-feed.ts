@@ -5,13 +5,13 @@ import type { ReviewHost, Thread } from '@sherpa/protocol';
  * The event omits the thread snapshot. The UI rereads the endpoint when the revision advances.
  *
  * Subscribes lazily with the first SSE client and stops with no clients. Otherwise host polling
- * would run with no clients (the server's idle shutdown does not count internal timers as activity,
+ * would run with no consumers (and server auto-stop does not count internal timers as activity,
  * see `idle.ts`).
  */
 export interface ReviewFeedOptions {
     /**
-     * Host-specific subscription to review status changes: the review host uses a status field
-     * in the same lightweight poll. It lives in the feed because it must follow the same lazy lifecycle as threads.
+     * Host-specific subscription to review status changes, such as a cheap status check
+     * in the same poll as threads. It lives in the feed so both subscriptions have the same lazy lifecycle.
      */
     readonly watchStatus?: (onChange: () => void) => () => void;
     /** On a status change, the server rereads PR metadata. */

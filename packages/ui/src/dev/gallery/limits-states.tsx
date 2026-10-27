@@ -90,7 +90,7 @@ function ConflictTree() {
                 filters={filters}
                 activeFilter={selectFilter(filters, 'all')}
                 onFilter={() => undefined}
-                pciFileIds={new Set()}
+                auditFilter={null}
                 mineFileIds={new Set()}
                 readState={new Map()}
                 route={null}

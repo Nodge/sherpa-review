@@ -24,7 +24,7 @@ describe('global UI settings', () => {
             composerLayout: 'visual',
             locale: 'auto',
             theme: 'auto',
-            
+            style: null,
             textSize: 'm',
             onboarding: { completedAt: null, step: 0 },
             updates: { dismissedVersion: null },
@@ -36,16 +36,16 @@ describe('global UI settings', () => {
         const store = new SettingsStore(sherpaDir);
         expect(store.read()).toMatchObject({ theme: 'auto', textSize: 'm', diffMode: 'split', locale: 'en' });
         store.patch({ theme });
-        expect(new SettingsStore(sherpaDir).read()).toMatchObject({ theme, diffMode: 'split', locale: 'en' });
+        expect(new SettingsStore(sherpaDir).read()).toMatchObject({ theme, style: null, diffMode: 'split', locale: 'en' });
     });
 
-    
+    it('saves the theme selection and extra style independently', () => {
         const store = new SettingsStore(sherpaDir);
         store.patch({ theme: 'light' });
-        
-        
-        
-        
+        expect(store.patch({ style: 'sample' })).toMatchObject({ theme: 'light', style: 'sample' });
+        expect(store.patch({ theme: 'auto' })).toMatchObject({ theme: 'auto', style: 'sample' });
+        expect(store.patch({ style: null })).toMatchObject({ theme: 'auto', style: null });
+        expect(new SettingsStore(sherpaDir).read()).toMatchObject({ theme: 'auto', style: null });
     });
 
     it('falls back to defaults for malformed JSON without throwing an error', async () => {
@@ -54,10 +54,10 @@ describe('global UI settings', () => {
         expect(new SettingsStore(sherpaDir).read().diffMode).toBe('unified');
     });
 
-    it.each([{ diffMode: 'three-way' }, { theme: 'invalid-theme' }])('falls back to defaults for values outside the schema: %j', async (settings) => {
+    it.each([{ diffMode: 'three-way' }, { theme: 'sample-dark' }, { style: 'Not An Id' }])('falls back to defaults for a value outside the schema: %j', async (settings) => {
         await fs.writeFile(settingsPathFor(sherpaDir), JSON.stringify(settings));
 
-        expect(new SettingsStore(sherpaDir).read()).toMatchObject({ diffMode: 'unified', theme: 'auto' });
+        expect(new SettingsStore(sherpaDir).read()).toMatchObject({ diffMode: 'unified', theme: 'auto', style: null });
     });
 
     it('patching one field leaves the others unchanged', () => {
@@ -72,7 +72,7 @@ describe('global UI settings', () => {
             composerLayout: 'visual',
             locale: 'auto',
             theme: 'auto',
-            
+            style: null,
             textSize: 'm',
             onboarding: { completedAt: null, step: 0 },
             updates: { dismissedVersion: null },
@@ -134,7 +134,7 @@ describe('global UI settings', () => {
             composerLayout: 'visual',
             locale: 'auto',
             theme: 'auto',
-            
+            style: null,
             textSize: 'm',
             onboarding: { completedAt: null, step: 0 },
             updates: { dismissedVersion: null },

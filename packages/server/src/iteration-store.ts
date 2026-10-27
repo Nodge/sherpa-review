@@ -34,8 +34,8 @@ interface InterdiffRow extends SqlRow {
  *
  * Why store the patch locally: after a force-push the host no longer returns the previous iteration, but the old
  * route snapshot must remain readable. The diff it was built from must therefore
- * be stored locally. Slices between iterations are cached here too: the review host computes an interdiff in
- * 2.8–3.7 s, so there is no reason to pay for it twice.
+ * be local. Interdiffs are cached here too: the host can take seconds to compute one,
+ * so there is no reason to pay that cost twice.
  *
  * Fail-closed boundary, as in `route-store.ts`: writes and reads all pass through protocol
  * schemas. A corrupt row does not crash the server: warn on stderr and skip it.

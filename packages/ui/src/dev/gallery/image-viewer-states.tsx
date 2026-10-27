@@ -1,7 +1,8 @@
-import { fixtureIteration, makeFixtureHost, PNG_SMALL_BASE64 } from '@sherpa/fixtures';
+import { fixtureIteration, GALLERY_HOSTS, makeFixtureHost, PNG_SMALL_BASE64 } from '@sherpa/fixtures';
 import type { FileDiff } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 
+import { ReviewHostProvider } from '../../app/review-host-context.tsx';
 import { toParseRequest } from '../../diff/model.js';
 import { parseFileDiff } from '../../diff/parse.js';
 import type { BlobLoader } from '../../diff-view/blob-loader.tsx';
@@ -104,6 +105,8 @@ function ImageCardState({
 }) {
     return (
         <div className="gallery__viewport">
+            {/* The host link label comes from the host description. The gallery uses the GitHub label. */}
+            <ReviewHostProvider value={GALLERY_HOSTS.github}>
             <BlobLoaderProvider loadBlob={loadBlob}>
                 <FileCard
                     file={file}
@@ -121,6 +124,7 @@ function ImageCardState({
                     initialImage={initial}
                 />
             </BlobLoaderProvider>
+            </ReviewHostProvider>
         </div>
     );
 }

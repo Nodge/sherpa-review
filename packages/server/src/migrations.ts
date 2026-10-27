@@ -187,7 +187,7 @@ export const MIGRATIONS: readonly Migration[] = [
         //
         // `iterations` stores a local patch for each iteration. The host no longer serves it
         // after a force-push, but old snapshots must remain readable. `interdiffs` caches slices
-        // (the review host computes a slice in 2.8–3.7 s, so there is no reason to pay for it twice).
+        // (a host may take seconds to calculate a slice, so there is no reason to pay twice).
         //
         // Route snapshots move from the `route_state.snapshot` blob to their own table. A PR has
         // many snapshots (one per generation), while `route_state` keeps only the current ID.
@@ -397,8 +397,8 @@ export const MIGRATIONS: readonly Migration[] = [
         `,
     },
     {
-        // File path beside its `fileId` in progress records. The review host's `fileId` is
-        // opaque id, so records from two iterations can only be matched through a path.
+        // File path beside its `fileId` in progress records. The host's `fileId` is
+        // opaque, so records from two iterations can only be matched by path.
         // The path came from the saved source iteration patch, but iterations recorded by server
         // 0.3.x have no patch and never will. Carryover silently returned zero.
         //

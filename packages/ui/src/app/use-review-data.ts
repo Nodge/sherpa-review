@@ -267,7 +267,7 @@ export function useReviewData({
     ]);
 
     // Overview and Full diff filters need lenses, but load them independently of the raw diff.
-    // A slice has no lenses. Ownership and audit scope use iteration files, while a slice has its own `fileId` values.
+    // A slice has no lenses. Ownership and audit lenses use iteration files, while a slice has its own `fileId` values.
     // Until the selection from the URL resolves, lenses wait alongside the diff. Otherwise a slice
     // opened by URL would fetch them needlessly.
     useEffect(() => {

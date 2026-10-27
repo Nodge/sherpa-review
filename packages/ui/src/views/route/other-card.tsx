@@ -176,7 +176,7 @@ export function OtherCard({
                         <p className="route-other__honest">{t('chat.ask.answerInChat')}</p>
                     )}
                     {/* Conflicts are outside coverage (docs/design/SPEC-elements.md §4.1): they cannot be explained or read
-                        here, so the reviewer's only useful action is in the review host. */}
+                        here. The reviewer's only valid action is in the host. */}
                     {view.conflictFiles === 0 ? null : (
                         <p className="route-other__conflicts" role="status">
                             {t('route.other.conflicts', view.conflictFiles)}

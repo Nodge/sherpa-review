@@ -15,18 +15,18 @@ describe('argument parsing', () => {
     });
 
     it('server: passes everything after the subcommand to the server unchanged', () => {
-        expect(parseArgs(['server', '--pr', 'github-quillmart--quillmart--1', '--sherpa-dir', '/s', '--version', '-h'])).toEqual({
+        expect(parseArgs(['server', '--pr', 'pr-1', '--sherpa-dir', '/s', '--version', '-h'])).toEqual({
             kind: 'server',
-            argv: ['--pr', 'github-quillmart--quillmart--1', '--sherpa-dir', '/s', '--version', '-h'],
+            argv: ['--pr', 'pr-1', '--sherpa-dir', '/s', '--version', '-h'],
         });
         expect(parseArgs(['server'])).toEqual({ kind: 'server', argv: [] });
     });
 
     it('up: accepts PR, harness and model, rejects extra arguments', () => {
-        expect(parseArgs(['up', '--pr', 'github-quillmart--quillmart--1', '--harness', 'claude-code', '--model', 'claude-opus-5'])).toEqual(
+        expect(parseArgs(['up', '--pr', 'pr-1', '--harness', 'claude-code', '--model', 'claude-opus-5'])).toEqual(
             {
                 kind: 'up',
-                prKey: 'github-quillmart--quillmart--1',
+                prKey: 'pr-1',
                 local: undefined,
                 base: undefined,
                 verdicts: undefined,
@@ -74,7 +74,7 @@ describe('argument parsing', () => {
         expect(() => parseArgs(['up', '--verdicts', 'on ship, merge'])).toThrow(
             '`--verdicts` only makes sense with `--local`',
         );
-        expect(() => parseArgs(['up', '--pr', 'github-quillmart--quillmart--1', '--verdicts', 'on ship, merge'])).toThrow(
+        expect(() => parseArgs(['up', '--pr', 'pr-1', '--verdicts', 'on ship, merge'])).toThrow(
             '`--verdicts` only makes sense with `--local`',
         );
         expect(() => parseArgs(['worker', 'next', '--verdicts', 'on ship, merge'])).toThrow(
@@ -109,7 +109,7 @@ describe('argument parsing', () => {
     });
 
     it('up: --local and --pr select different reviews, --base requires --local', () => {
-        expect(() => parseArgs(['up', '--local', '.', '--pr', 'github-quillmart--quillmart--1'])).toThrow('pass one of them');
+        expect(() => parseArgs(['up', '--local', '.', '--pr', 'pr-1'])).toThrow('pass one of them');
         expect(() => parseArgs(['up', '--base', 'main'])).toThrow('only makes sense with `--local`');
         expect(() => parseArgs(['worker', 'next', '--local', '.'])).toThrow(
             'only available for `sherpa up`',
@@ -124,13 +124,13 @@ describe('argument parsing', () => {
             kind: 'worker-next',
             prKey: undefined,
         });
-        expect(parseArgs(['worker', 'next', '--pr', 'github-quillmart--quillmart--1'])).toEqual({
+        expect(parseArgs(['worker', 'next', '--pr', 'pr-1'])).toEqual({
             kind: 'worker-next',
-            prKey: 'github-quillmart--quillmart--1',
+            prKey: 'pr-1',
         });
-        expect(parseArgs(['--pr=github-quillmart--quillmart--1', 'worker', 'next'])).toEqual({
+        expect(parseArgs(['--pr=pr-1', 'worker', 'next'])).toEqual({
             kind: 'worker-next',
-            prKey: 'github-quillmart--quillmart--1',
+            prKey: 'pr-1',
         });
     });
 
@@ -143,10 +143,10 @@ describe('argument parsing', () => {
             lang: undefined,
         });
         expect(
-            parseArgs(['worker', 'register', '--harness', 'claude-code', '--model', 'gpt-5', '--pr', 'github-quillmart--quillmart--1']),
+            parseArgs(['worker', 'register', '--harness', 'claude-code', '--model', 'gpt-5', '--pr', 'pr-1']),
         ).toEqual({
             kind: 'worker-register',
-            prKey: 'github-quillmart--quillmart--1',
+            prKey: 'pr-1',
             harness: 'claude-code',
             model: 'gpt-5',
             lang: undefined,

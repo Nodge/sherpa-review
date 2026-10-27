@@ -15,8 +15,8 @@ import { describe, expect, it } from 'vitest';
 
 /**
  * Shared `ReviewHost` contract suite (`docs/testing.md §3`): the same list of tests
- * runs against every implementation: `FixtureHost` and `LocalHost`
- * with the real git backend.
+ * runs against all implementations: `FixtureHost`, recorded remote host responses and `LocalHost`
+ * with each VCS backend (fake and real).
  *
  * Checks interface promises rather than internals: response shapes
  * (fail-closed through protocol schemas), the `watchThreads` promise of an initial snapshot and a snapshot
@@ -29,7 +29,7 @@ export interface ReviewHostContractOptions<H extends ReviewHost> {
     readonly writes?: boolean;
     /**
      * "Author pushed": advance the host to the next iteration (fixture uses
-     * `advanceIteration()`). Without this hook, skip iteration-change
+     * `advanceIteration()`, remote host mocks have their own "push"). Without this hook, skip iteration-change
      * tests: a host with one iteration has nothing to test them on.
      */
     readonly advance?: (host: H) => void | Promise<void>;
@@ -67,7 +67,7 @@ const SLOW_TIMEOUT_MS = 60_000;
 
 /**
  * Wait for a condition: `watchThreads` transport is an adapter detail (synchronous in the fixture,
- * polling in the review host). The contract promises only convergence.
+ * polling in a remote host), and the contract promises only convergence.
  */
 async function waitWithin(condition: () => boolean, what: string, timeoutMs: number): Promise<void> {
     const deadline = Date.now() + timeoutMs;

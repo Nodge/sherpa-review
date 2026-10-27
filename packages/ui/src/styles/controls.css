@@ -48,6 +48,11 @@
     outline-offset: 2px;
 }
 
+/* A control on `<a>` (a button linking out): the link colour scale from base.css does not recolour it. */
+a.ctl:is(:hover, :active) {
+    color: var(--ctl-ink);
+}
+
 /* --- Filled buttons: a scale of three tones of their own colour --- */
 
 .ctl--primary,

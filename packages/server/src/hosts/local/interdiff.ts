@@ -1,7 +1,7 @@
 import type { FileChangeType, FileDiff, PrDiff } from '@sherpa/protocol';
 import { structuredPatch } from 'diff';
 
-
+import { countPatchStats } from '../../patch/split.js';
 
 import type { LocalIterationFile, LocalIterationRecord, LocalIterationsStore } from './iterations-store.js';
 
@@ -14,7 +14,7 @@ import type { LocalIterationFile, LocalIterationRecord, LocalIterationsStore } f
  * `splitPatchByFile` and the UI parser.
  */
 
-/** Context lines around a change: the default number printed by `git diff`. */
+/** Context lines around a change, matching the `git diff` default. */
 const CONTEXT_LINES = 3;
 
 /** File mode in add/delete headers: the local adapter does not manage permissions. */
@@ -83,7 +83,7 @@ async function sliceFile(
         oldPath: null,
         changeType,
         binary: patch === null,
-        // CODEOWNERS review rules are not reproduced locally, just as for the iteration itself.
+        // Host review rules are not reproduced locally, just as for the iteration itself.
         generated: false,
         additions: stats.additions,
         deletions: stats.deletions,

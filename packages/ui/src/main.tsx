@@ -99,7 +99,7 @@ if (token === null) {
     // The only keyboard listener on the page. Commands are declared only here (docs/architecture.md §7.3).
     const shortcuts = createShortcutRegistry();
     attachShortcuts(window, shortcuts);
-    // Command targets under the pointer (docs/design/SPEC-elements.md §5) use one pointer monitor per page, like the key listener.
+    // Target of "under the cursor" commands (docs/design/SPEC-elements.md §5): one cursor listener per page, like the keyboard listener.
     const pointer = createPointerTarget(window, document);
 
     /**

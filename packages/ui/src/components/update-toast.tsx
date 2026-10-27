@@ -11,9 +11,6 @@ import './update-toast.css';
  * which command to use to update.
  */
 
-/** Distribution README: copies follow these instructions and have no update command. */
-const README_URL = 'https://github.com/quillmart/quillmart/blob/main/tools/sherpa/README.md';
-
 export interface UpdateToastProps {
     readonly update: UiUpdate;
     /** "Don't remind me about X": the version goes into global settings and the server stops returning it. */
@@ -100,7 +97,7 @@ export function UpdateToast({ update, onDismissVersion, onLater, howToOpen = fal
     );
 }
 
-/** A checkout updates with a command, a copy by copying the directory again. */
+/** Use the channel's command if present, otherwise the installation directory and instructions link if provided. */
 function UpdateInstructions({ install }: { install: UiUpdate['install'] }) {
     const t = useT();
     if (install.command !== null) {
@@ -112,10 +109,12 @@ function UpdateInstructions({ install }: { install: UiUpdate['install'] }) {
     }
     return (
         <div className="update-toast__how-block">
-            <p className="update-toast__copy-dir">{t('update.copyDir', install.dir)}</p>
-            <a className="update-toast__readme" href={README_URL} target="_blank" rel="noreferrer">
-                {t('update.readme')}
-            </a>
+            {install.dir === null ? null : <p className="update-toast__copy-dir">{t('update.copyDir', install.dir)}</p>}
+            {install.readmeUrl === null ? null : (
+                <a className="update-toast__readme" href={install.readmeUrl} target="_blank" rel="noreferrer">
+                    {t('update.readme')}
+                </a>
+            )}
         </div>
     );
 }

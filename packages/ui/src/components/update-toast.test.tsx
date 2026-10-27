@@ -22,12 +22,16 @@ const UPDATE: UiUpdate = {
     latest: '0.5.0',
     releasedAt: '2026-09-01T09:00:00.000Z',
     whatsNew: 'Update toast and shortcuts sheet.',
-    
+    install: {
+        dir: '/Users/x/tools/sherpa',
+        command: "cd '/Users/x/tools/sherpa' && sherpa-update",
+        readmeUrl: 'https://example.com/readme',
+    },
 };
 
 const COPY: UiUpdate = {
     ...UPDATE,
-    install: { kind: 'copy', dir: '/opt/sherpa/skill', command: null },
+    install: { dir: '/opt/sherpa/skill', command: null, readmeUrl: 'https://example.com/readme' },
 };
 
 const mounted: (() => void)[] = [];
@@ -175,7 +179,7 @@ describe('update toast', () => {
         expect(settings.getSnapshot().updates).toEqual({ dismissedVersion: '0.5.0' });
     });
 
-    it('"How to update" shows a command for a checkout and a directory and README for a copy', () => {
+    it('"How to update" shows the command if present, otherwise the directory and channel link', () => {
         vi.useFakeTimers();
         const checkout = mount(UPDATE);
         act(() => {
@@ -184,7 +188,7 @@ describe('update toast', () => {
         click(checkout, '.update-toast__how');
 
         expect(checkout.querySelector<HTMLInputElement>('.command-box__command')?.value).toBe(
-            "cd '/Users/x/quillmart' && git pull",
+            "cd '/Users/x/tools/sherpa' && sherpa-update",
         );
 
         const copy = mount(COPY);
@@ -195,7 +199,31 @@ describe('update toast', () => {
 
         expect(copy.querySelector('.command-box')).toBeNull();
         expect(copy.querySelector('.update-toast__copy-dir')?.textContent).toContain('/opt/sherpa/skill');
-        expect(copy.querySelector<HTMLAnchorElement>('.update-toast__readme')?.href).toContain('/tools/sherpa/README.md');
+        expect(copy.querySelector<HTMLAnchorElement>('.update-toast__readme')?.href).toBe('https://example.com/readme');
+    });
+
+    it('shows only the directory when the channel provides no link', () => {
+        vi.useFakeTimers();
+        const host = mount({ ...COPY, install: { ...COPY.install, readmeUrl: null } });
+        act(() => {
+            vi.advanceTimersByTime(1500);
+        });
+        click(host, '.update-toast__how');
+
+        expect(host.querySelector('.update-toast__copy-dir')?.textContent).toContain('/opt/sherpa/skill');
+        expect(host.querySelector('.update-toast__readme')).toBeNull();
+    });
+
+    it('shows only the link when the channel does not know the directory', () => {
+        vi.useFakeTimers();
+        const host = mount({ ...COPY, install: { ...COPY.install, dir: null } });
+        act(() => {
+            vi.advanceTimersByTime(1500);
+        });
+        click(host, '.update-toast__how');
+
+        expect(host.querySelector('.update-toast__copy-dir')).toBeNull();
+        expect(host.querySelector<HTMLAnchorElement>('.update-toast__readme')?.href).toBe('https://example.com/readme');
     });
 
     it('does not render a body without "what is new"', () => {

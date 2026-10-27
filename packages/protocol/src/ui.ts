@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { agentNoteIdSchema, agentNoteSchema, chatAnchorSchema, chatExchangeIdSchema, chatExchangeSchema } from './chat.js';
 import { distributionVersionSchema } from './distribution.js';
 import { draftBufferEntrySchema } from './draft-buffer.js';
-import { localeSchema, localeSettingSchema } from './locale.js';
+import { localeSchema, localeSettingSchema, localizedTextSchema } from './locale.js';
 import { prKeySchema } from './manifest.js';
 import { workerStatusSchema } from './messages.js';
 import {
@@ -59,33 +59,43 @@ export const uiTaskSchema = z.object({
 export type UiTask = z.infer<typeof uiTaskSchema>;
 
 /**
- * Feedback channel availability. Depends only on the feedback channel token
- * in the reviewer's environment. Neither the review host nor a live worker is required. Travels
- * in the snapshot so the form explains reduced functionality before submission (`docs/design/SPEC-elements.md §1.1`).
+ * Build feedback channel, requires neither a review host nor a live worker. Included in the snapshot so the UI
+ * knows which button to show and the form can explain reduced functionality before submission (`docs/design/SPEC-elements.md §1.1`).
+ * `link` opens an external page without a form. `issues` shows a form, and the server creates the issue.
  */
-export const uiFeedbackAvailabilitySchema = z.object({
-    available: z.boolean(),
-    /** When `available: false`, explains why and where to write manually. Otherwise null. */
-    reason: z.string().nullable(),
-});
-export type UiFeedbackAvailability = z.infer<typeof uiFeedbackAvailabilitySchema>;
+export const uiFeedbackChannelSchema = z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('link'), url: z.url({ protocol: /^https?$/ }) }),
+    z.object({
+        kind: z.literal('issues'),
+        available: z.boolean(),
+        /** When `available: false`, why and where to write manually. Otherwise null. */
+        reason: z.string().nullable(),
+        /** Where to ask or discuss without an issue. null if there is no link. */
+        discussionUrl: z.url({ protocol: /^https?$/ }).nullable(),
+    }),
+]);
+export type UiFeedbackChannel = z.infer<typeof uiFeedbackChannelSchema>;
 
 /**
- * Where the distribution was installed determines which command
- * update instructions to show.
- * With `copy`, the distribution was copied elsewhere and has no update command.
- * The toast asks the reviewer to copy the directory again.
+ * How to update the installed distribution is determined by the update channel the server was built with.
+ * If there is a command, the toast shows it. Otherwise, it shows the installation directory if the channel knows it, and a link
+ * to the instructions if available.
  */
 export const uiUpdateInstallSchema = z.object({
-    kind: z.enum(['copy']),
-    /** Distribution directory realpath as passed by the CLI (`--install-dir`). */
-    dir: z.string().min(1),
+    /**
+     * Installation directory (realpath from `--install-dir`) or the root where the command runs.
+     * null if the channel does not know how the distribution was installed (an npm package).
+     */
+    dir: z.string().min(1).nullable(),
+    /** Update command for the terminal. null if the channel does not know it. */
     command: z.string().nullable(),
+    /** Installation instructions link. null if none. */
+    readmeUrl: z.url({ protocol: /^https?$/ }).nullable(),
 });
 export type UiUpdateInstall = z.infer<typeof uiUpdateInstallSchema>;
 
 /**
- * "A new version is available": the result of comparing `version.json` in main with the embedded
+ * "New version available", the latest version from the update channel compared with the embedded
  * server version. Appears in the snapshot only when `latest > current` and the version has not been dismissed
  * (`settings.updates.dismissedVersion`). "Later" stays in tab memory and does not change the snapshot.
  */
@@ -116,6 +126,27 @@ export const uiGenerationCapSchema = z.object({
 export type UiGenerationCap = z.infer<typeof uiGenerationCapSchema>;
 
 /**
+ * Review host description for the UI. Everything the UI says about the host comes through this data from the host plugin,
+ * without branching on its name. Labels are provided in every UI language (`LocalizedText`).
+ */
+export const uiReviewHostSchema = z.object({
+    /** Adapter name, only for UI state keys. Never used to build labels. */
+    id: z.string().min(1),
+    /** How to name the host in text ("delivered to …"). */
+    label: localizedTextSchema,
+    /** Label for "open file on host" (file menu, image card). null for the generic UI label. */
+    webAction: localizedTextSchema.nullable(),
+    /** Destination for published drafts, the host's PR or an agent task in the same session. */
+    drafts: z.enum(['pr', 'agent']),
+    /**
+     * What a review iteration is: a PR commit on the host (`pr`) or a working-tree snapshot (`tree`).
+     * Determines the wording for stale routes and iterations that no longer exist.
+     */
+    iterations: z.enum(['pr', 'tree']),
+});
+export type UiReviewHost = z.infer<typeof uiReviewHostSchema>;
+
+/**
  * PR state snapshot for the UI. Returned by `GET state` and sent in full by the SSE channel
  * on every change. The queue is small, so granular events are not worth it.
  */
@@ -124,10 +155,10 @@ export const uiStateSchema = z.object({
     worker: workerStatusSchema,
     tasks: z.array(uiTaskSchema),
     /**
-     * Name of this PR's host adapter (`fixture`). null means prKey maps to no host,
-     * does not map to one, review endpoints are unavailable. This server has only a queue.
+     * This PR's review host. null if prKey maps to no host, leaving review endpoints
+     * unavailable. Such a server only has a queue.
      */
-    reviewHost: z.string().nullable(),
+    reviewHost: uiReviewHostSchema.nullable(),
     /**
      * PR metadata from `ReviewHost.getPr()`. Unlike the diff and threads, it is small,
      * so it travels in every snapshot. The breadcrumb and view headers use the same source.
@@ -135,8 +166,8 @@ export const uiStateSchema = z.object({
      * assembly and refreshes it after publishing a verdict, so the status arrives over SSE).
      */
     pr: prMetaSchema.nullable(),
-    /** Feedback channel availability: depends only on its token in the environment. */
-    feedback: uiFeedbackAvailabilitySchema,
+    /** Build feedback channel. null if there is no channel, and no Feedback button in the top bar. */
+    feedback: uiFeedbackChannelSchema.nullable(),
     /**
      * PR iterations, the host's list supplemented with `gone` entries from local storage, in order
      * of appearance. Empty if there is no host or the list has not loaded yet. A new push arrives in this same
@@ -144,8 +175,8 @@ export const uiStateSchema = z.object({
      */
     iterations: z.array(iterationSchema),
     /**
-     * A newer distribution version. null if the check was not run (dev build `0.0.0`,
-     * fixture host), the check failed, the version is current or the reviewer dismissed it.
+     * New distribution version. null if the check was not run (dev build `0.0.0`, server
+     * without an update channel, host without a check), failed, the version is current or the reviewer dismissed it.
      */
     update: uiUpdateSchema.nullable(),
     /** Generation cap for the current route snapshot. null if there is no snapshot or nothing was truncated. */
@@ -178,7 +209,7 @@ export type UiCancelResponse = z.infer<typeof uiCancelResponseSchema>;
 
 /**
  * PR review data. Served through separate endpoints instead of `uiState`, since the diff and threads
- * They weigh megabytes (host comments have no pagination), too much for every SSE snapshot.
+ * weigh megabytes (some hosts have comments without pagination). They cannot be sent in every SSE snapshot.
  * The `UI_REVIEW_EVENT` event signals changes, and the UI refetches the relevant endpoint.
  * PR metadata is the exception. It is small and lives in `uiStateSchema.pr`.
  */
@@ -231,7 +262,7 @@ export const uiReviewBlobRequestSchema = z.object({ blobId: hostIdSchema });
 export type UiReviewBlobRequest = z.infer<typeof uiReviewBlobRequestSchema>;
 
 /**
- * File filter lenses: ownership ("mine") is separate from extra lenses (PCI DSS).
+ * File filter lenses, ownership ("My files") separate from extra lenses (such as audit scopes).
  * `ownershipSource` is `ReviewHost.ownershipSource`, always present for the ownership lens.
  */
 export const uiReviewLensesResponseSchema = z
@@ -437,17 +468,17 @@ export const uiChatNoteDeleteRequestSchema = z.object({ noteId: agentNoteIdSchem
 export type UiChatNoteDeleteRequest = z.infer<typeof uiChatNoteDeleteRequestSchema>;
 
 /**
- * Sending feedback: Feedback button in the top bar → project issue.
+ * Submit feedback, from the top-bar Feedback button's form to an issue in the build's feedback channel (`issues`).
  * The UI supplies the view and route phase as automatic context (unknown to the server). The server adds the rest
- * (versions, prKey, worker status, login) to the issue itself. Without channel credentials,
- * returns `outcome: 'unavailable'` with instructions for sending feedback manually. This is reduced functionality,
- * not an endpoint error. A failure in the issue service is a normal RPC error, and the entered text
+ * (versions, prKey, worker status, login) to the issue itself. If the channel is unavailable
+ * or is not `issues`, `outcome: 'unavailable'` includes text saying where to write manually. This is reduced functionality,
+ * not an endpoint error. A submission failure is a normal RPC error, and the entered text
  * stays in the form for a retry.
  */
 export const uiFeedbackContextSchema = z.object({
     view: z.string().min(1),
     routePhase: uiRoutePhaseSchema,
-    /** UI bundle version. It can differ from the server version. The issue includes both. */
+    /** UI bundle version, which may differ from the server's. Both appear in the issue. */
     uiVersion: z.string().min(1),
 });
 export type UiFeedbackContext = z.infer<typeof uiFeedbackContextSchema>;
@@ -462,7 +493,7 @@ export type UiFeedbackRequest = z.infer<typeof uiFeedbackRequestSchema>;
 
 export const uiFeedbackResponseSchema = z.object({
     outcome: z.enum(['created', 'unavailable']),
-    /** Key and URL of the created issue when `created`, otherwise null. */
+    /** Key and link of the created issue when `created`, if the channel knows them. Otherwise null. */
     issueKey: z.string().nullable(),
     issueUrl: z.string().nullable(),
     /** Where to write manually when `unavailable`. null when `created`. */
@@ -473,8 +504,8 @@ export type UiFeedbackResponse = z.infer<typeof uiFeedbackResponseSchema>;
 /**
  * Force an update check ("Check for updates" palette command), ignoring the cache
  * at `~/.sherpa/update-check.json`. The response is the same as what goes into `uiState.update`.
- * `update: null` means the version is current, was dismissed or the check failed. The UI has no reason
- * to distinguish them. The server writes the failure reason to stderr.
+ * `update: null` means the version is current or dismissed. A failed check returns a
+ * `host_unavailable` error, so the palette says "could not check", not "no updates".
  */
 export const uiUpdateCheckResponseSchema = z.object({ update: uiUpdateSchema.nullable() });
 export type UiUpdateCheckResponse = z.infer<typeof uiUpdateCheckResponseSchema>;
@@ -504,8 +535,13 @@ const uiSettingsFields = {
     locale: localeSettingSchema,
     /** UI theme, shared across all PRs. `auto` follows the system theme, an explicit choice does not. */
     theme: z.enum(['auto', 'dark', 'light']),
-    
-    
+    /**
+     * Extra visual style for the UI build (`packages/ui/src/styles/extra/`) layered over the theme:
+     * `data-theme` = `<style>-<dark|light>`. `null` means the default Sherpa style. The UI silently replaces a style absent from
+     * the build with the default. The id format prevents quotes and markup from entering the attribute
+     * and the server's inline script.
+     */
+    style: z.string().regex(/^[a-z][a-z0-9-]{0,31}$/).nullable(),
     /** Interface text size. `l` uses the same scale at a larger size (`docs/design/SPEC-theming-2026-09-12.md §5`). */
     textSize: z.enum(['m', 'l']),
     /**
@@ -529,7 +565,7 @@ export const uiSettingsSchema = z.object({
     composerLayout: uiSettingsFields.composerLayout.default('visual'),
     locale: uiSettingsFields.locale.default('auto'),
     theme: uiSettingsFields.theme.default('auto'),
-    
+    style: uiSettingsFields.style.default(null),
     textSize: uiSettingsFields.textSize.default('m'),
     onboarding: uiSettingsFields.onboarding.default({ completedAt: null, step: 0 }),
     updates: uiSettingsFields.updates.default({ dismissedVersion: null }),

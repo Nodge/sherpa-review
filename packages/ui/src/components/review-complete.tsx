@@ -1,6 +1,5 @@
 import type { Verdict } from '@sherpa/protocol';
 
-import { draftDestinationOf } from '../app/review-state.js';
 import type { Translate } from '../i18n/index.js';
 import { shortCommit, useT } from '../i18n/index.js';
 import { Icon } from '../icons/icon.tsx';
@@ -105,7 +104,7 @@ export function ReviewComplete({ completion, onOpenThread, onOpenFullDiff }: Rev
 
 /** Comment destination: local review sends the round as an agent task in the same session. */
 function deliveryText(completion: ReviewCompletion, t: Translate): string {
-    switch (draftDestinationOf(completion.reviewHost)) {
+    switch (completion.draftDestination) {
         case 'agent':
             return t('complete.handedToAgent');
         case 'pr':

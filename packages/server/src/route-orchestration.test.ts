@@ -17,6 +17,7 @@ import {
 } from '@sherpa/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { fixtureHostPlugin } from './hosts/fixture/plugin.js';
 import { databasePathFor, routePayloadDirOf, sharedPayloadDirOf } from './paths.js';
 import type { TaskRecord } from './queue.js';
 import { MAX_RESULT_REJECTIONS } from './queue.js';
@@ -32,7 +33,7 @@ import {
 } from './route/fixture-support.js';
 import type { SherpaServer } from './server.js';
 import { startServer } from './server.js';
-import { get, makeTempSherpaDir, postJson, postRaw, removeTempSherpaDir } from './test-support.js';
+import { get, hostPluginOf, makeTempSherpaDir, postJson, postRaw, removeTempSherpaDir } from './test-support.js';
 
 /**
  * Route orchestration on the fixture host: automatic enqueuing, result acceptance
@@ -69,10 +70,13 @@ describe('route orchestration', () => {
 
     async function start(prKey: string = MEDIUM_PR): Promise<SherpaServer> {
         const server = await startServer({
+            updateChannel: null,
+            feedbackChannel: null,
             prKey,
             sherpaDir,
             longPollSeconds: 0.3,
             now: () => new Date(Date.now() + clockOffsetMs),
+            hosts: [fixtureHostPlugin],
         });
         servers.push(server);
         return server;
@@ -89,10 +93,12 @@ describe('route orchestration', () => {
     /** A server over the same database, but the host is on the next iteration: a push happened while it was down. */
     async function startWithPushedHost(host: ReturnType<typeof makeFixtureHost>): Promise<SherpaServer> {
         const server = await startServer({
+            updateChannel: null,
+            feedbackChannel: null,
             prKey: MEDIUM_PR,
             sherpaDir,
             longPollSeconds: 0.3,
-            reviewHostFactory: () => ({ name: 'fixture', host }),
+            hosts: [hostPluginOf({ name: 'fixture', ui: fixtureHostPlugin.ui, host })],
         });
         servers.push(server);
         server.workerRegistry.register(WORKER, 'claude-code', 'opus-5');
@@ -428,10 +434,13 @@ describe('route orchestration', () => {
 
     it('section batch size is configurable, with three stops in one task', async () => {
         const server = await startServer({
+            updateChannel: null,
+            feedbackChannel: null,
             prKey: MEDIUM_PR,
             sherpaDir,
             longPollSeconds: 0.3,
             route: { sectionBatchSize: 3 },
+            hosts: [fixtureHostPlugin],
         });
         servers.push(server);
         server.workerRegistry.register(WORKER, 'claude-code', 'opus-5');
@@ -900,10 +909,12 @@ describe('route orchestration', () => {
             const broken = makeFixtureHost('medium');
             broken.getDiff = () => Promise.reject(new Error('host is down'));
             const second = await startServer({
+                updateChannel: null,
+                feedbackChannel: null,
                 prKey: MEDIUM_PR,
                 sherpaDir,
                 longPollSeconds: 0.3,
-                reviewHostFactory: () => ({ name: 'fixture', host: broken }),
+                hosts: [hostPluginOf({ name: 'fixture', ui: fixtureHostPlugin.ui, host: broken })],
             });
             servers.push(second);
 
@@ -931,10 +942,12 @@ describe('route orchestration', () => {
             const broken = makeFixtureHost('medium');
             broken.getDiff = () => Promise.reject(new Error('host is down'));
             const second = await startServer({
+                updateChannel: null,
+                feedbackChannel: null,
                 prKey: MEDIUM_PR,
                 sherpaDir,
                 longPollSeconds: 0.3,
-                reviewHostFactory: () => ({ name: 'fixture', host: broken }),
+                hosts: [hostPluginOf({ name: 'fixture', ui: fixtureHostPlugin.ui, host: broken })],
             });
             servers.push(second);
             const beforeFill = await readRoute(second);
@@ -1096,10 +1109,12 @@ describe('route orchestration', () => {
         const broken = makeFixtureHost('medium');
         broken.getDiff = () => Promise.reject(new Error('host is down'));
         const second = await startServer({
+            updateChannel: null,
+            feedbackChannel: null,
             prKey: MEDIUM_PR,
             sherpaDir,
             longPollSeconds: 0.3,
-            reviewHostFactory: () => ({ name: 'fixture', host: broken }),
+            hosts: [hostPluginOf({ name: 'fixture', ui: fixtureHostPlugin.ui, host: broken })],
         });
         servers.push(second);
         second.workerRegistry.register(WORKER, 'claude-code', 'opus-5');

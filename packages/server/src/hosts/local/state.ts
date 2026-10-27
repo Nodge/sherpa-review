@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { localHostStatePathFor } from '../../paths.js';
 
 /**
- * The directory a local key (`local-git-*`) reviews. This file supports restarts:
+ * Which directory a local key (`local-<vcs>-*`) reviews. The file supports restart:
  * `sherpa up --local` supplies the directory only on first start, and the daemon restarts
  * without it after stopping itself.
  */

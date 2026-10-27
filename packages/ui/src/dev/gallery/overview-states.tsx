@@ -10,7 +10,7 @@ import type { BannerSource } from '../../components/banner-slot.tsx';
 import { BannerSlot } from '../../components/banner-slot.tsx';
 import { reconnectCommand } from '../../components/reconnect-command.js';
 import { AgentPill } from '../../components/top-bar.tsx';
-import { buildFileFilters, filterFiles, filterStats, findFilter, PCI_FILTER_ID } from '../../filters/lens-filters.js';
+import { buildFileFilters, filterFiles, filterStats, findAuditFilter } from '../../filters/lens-filters.js';
 import { createSessionStore } from '../../session/session-store.js';
 import { RouteActionErrorBanner } from '../../views/route/generation-card.tsx';
 import { ViewFrame } from '../../views/view-frames.tsx';
@@ -32,6 +32,7 @@ const UNAVAILABLE_OWNERSHIP: Lens = {
         label: 'My files',
         paths: [],
         zones: null,
+        audit: null,
     }),
     available: false,
     paths: [],
@@ -170,12 +171,12 @@ function BannerState() {
         extra: DATA.extraLenses,
         t,
     });
-    const pci = findFilter(filters, PCI_FILTER_ID);
-    if (pci === null) {
+    const audit = findAuditFilter(filters);
+    if (audit === null) {
         return null;
     }
-    const stats = filterStats(DATA.diff.files, pci);
-    const paths = filterFiles(DATA.diff.files, pci).map((file) => file.path);
+    const stats = filterStats(DATA.diff.files, audit);
+    const paths = filterFiles(DATA.diff.files, audit).map((file) => file.path);
     const sources: readonly BannerSource[] = [
         {
             id: 'route-action-error',
@@ -191,7 +192,7 @@ function BannerState() {
             active: () => true,
             render: () => (
                 <AuditScopeBanner
-                    filter={pci}
+                    filter={audit}
                     stats={stats}
                     paths={paths}
                     onShowAll={() => undefined}

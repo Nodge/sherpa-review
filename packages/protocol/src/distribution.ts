@@ -6,14 +6,13 @@ import { semverSchema } from './version.js';
 export const DISTRIBUTION_WHATS_NEW_MAX_CHARS = 140;
 
 /**
- * Distribution `version.json`: the source of truth for checking
- * whether a new version is available. The build (`build.mjs`) writes `version` and `builtFrom`. The release command
- * adds `releasedAt` and `whatsNew`. The server reads the file from main and compares it with the embedded version.
- * Release fields are nullable: `dist/` before release has the same file without them.
+ * Distribution `version.json`: build and release version. The update channel returns the latest
+ * published version in the same format, and the server compares it with the embedded one. The build writes `version` and `builtFrom`,
+ * and the release command adds `releasedAt` and `whatsNew`. Release fields are nullable: before release, `dist/` has the same file without them.
  */
 export const distributionVersionSchema = z.object({
     version: semverSchema,
-    /** Build source identifier: Git HEAD hash, with `-dirty` for uncommitted changes, or null outside a checkout. */
+    /** Source revision id used for the build. null means unknown. */
     builtFrom: z.string().nullable(),
     releasedAt: z.iso.datetime().nullable(),
     /** One "what is new" phrase for the update toast, not a changelog. */

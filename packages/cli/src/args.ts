@@ -159,7 +159,7 @@ function parseUpCommand(
             `sherpa: unexpected arguments after \`up\`: ${positionals.slice(1).join(' ')}.\n` +
                 'Expected `sherpa up [--pr <pr key> | --local <path> [--base <ref>] [--verdicts <instruction>]] ' +
                 '[--harness <harness name>] [--model <model name>] [--lang <ru|en>] [--no-open]`; ' +
-                'without `--pr` and `--local` the PR is taken from the Git branch of the current directory.',
+                'without `--pr` and `--local` the PR is taken from the current branch of the current directory.',
         );
     }
 

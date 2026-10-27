@@ -4,26 +4,32 @@ import path from 'node:path';
 
 import type { FileDiff, PrDiff } from '@sherpa/protocol';
 import { prDiffSchema } from '@sherpa/protocol';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { walkPatch } from '../../route/diff-index.js';
 
-
-
+import type { GitFixture } from './git-fixture.js';
+import { gitAvailable } from './git-fixture.js';
+import { disposeGitProjectTemplate, GIT_PR_KEY, GitProject, PROJECT_PREFIX } from './git-project.js';
+import { gitVcs } from './git-vcs.js';
 import type { LocalIterationRecord, LocalIterationsStore } from './iterations-store.js';
 import { fileIterationsStore, MAX_LOCAL_ITERATIONS, memoryIterationsStore } from './iterations-store.js';
-import type { LocalHostOptions } from './local-host.js';
-import { LocalHost } from './local-host.js';
+import type { LocalHost, LocalHostOptions } from './local-host.js';
 import { MAX_FILE_BYTES } from './snapshot.js';
-import { memoryThreadsStore } from './threads-store.js';
 import type { CommandRunner } from './vcs.js';
 
 /**
  * Local host iteration history and slices between iterations support progress carryover,
- * note anchors and the stale route banner.
+ * note anchors and the stale-route banner. The host uses real `git` (`git-project.ts`).
  */
 
-const PREFIX = 'app';
+const PREFIX = PROJECT_PREFIX;
+
+/** Each host endpoint invokes `git` several times. The default five-second timeout is too short. */
+const TIMEOUT_MS = 30_000;
+
+/** Subscribers learn about snapshots asynchronously: allow extra time for slow `git`. */
+const WAIT_MS = 15_000;
 
 function fileOf(diff: PrDiff, filePath: string): FileDiff {
     const file = diff.files.find((candidate) => candidate.path === filePath);
@@ -33,42 +39,36 @@ function fileOf(diff: PrDiff, filePath: string): FileDiff {
     return file;
 }
 
-describe('local host iteration history', () => {
-    let root: string;
-    let fake: FakeVcs;
+afterAll(() => {
+    disposeGitProjectTemplate();
+});
+
+describe.skipIf(!gitAvailable)('local host iteration history', { timeout: TIMEOUT_MS }, () => {
+    let project: GitProject;
+    let repo: GitFixture;
     let iterations: LocalIterationsStore;
 
     beforeEach(() => {
-        root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sherpa-local-iters-')));
-        fake = new FakeVcs({ root, prefix: PREFIX });
+        project = new GitProject('sherpa-local-iters-');
+        repo = project.repo;
         iterations = memoryIterationsStore();
-        fake.commit(`${PREFIX}/src/a.ts`, ['const a = 1;', 'const b = 2;', 'const c = 3;', ''].join('\n'));
-        fake.writeDisk(`${PREFIX}/src/a.ts`, ['const a = 1;', 'const b = 22;', 'const c = 3;', ''].join('\n'));
+        repo.commitBase({ [`${PREFIX}/src/a.ts`]: ['const a = 1;', 'const b = 2;', 'const c = 3;', ''].join('\n') });
+        repo.write(`${PREFIX}/src/a.ts`, ['const a = 1;', 'const b = 22;', 'const c = 3;', ''].join('\n'));
     });
 
     afterEach(() => {
-        fs.rmSync(root, { recursive: true, force: true });
+        project.cleanup();
     });
 
     function makeHost(overrides: Partial<LocalHostOptions> = {}): LocalHost {
-        return new LocalHost({
-            prKey: 'local-git-app-0badc0de',
-            vcs: scriptedVcs(fake.runner),
-            projectDir: fake.projectDir,
-            base: null,
-            branch: fake.branch,
-            threads: memoryThreadsStore(),
-            iterations,
-            pollIntervalMs: 600_000,
-            ...overrides,
-        });
+        return project.makeHost({ iterations, ...overrides });
     }
 
     it('an edit creates the next iteration and keeps the previous one in the list', async () => {
         const host = makeHost();
         const first = (await host.getDiff()).diffId;
 
-        fake.writeDisk(`${PREFIX}/src/a.ts`, ['const a = 1;', 'const b = 222;', 'const c = 3;', ''].join('\n'));
+        repo.write(`${PREFIX}/src/a.ts`, ['const a = 1;', 'const b = 222;', 'const c = 3;', ''].join('\n'));
         await host.refresh();
         const second = (await host.getDiff()).diffId;
 
@@ -87,19 +87,19 @@ describe('local host iteration history', () => {
         const seen: string[][] = [];
         const stop = host.watchIterations((list) => seen.push(list.map((iteration) => iteration.diffId)));
         const first = (await host.getDiff()).diffId;
-        await expect.poll(() => seen.length).toBeGreaterThan(0);
+        await expect.poll(() => seen.length, { timeout: WAIT_MS }).toBeGreaterThan(0);
 
-        fake.writeDisk(`${PREFIX}/src/b.ts`, 'const b = 1;\n');
+        repo.write(`${PREFIX}/src/b.ts`, 'const b = 1;\n');
         await host.refresh();
         const second = (await host.getDiff()).diffId;
 
-        await expect.poll(() => seen.at(-1)).toEqual([first, second]);
+        await expect.poll(() => seen.at(-1), { timeout: WAIT_MS }).toEqual([first, second]);
         stop();
     });
 
     it('preserves history when the host is recreated with the same storage', async () => {
         const first = (await makeHost().getDiff()).diffId;
-        fake.writeDisk(`${PREFIX}/src/b.ts`, 'const b = 1;\n');
+        repo.write(`${PREFIX}/src/b.ts`, 'const b = 1;\n');
 
         const revived = makeHost();
         const second = (await revived.getDiff()).diffId;
@@ -118,7 +118,7 @@ describe('local host iteration history', () => {
     it('slices a modification with a patch that the hunk parser can read', async () => {
         const host = makeHost();
         const base = (await host.getDiff()).diffId;
-        fake.writeDisk(`${PREFIX}/src/a.ts`, ['const a = 1;', 'const b = 222;', 'const c = 3;', ''].join('\n'));
+        repo.write(`${PREFIX}/src/a.ts`, ['const a = 1;', 'const b = 222;', 'const c = 3;', ''].join('\n'));
         await host.refresh();
         const head = (await host.getDiff()).diffId;
 
@@ -138,13 +138,13 @@ describe('local host iteration history', () => {
 
     it('slices additions and deletions with the file present on only one side', async () => {
         const host = makeHost();
-        fake.commit(`${PREFIX}/src/gone.ts`, 'export const gone = 1;\n');
-        fake.writeDisk(`${PREFIX}/src/gone.ts`, 'export const gone = 2;\n');
+        repo.commitBase({ [`${PREFIX}/src/gone.ts`]: 'export const gone = 1;\n' });
+        repo.write(`${PREFIX}/src/gone.ts`, 'export const gone = 2;\n');
         await host.refresh();
         const base = (await host.getDiff()).diffId;
 
-        fake.writeDisk(`${PREFIX}/src/fresh.ts`, 'export const fresh = 1;\n');
-        fake.removeDisk(`${PREFIX}/src/gone.ts`);
+        repo.write(`${PREFIX}/src/fresh.ts`, 'export const fresh = 1;\n');
+        repo.remove(`${PREFIX}/src/gone.ts`);
         await host.refresh();
         const head = (await host.getDiff()).diffId;
 
@@ -167,11 +167,11 @@ describe('local host iteration history', () => {
 
     it('includes a binary side in the slice without a patch', async () => {
         const host = makeHost();
-        fake.writeDisk(`${PREFIX}/cache.bin`, Buffer.from([0x01, 0x00, 0x02]));
+        repo.write(`${PREFIX}/cache.bin`, Buffer.from([0x01, 0x00, 0x02]));
         await host.refresh();
         const base = (await host.getDiff()).diffId;
 
-        fake.writeDisk(`${PREFIX}/cache.bin`, Buffer.from([0x01, 0x00, 0x03]));
+        repo.write(`${PREFIX}/cache.bin`, Buffer.from([0x01, 0x00, 0x03]));
         await host.refresh();
         const head = (await host.getDiff()).diffId;
 
@@ -183,7 +183,7 @@ describe('local host iteration history', () => {
         const host = makeHost();
         const base = (await host.getDiff()).diffId;
 
-        fake.writeDisk(`${PREFIX}/dump.csv`, Buffer.alloc(MAX_FILE_BYTES + 1, 0x41));
+        repo.write(`${PREFIX}/dump.csv`, Buffer.alloc(MAX_FILE_BYTES + 1, 0x41));
         await host.refresh();
         const head = (await host.getDiff()).diffId;
 
@@ -212,7 +212,7 @@ describe('local host iteration history', () => {
 
         const diff = await host.getDiff();
         expect(diff.files.map((file) => file.path)).toContain('src/a.ts');
-        await expect(host.getPr()).resolves.toMatchObject({ id: 'local-git-app-0badc0de' });
+        await expect(host.getPr()).resolves.toMatchObject({ id: GIT_PR_KEY });
         // The host does not know previous iterations: only the active one remains, and slices for it are rejected.
         expect(await host.listIterations()).toMatchObject([{ diffId: diff.diffId, status: 'active' }]);
         await expect(host.getDiff({ base: 'diff-0', head: diff.diffId })).rejects.toThrow('is unknown');
@@ -224,18 +224,19 @@ describe('local host iteration history', () => {
     it('records a file rewritten between diff and read without contents', async () => {
         // The edit reaches disk after the diff: the patch describes the old state, but the file is already new.
         let raced = false;
+        const live = project.runner();
         const racing: CommandRunner = async (args) => {
-            const outcome = await fake.runner(args);
+            const outcome = await live(args);
             if (args.includes('--name-status') && !raced) {
                 raced = true;
-                fake.writeDisk(
+                repo.write(
                     `${PREFIX}/src/a.ts`,
                     ['const a = 1;', 'const b = 2222222;', 'const c = 3;', ''].join('\n'),
                 );
             }
             return outcome;
         };
-        const host = makeHost({ vcs: scriptedVcs(racing) });
+        const host = makeHost({ vcs: gitVcs(racing) });
 
         const base = (await host.getDiff()).diffId;
         const recorded = (await iterations.read()).at(-1)?.files.find((file) => file.path === 'src/a.ts');

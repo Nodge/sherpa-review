@@ -324,7 +324,7 @@ export interface FileContextMenuProps {
 }
 
 /**
- * Single-file menu: copy path and links, open the file on the web, toggle viewed. Marks
+ * Single-file menu. Copy path and links, open the file on the host, and mark viewed. Marking
  * is only available in the active iteration, so read-only mode disables the last item
  * with the same reason as the viewed checkbox.
  */

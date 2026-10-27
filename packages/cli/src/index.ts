@@ -1,9 +1,10 @@
 import { run } from './cli.js';
+import { CLI_HOSTS } from './hosts/all.js';
 import { checkNodeVersion } from './runtime.js';
 
 /**
- * Node flags for the server daemon. A host or issue service may use certificates signed by a private
- * CA in the system store, but Node trusts only its own bundle out of the box and fails on
+ * Node flags for the server daemon. Review hosts and channels may use a custom CA, which is
+ * in the system store, but Node only trusts its own bundle by default and fails with
  * `SELF_SIGNED_CERT_IN_CHAIN`. The flag appeared in 22.15/23.8. Older runtimes won't receive it.
  */
 const DAEMON_NODE_FLAGS = ['--use-system-ca'];
@@ -18,6 +19,7 @@ async function main(): Promise<number> {
 
     return run(process.argv.slice(2), {
         env: process.env,
+        hosts: CLI_HOSTS,
         out: (text) => {
             process.stdout.write(`${text}\n`);
         },

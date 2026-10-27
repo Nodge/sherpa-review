@@ -2,16 +2,18 @@ import type { ReactNode } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Icon } from '../icons/icon.tsx';
-import { useT } from '../i18n/index.js';
+import { localized, useT } from '../i18n/index.js';
 import { tourStepCount, useTourReplay } from '../onboarding/index.js';
 import { useEscapeLayer } from '../shortcuts/context.tsx';
 import { useUiSettings, useUiSettingsStore } from '../settings/context.tsx';
+import { EXTRA_STYLES } from '../styles/extra-styles.js';
 import './settings-menu.css';
 
 /**
- * Header settings menu (docs/design/SPEC-theming-2026-09-12.md §7): theme, language, text size
- * and 2 actions, replay onboarding and open the command palette. It replaced the theme button. The skill has
- * no account, and 3 separate settings buttons would not fit in the header.
+ * Settings menu in the header (docs/design/SPEC-theming-2026-09-12.md §7): theme, extra build styles
+ * (`styles/extra-styles.ts`), language, text size and two actions: replay onboarding
+ * and open the command palette. Replaced the theme button. The skill has no account, and three settings
+ * cannot each have their own button in the header.
  *
  * Closes like the Ship menu and filter select: the `popover` layer in Esc priority order plus mousedown
  * outside. Mutual closing works the same way: a trigger press reaches document, and other
@@ -33,7 +35,7 @@ export interface SettingsMenuProps {
 export function SettingsMenu({ agentConnected, onOpenCommands, onReplayTour, defaultOpen = false }: SettingsMenuProps) {
     const t = useT();
     const settings = useUiSettingsStore();
-    const { theme, locale, textSize } = useUiSettings();
+    const { theme, style, locale, textSize } = useUiSettings();
     const replayTour = useTourReplay(onReplayTour);
     const [open, setOpen] = useState(defaultOpen);
     const rootRef = useRef<HTMLDivElement | null>(null);
@@ -106,22 +108,28 @@ export function SettingsMenu({ agentConnected, onOpenCommands, onReplayTour, def
                         />
                     </SettingsRow>
 
-                    
-                        <button
-                            type="button"
-                            role="switch"
-                            
-                            
-                            
-                            onClick={() => {
-                                
-                            }}
-                        >
-                            <span className="ctl-switch__track" aria-hidden="true">
-                                <span className="ctl-switch__knob" />
-                            </span>
-                        </button>
-                    </SettingsRow>
+                    {EXTRA_STYLES.map((extra) => {
+                        const label = localized(extra.label, t);
+                        const on = style === extra.id;
+                        return (
+                            <SettingsRow key={extra.id} label={label}>
+                                <button
+                                    type="button"
+                                    role="switch"
+                                    aria-label={label}
+                                    aria-checked={on}
+                                    className={`ctl-switch settings-menu__switch${on ? ' is-on' : ''}`}
+                                    onClick={() => {
+                                        settings.update({ style: on ? null : extra.id });
+                                    }}
+                                >
+                                    <span className="ctl-switch__track" aria-hidden="true">
+                                        <span className="ctl-switch__knob" />
+                                    </span>
+                                </button>
+                            </SettingsRow>
+                        );
+                    })}
 
                     <SettingsRow label={t('settings.language')}>
                         <Segments

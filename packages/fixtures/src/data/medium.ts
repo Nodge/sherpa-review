@@ -1,6 +1,6 @@
 import type { FileDiff, HostId, LensZone, Thread, ThreadPin } from '@sherpa/protocol';
 
-import { anchor, bot, comment, human, lens, thread } from '../builders.js';
+import { anchor, bot, comment, human, lens, PCI_AUDIT, thread } from '../builders.js';
 import { lockLines } from '../content.js';
 import type { FileSpec } from '../patch.js';
 import { makeFileDiff, totalChanges } from '../patch.js';
@@ -1920,7 +1920,7 @@ export function makeMediumFixture(): FixtureDataInput {
         interdiffs: interdiffs(),
         // Lenses describe the first iteration. The host would recalculate ownership and PCI after the push.
         ownership: lens({ id: 'mine', label: 'My files', paths: MY_FILES, zones: OWNERSHIP_ZONES }),
-        extraLenses: [lens({ id: 'pci', label: 'PCI DSS', paths: PCI_FILES })],
+        extraLenses: [lens({ id: 'pci', label: 'PCI DSS', paths: PCI_FILES, audit: PCI_AUDIT })],
         currentUser: REVIEWER,
         mutationEpoch: '2026-08-20T09:00:00.000Z',
     };

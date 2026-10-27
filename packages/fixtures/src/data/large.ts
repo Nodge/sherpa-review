@@ -1,6 +1,6 @@
 import type { FileDiff, LensZone, Thread } from '@sherpa/protocol';
 
-import { anchor, bot, comment, human, lens, singleIteration, thread } from '../builders.js';
+import { anchor, bot, comment, human, lens, PCI_AUDIT, singleIteration, thread } from '../builders.js';
 import type { SyntheticParams } from './synthetic.js';
 import { modulePathOf, synthesizeFiles } from './synthetic.js';
 import type { FixtureDataInput } from './types.js';
@@ -246,6 +246,7 @@ export function makeLargeFixture(): FixtureDataInput {
             lens({
                 id: 'pci',
                 label: 'PCI DSS',
+                audit: PCI_AUDIT,
                 available: false,
                 note: 'No files of this PR are in the PCI DSS scope.',
             }),

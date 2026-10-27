@@ -288,7 +288,7 @@
 .file-tree__tag {
     flex: none;
     padding: 0 4px;
-    border: 1px solid var(--tag-pci-border);
+    border: 1px solid var(--tag-audit-border);
     border-radius: var(--radius-mark);
     font-family: var(--font-mono);
     font-size: var(--font-size-tag);

@@ -1,5 +1,5 @@
 import { fixtureIteration } from '@sherpa/fixtures';
-import type { UiTask, WorkerStatus } from '@sherpa/protocol';
+import type { UiFeedbackChannel, UiTask, WorkerStatus } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 
@@ -13,6 +13,7 @@ import type { ViewId } from '../../session/views.js';
 import { SettingsProvider } from '../../settings/context.tsx';
 import { useResolvedTheme } from '../../settings/document-settings.tsx';
 import { createUiSettingsStore } from '../../settings/settings-store.js';
+import { EXTRA_STYLES } from '../../styles/extra-styles.js';
 import { UI_VERSION } from '../../version.js';
 import { MARKDOWN_STATES } from './markdown-states.tsx';
 import { DIFF_STATES } from './diff-states.tsx';
@@ -48,6 +49,7 @@ import { SHORTCUT_STATES } from './shortcuts-states.tsx';
 import { ROUTE_LOCALE_STATES } from './route-locale-states.tsx';
 import { ONBOARDING_STATES } from './onboarding-states.tsx';
 import { UPDATE_TOAST_STATES } from './update-toast-states.tsx';
+import { GALLERY_FEEDBACK_ISSUES, GALLERY_FEEDBACK_LINK } from './feedback-channels.js';
 import { LIMIT_STATES } from './limits-states.tsx';
 import { DRAFT_BUFFER_STATES } from './draft-buffer-states.tsx';
 import { DISCUSSION_STATES } from './discussion-states.tsx';
@@ -151,6 +153,12 @@ export const GALLERY_STATES: readonly GalleryState[] = [
         render: () => <TopBarState />,
     },
     {
+        id: 'top-bar-feedback-link',
+        group: 'Top bar',
+        title: 'Feedback: link to issues, no form',
+        render: () => <TopBarState feedback={GALLERY_FEEDBACK_LINK} />,
+    },
+    {
         id: 'settings-menu',
         group: 'Settings menu',
         title: 'closed',
@@ -182,20 +190,16 @@ export const GALLERY_STATES: readonly GalleryState[] = [
         id: 'settings-menu-open-light',
         group: 'Settings menu',
         title: 'open, light theme',
-        render: () => <SettingsMenuThemedState theme="light" />,
+        render: () => <SettingsMenuThemedState theme="light" style={null} />,
     },
-    {
-        
-        group: 'Settings menu',
-        
-        
-    },
-    {
-        
-        group: 'Settings menu',
-        
-        
-    },
+    ...EXTRA_STYLES.flatMap((extra) =>
+        (['dark', 'light'] as const).map((scheme) => ({
+            id: `settings-menu-open-${extra.id}-${scheme}`,
+            group: 'Settings menu',
+            title: `open, ${extra.label.en}, ${scheme === 'dark' ? 'dark' : 'light'}`,
+            render: () => <SettingsMenuThemedState theme={scheme} style={extra.id} />,
+        })),
+    ),
     ...OVERVIEW_STATES.filter((state) => state.id !== START_STATE_ID),
     ...REVIEW_COMPLETION_STATES,
     ...SHORTCUT_STATES,
@@ -394,9 +398,9 @@ function SettingsMenuState({ open = false, agentConnected = true }: { open?: boo
  * on the card itself instead of `<html>`. Tokens apply to any subtree (docs/design/theme.md).
  * The surrounding gallery keeps its own theme, so its theme toggle does not conflict with the card.
  */
-function SettingsMenuThemedState({ theme }: { theme: 'dark' | 'light' }) {
+function SettingsMenuThemedState({ theme, style }: { theme: 'dark' | 'light'; style: string | null }) {
     const [settings] = useState(() =>
-        createUiSettingsStore({ loaded: true, initial: { theme } }),
+        createUiSettingsStore({ loaded: true, initial: { theme, style } }),
     );
     return (
         <SettingsProvider store={settings}>
@@ -416,7 +420,7 @@ function SettingsMenuThemedContent() {
 }
 
 /** Gallery tabs are interactive, so their selected states can be compared. */
-function TopBarState() {
+function TopBarState({ feedback = GALLERY_FEEDBACK_ISSUES }: { feedback?: UiFeedbackChannel }) {
     const t = useT();
     const [view, setView] = useState<ViewId>('route');
 
@@ -433,7 +437,7 @@ function TopBarState() {
             onOpenSearch={() => undefined}
             agentConnected
             onReplayTour={() => undefined}
-            feedback={{ available: true, reason: null }}
+            feedback={feedback}
             feedbackContext={{
                 uiVersion: UI_VERSION,
                 prKey: 'fixture-medium',
@@ -444,8 +448,8 @@ function TopBarState() {
             onSendFeedback={() =>
                 Promise.resolve({
                     outcome: 'created',
-                    issueKey: '#123456',
-                    issueUrl: 'https://github.com/quillmart/quillmart/issues/123456',
+                    issueKey: '#123',
+                    issueUrl: 'https://github.com/example/sherpa/issues/123',
                     message: null,
                 })
             }

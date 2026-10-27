@@ -21,8 +21,8 @@ import { DiffWorkspace } from './full-diff.tsx';
 
 /**
  * Full diff shortcuts for the target under the pointer (docs/design/SPEC-elements.md §5): nothing is focused, the pointer
- * simply rests over a line, file card or thread. The pointer monitor is mocked because `elementFromPoint`
- * is absent in jsdom. The "mouse or focus" rule is checked through what the monitor returns to the view.
+ * simply rests over a line, file card or thread. `PointerTarget` is mocked because `elementFromPoint`
+ * is absent in jsdom. What `PointerTarget` returns to the view tests the "pointer or focus" rule.
  */
 
 const DATA = fixtureIteration('medium');
@@ -143,7 +143,7 @@ function mount(options: MountOptions = {}) {
     const session = createSessionStore({ initial: { view: 'diff', filter: 'all' } });
     const registry = createShortcutRegistry();
     registry.setActiveScope('full-diff');
-    // Pointer monitor: the test specifies what is under the mouse. `null` means the mouse was not the latest signal.
+    // `PointerTarget`: the test sets what is under the pointer. `null` means the pointer was not the latest input.
     let hovered: Element | null = null;
     const pointer: PointerTarget = {
         hovered: () => hovered,
@@ -305,7 +305,7 @@ describe('full diff shortcuts for the target under the pointer', () => {
         act(() => {
             focused.focus();
         });
-        // The mouse has not moved since focus changed, so the pointer monitor gives no target under the cursor.
+        // The pointer has not moved since focus. `PointerTarget` returns no target under the pointer.
         view.hover(null);
 
         view.press('c');

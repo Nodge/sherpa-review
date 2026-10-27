@@ -281,7 +281,7 @@ function resolveSlice(
 /**
  * Position among slice endpoints, oldest to newest: index in the iteration list (the server returns
  * it oldest to newest). The active iteration outside the list is newest. null cannot be a slice endpoint:
- * a gone iteration (the review host returns 400 for it) or an unknown one.
+ * it is gone (the host no longer returns it) or unknown.
  */
 function sliceIndex(iterations: readonly Iteration[], active: string | null, diffId: string): number | null {
     const index = iterations.findIndex((iteration) => iteration.diffId === diffId);
@@ -546,7 +546,7 @@ export type RowAction =
     | { readonly kind: 'edge'; readonly edge: string | null };
 
 /**
- * A click on a picker row. Slice selection takes two steps: Shift-click sets the first
+ * Picker row click. Select a slice in two steps: Shift+click sets the first
  * endpoint. The next click on another iteration, with or without Shift, builds the slice. Clicking the iteration
  * of the first endpoint clears it. A row that cannot be an endpoint uses normal click selection,
  * whether a first endpoint is set or not.

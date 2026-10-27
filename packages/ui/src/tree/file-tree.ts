@@ -48,8 +48,8 @@ export interface TreeFileRow {
     readonly blameUrl: string | null;
     /** Unmerged file: `conflict` tag on the row and exclusion from coverage (docs/design/SPEC-elements.md §4.1). */
     readonly conflict: boolean;
-    /** The file is in the extra `pci` lens, shown as a tag in its row (docs/design/README.md §10). */
-    readonly pci: boolean;
+    /** Tag for the file's audit scope (docs/design/README.md §10). null means it belongs to none. */
+    readonly auditTag: string | null;
     /** File reading progress (docs/design/SPEC-elements.md §2.12): three states and counts for the tooltip. */
     readonly read: FileReadState;
     /** Route in the margins (docs/design/README.md §10): stop badge or hatch. null means no route. */
@@ -87,10 +87,15 @@ export interface FileTree {
     readonly bulkDirectories: ReadonlySet<string>;
 }
 
+export interface TreeAudit {
+    readonly tag: string;
+    readonly fileIds: ReadonlySet<string>;
+}
+
 export interface FileTreeInput {
     readonly files: readonly FileDiff[];
-    /** Files in the `pci` lens. An empty set means no tags. */
-    readonly pciFileIds: ReadonlySet<string>;
+    /** Audit scope: its files get a row tag. null means no audit lens and no tags. */
+    readonly audit: TreeAudit | null;
     /** Ownership-lens files. null means no lens, so roots outside the ownership zone are not computed. */
     readonly mineFileIds: ReadonlySet<string> | null;
     /** File read-state. Files missing from the map use their own defaults. */
@@ -175,7 +180,7 @@ export function buildFileTree(input: FileTreeInput): FileTree {
             hostFileUrl: file.hostFileUrl,
             blameUrl: file.blameUrl,
             conflict: file.changeType === 'conflict',
-            pci: input.pciFileIds.has(file.fileId),
+            auditTag: input.audit?.fileIds.has(file.fileId) === true ? input.audit.tag : null,
             read,
             route: input.routeFiles?.get(file.fileId) ?? null,
         });

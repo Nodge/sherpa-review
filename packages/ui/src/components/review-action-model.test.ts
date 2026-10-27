@@ -149,7 +149,7 @@ describe('floating bar model', () => {
             'ship',
             {
                 publishedCommentIds: ['ok'],
-                failed: [{ commentId: 'bad', message: 'The review host refused' }],
+                failed: [{ commentId: 'bad', message: 'Host refused' }],
                 verdictApplied: false,
             },
             new Map([['bad', 'Fix the boundary']]),
@@ -159,7 +159,7 @@ describe('floating bar model', () => {
         expect(failure).toEqual({
             verdict: 'ship',
             failedCount: 1,
-            comments: [{ commentId: 'bad', message: 'The review host refused', body: 'The boundary needs fixing' }],
+            comments: [{ commentId: 'bad', message: 'Host refused', body: 'Fix the boundary' }],
             message: null,
         });
         expect(

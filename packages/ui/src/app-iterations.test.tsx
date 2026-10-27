@@ -1,13 +1,14 @@
 // @vitest-environment jsdom
 import {
     fixtureIteration,
+    GALLERY_HOSTS,
     MEDIUM_DIFF_ID,
     MEDIUM_DIFF_ID_V2,
     MEDIUM_HEAD_COMMIT,
     MEDIUM_HEAD_COMMIT_V2,
     routeFixtures,
 } from '@sherpa/fixtures';
-import type { Iteration, RouteSnapshot, UiRouteState, UiState } from '@sherpa/protocol';
+import type { Iteration, RouteSnapshot, UiReviewHost, UiRouteState, UiState } from '@sherpa/protocol';
 import { UI_ENDPOINTS } from '@sherpa/protocol';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -97,6 +98,7 @@ function mountApp(options: {
     readonly view?: ViewId;
     readonly routeFilter?: RouteFilter;
     readonly iterations?: readonly Iteration[];
+    readonly reviewHost?: UiReviewHost;
 }): Mounted {
     const originalFetch = globalThis.fetch;
     const globals = globalThis as { ResizeObserver?: unknown };
@@ -144,9 +146,9 @@ function mountApp(options: {
         prKey: 'fixture/medium',
         worker: { kind: 'never' },
         tasks: [],
-        reviewHost: 'fixture',
+        reviewHost: options.reviewHost ?? GALLERY_HOSTS.fixture,
         pr: DATA.pr,
-        feedback: { available: false, reason: 'The test feedback channel is unavailable.' },
+        feedback: { kind: 'issues', available: false, reason: 'The test feedback channel is unavailable.', discussionUrl: null },
         iterations: [...(options.iterations ?? [])],
         update: null,
         generationCap: null,
@@ -231,6 +233,17 @@ describe('iteration banners outside the route tab', () => {
 
         expect(mounted.host.textContent).toContain('The route was built for');
         expect(mounted.host.textContent).toContain('Rebuild the route');
+    });
+
+    it('uses the host description for stale wording: PR commits or working-tree snapshots', async () => {
+        const pr = mountApp({ route: routeState({ stale: STALE }) });
+        await pr.settle();
+        expect(pr.host.textContent).toContain('the PR is already at');
+
+        const tree = mountApp({ route: routeState({ stale: STALE }), reviewHost: GALLERY_HOSTS.local });
+        await tree.settle();
+        expect(tree.host.textContent).toContain('the working tree is at');
+        expect(tree.host.textContent).not.toContain('the PR is already at');
     });
 
     it('hides the stale banner during a rebuild because its button is disabled anyway', async () => {

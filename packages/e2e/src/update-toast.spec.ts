@@ -5,22 +5,26 @@ import path from 'node:path';
 import { announceUpdate, expect, test } from './sherpa-fixture.js';
 
 /**
- * "A new version is available" toast. No live review host here. On the fixture host, the check
- * disabled on the fixture host, and a dev endpoint supplies the "new version", just like in the gallery.
+ * The "New version available" toast. No network here: the fixture host disables version checks,
+ * and a dev endpoint supplies the "new version", just like in the gallery. The build's update channel decides
+ * how to update, so the toast expectations come from the dev endpoint response rather than being hardcoded in the spec.
  */
 
-/** Directory ending in the checkout path: determines the update command in the toast. */
-const CHECKOUT_DIR = '/tmp/fake/tools/sherpa/skill';
+/** Distribution directory. The channel uses it to build the update hint. */
+const INSTALL_DIR = '/tmp/sherpa-e2e/install';
 
 const VERSION = '9.9.9';
 const WHATS_NEW = 'Update toast and keyboard shortcuts sheet.';
 
-test('the toast arrives through the dev endpoint and shows the update command', async ({ page, launchSherpa }) => {
-    const server = await launchSherpa('fixture-medium', { installDir: CHECKOUT_DIR });
+test('the toast arrives through the dev endpoint and shows the update channel hint', async ({ page, launchSherpa }) => {
+    const server = await launchSherpa('fixture-medium', { installDir: INSTALL_DIR });
     await page.goto(server.url);
     await expect(page.locator('.top-bar')).toBeVisible();
 
-    await announceUpdate(page, server, { version: VERSION, whatsNew: WHATS_NEW, releasedAt: null });
+    const update = await announceUpdate(page, server, { version: VERSION, whatsNew: WHATS_NEW, releasedAt: null });
+    if (update === null) {
+        throw new Error('the dev endpoint returned no update: the server was built without an update channel');
+    }
 
     const toast = page.locator('.update-toast');
     await expect(toast).toBeVisible({ timeout: 2000 });
@@ -30,14 +34,21 @@ test('the toast arrives through the dev endpoint and shows the update command', 
 
     await toast.getByRole('button', { name: 'How to update' }).click();
 
-    await expect(toast.locator('.command-box__command')).toHaveValue("cd '/tmp/fake' && git pull");
+    const { install } = update;
+    if (install.command !== null) {
+        await expect(toast.locator('.command-box__command')).toHaveValue(install.command);
+    } else if (install.dir !== null) {
+        await expect(toast.locator('.update-toast__copy-dir')).toContainText(install.dir);
+    } else {
+        await expect(toast.locator('.update-toast__readme')).toBeVisible();
+    }
 });
 
 test('"Do not remind me" survives a server restart', async ({ page, launchSherpa }) => {
     // A shared state root means the same "one user": settings live there, not in the browser.
     const sherpaDir = await mkdtemp(path.join(tmpdir(), 'sherpa-e2e-update-'));
     try {
-        const first = await launchSherpa('fixture-medium', { sherpaDir, installDir: CHECKOUT_DIR });
+        const first = await launchSherpa('fixture-medium', { sherpaDir, installDir: INSTALL_DIR });
         await page.goto(first.url);
         await announceUpdate(page, first, { version: VERSION, whatsNew: WHATS_NEW, releasedAt: null });
 
@@ -53,7 +64,7 @@ test('"Do not remind me" survives a server restart', async ({ page, launchSherpa
         await expect(toast).toBeHidden();
 
         await first.stop();
-        const second = await launchSherpa('fixture-medium', { sherpaDir, installDir: CHECKOUT_DIR });
+        const second = await launchSherpa('fixture-medium', { sherpaDir, installDir: INSTALL_DIR });
         await page.goto(second.url);
         await expect(page.locator('.top-bar')).toBeVisible();
         await announceUpdate(page, second, { version: VERSION, whatsNew: WHATS_NEW, releasedAt: null });

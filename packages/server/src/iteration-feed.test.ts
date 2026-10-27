@@ -217,7 +217,7 @@ describe('iteration feed', () => {
         host.advanceIteration();
 
         expect(feed.active()?.diffId).toBe(V2.diffId);
-        // Publish the iteration list immediately: the banner cannot wait for the host interdiff (2.8–3.7 s).
+        // Publish the iteration list immediately. The banner cannot wait seconds for the host interdiff.
         expect(feed.staleFor(snapshot)).toEqual({
             routeCommit: V1.headCommit,
             prCommit: V2.headCommit,
@@ -329,7 +329,7 @@ describe('iteration feed', () => {
                 return original(slice);
             }
             slices.push(`${slice.base} ${slice.head}`);
-            // A slice from the review host takes seconds. Without a delay, the 2 consumers do not overlap.
+            // A host slice takes seconds. Without a delay, the two consumers would not overlap.
             await new Promise((resolve) => setTimeout(resolve, 20));
             return original(slice);
         };
@@ -548,7 +548,7 @@ describe('iteration feed', () => {
         const legacy = 'iter-0-3-x';
         const host = makeFixtureHost('medium');
         const original = host.getDiff.bind(host);
-        // The host omits the 0.3.x iteration from the list but computes a slice against it, as the review host does.
+        // The host omits the 0.3.x iteration from its list but can compute a slice with it, as real hosts do.
         host.getDiff = (slice) =>
             slice?.base === legacy ? original({ base: V1.diffId, head: slice.head }) : original(slice);
         seedSeenRange(legacy, 'legacy-file');
@@ -713,7 +713,7 @@ describe('iteration feed', () => {
 
     /**
      * Host with a slice counter and the ability to repeat a watcher event with the same list, as when
-     * the review host polls and returns the same response twice.
+     * polling a host that returns the same response twice.
      */
     function replayableHost(): {
         host: ReturnType<typeof makeFixtureHost>;
@@ -812,7 +812,7 @@ describe('iteration feed', () => {
             if (slice === undefined) {
                 return original(slice);
             }
-            // Calculating a slice on the review host takes seconds. Later events arrive before carryover finishes.
+            // A host slice takes seconds, so subsequent events arrive before carryover completes.
             await new Promise((resolve) => setTimeout(resolve, 20));
             return original(slice);
         };

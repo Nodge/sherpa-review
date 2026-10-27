@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { chatFixtures, fixtureIteration } from '@sherpa/fixtures';
+import { chatFixtures, fixtureIteration, GALLERY_HOSTS } from '@sherpa/fixtures';
 import type { AgentNote, UiChatResponse, UiRouteState, UiState } from '@sherpa/protocol';
 import { UI_ENDPOINTS } from '@sherpa/protocol';
 import { act } from 'react';
@@ -97,9 +97,9 @@ function mountApp(options: { readonly notes?: readonly AgentNote[]; readonly vie
         prKey: 'fixture/medium',
         worker: { kind: 'never' },
         tasks: [],
-        reviewHost: 'fixture',
+        reviewHost: GALLERY_HOSTS.fixture,
         pr: V2.pr,
-        feedback: { available: false, reason: 'The test feedback channel is unavailable.' },
+        feedback: { kind: 'issues', available: false, reason: 'The test feedback channel is unavailable.', discussionUrl: null },
         iterations: [{ ...V2.iteration, status: 'active' }],
         update: null,
         generationCap: null,

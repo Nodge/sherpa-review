@@ -67,7 +67,7 @@ function FiltersState({ filters }: { filters: readonly FileFilter[] }) {
                 filters={filters}
                 activeFilter={active}
                 onFilter={setFilterId}
-                pciFileIds={new Set()}
+                auditFilter={null}
                 mineFileIds={findFilter(filters, MINE_FILTER_ID)?.fileIds ?? null}
                 readState={READ_STATE}
                 route={null}

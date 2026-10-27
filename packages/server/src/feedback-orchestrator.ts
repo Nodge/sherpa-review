@@ -7,7 +7,7 @@ import { reviewFeedbackResultSchema } from '@sherpa/protocol';
 import { buildFeedbackPayload, materializeFeedbackPayload } from './feedback-payload.js';
 import type { FeedbackStore } from './feedback-store.js';
 import { resolveGenerationLocale } from './generation-locale.js';
-import type { FeedbackHost, FeedbackReply } from './hosts/select.js';
+import type { FeedbackHost, FeedbackReply } from './hosts/plugin.js';
 import type { TaskQueue, TaskRecord, TaskResultAcceptance } from './queue.js';
 import { voiceErrors } from './route/voice.js';
 import { holdsPayload } from './shared-payload.js';
@@ -256,7 +256,7 @@ export class FeedbackOrchestrator {
 
     /**
      * Writes agent replies to threads and closes the round. Order matters: set `done` only after
-     * a successful write. Otherwise a host failure (disk full, permissions, failed `git`) would close the round
+     * a successful write, otherwise a host failure (no space, permissions, a failed VCS command) would close the round
      * forever, because reconciliation never enqueues accepted or failed rounds again. A failure
      * leaves the binding open, and the next reconciliation enqueues the round for the agent again.
      */

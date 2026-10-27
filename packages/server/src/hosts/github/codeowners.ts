@@ -4,14 +4,13 @@
  * Semantics (`docs/research/github-api.md` §CODEOWNERS):
  * - a line is `<pattern> <owner>…`. `#` starts a comment at the start of a line or after a space.
  * - a file gets the owners of the **last** matching rule, rather than all matching rules
- *   (matching rules do not accumulate).
+ *   (other hosts may combine rules).
  * - a pattern without owners clears ownership assigned by preceding rules.
  * - supports a gitignore subset without GitHub extensions: `!` negation, `[a-z]` classes
  *   and escaped hashes are unsupported. Sherpa ignores these lines entirely, just as
  *   GitHub ignores them and reports an error. `{a,b}` is literal, GitHub has no alternatives.
  *
- * A Java NIO glob dialect does not work here because its anchoring rules
- * and `**` behaviour differ.
+ * Globs from other adapters do not fit here. Their anchoring rules and `**` semantics differ.
  */
 
 /** One file rule: pattern, owners (empty means unowned) and line number for diagnostics. */

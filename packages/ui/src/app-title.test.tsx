@@ -41,12 +41,12 @@ afterEach(() => {
 
 function uiState(pr: PrMeta | null): UiState {
     return {
-        prKey: 'github-quillmart--quillmart--4821',
+        prKey: 'fixture-4821',
         worker: { kind: 'never' },
         tasks: [],
         reviewHost: null,
         pr,
-        feedback: { available: false, reason: 'The test feedback channel is unavailable.' },
+        feedback: { kind: 'issues', available: false, reason: 'The test feedback channel is unavailable.', discussionUrl: null },
         iterations: [],
         update: null,
         generationCap: null,

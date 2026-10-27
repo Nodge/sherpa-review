@@ -11,9 +11,9 @@ The skill invocation argument decides what is reviewed. There are two modes:
 
 - **No argument** means local review of the directory you are working in: everything that changed there against the base commit of the git checkout, committed and uncommitted alike. Stay in local mode even when the branch of that checkout has a pull request. A bare call is never a request to review the PR.
 - **A path to a directory** (`.`, `~/projects/app`) means the same local review, for that directory.
-- **A GitHub URL** (`https://github.com/quillmart/quillmart/pull/12345`) — PR review of `github-quillmart--quillmart--12345`.
+
 - **A GitHub PR URL** (`https://github.com/<owner>/<repo>/pull/<n>`, any trailing path) — PR review of that pull request. Pass the URL to `--pr` as it is; Sherpa turns it into the key itself and prints the key it settled on.
-- **A bare number** (`12345`) — PR review of `github-quillmart--quillmart--12345`.
+
 - **An already-formed key** `<host>-<id>` (`github-quillmart--quillmart--12345`, `fixture-medium`) means PR review, key as is.
 - Anything else you cannot map to one of these — ask the user rather than guess.
 

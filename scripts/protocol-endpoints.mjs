@@ -61,7 +61,7 @@ const DESCRIPTIONS = {
         reviewChatCancel: 'cancel a question',
         reviewChatRetry: 'retry a failed question',
         reviewChatNoteDelete: 'delete an agent note',
-        feedback: 'reviewer feedback as an issue',
+        feedback: 'reviewer feedback to the build feedback channel',
         updateCheck: 'check for a new distribution version on demand',
         settings: 'read and edit reviewer settings',
         prState: 'UI state for this PR: collapsed nodes and recent palette commands',

@@ -375,7 +375,7 @@
       <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--c-e2b878);background:var(--c-241f14);border:1px solid var(--c-4a4230);border-radius:4px;padding:2px 6px">2a · 09-20 · №1</span>
       <h2 style="margin:0;font-size:17px;font-weight:600;color:var(--c-f0f1f4)">"Open issue" toggle in the composer</h2>
     </div>
-    <p style="margin:0 0 20px;max-width:760px;font-size:12.5px;line-height:1.6;color:var(--c-a9aeb7)">One row above the editor border: a switch and the label "Open issue". An issue marks a comment on the review host as a finding that must be resolved before merge. It is set while writing and sent to the host with the comment on Ship. A host without this concept (GitHub, <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--c-9ba1ab)">capabilities.issueComments === false</span>) has no row at all, no disabled control or hint. The composer starts at its border.</p>
+    <p style="margin:0 0 20px;max-width:760px;font-size:12.5px;line-height:1.6;color:var(--c-a9aeb7)">One row above the editor border: a toggle + the "Open issue" label. An issue is a comment flag on the review host for a remark that must be resolved before merging. The reviewer sets it while writing, and Ship sends it to the host with the comment. For a host without this concept (GitHub, <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--c-9ba1ab)">capabilities.issueComments === false</span>), the row is absent. No disabled control or hint. The composer starts with the border.</p>
 
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:18px;align-items:start">
 
@@ -485,8 +485,8 @@
     <div style="margin-top:16px;padding:12px 14px;background:var(--c-191712);border-left:2px solid var(--c-6b5b39);border-radius:0 6px 6px 0;max-width:900px">
       <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--c-8a7550);margin-bottom:5px">Decisions</div>
       <ul style="margin:0;padding-left:17px;font-size:12.5px;line-height:1.65;color:var(--c-d8c9ad)">
-        <li>A switch, not a checkbox or button, because this is a comment property (<span style="font-family:'IBM Plex Mono',monospace">CommentDraft.issue: boolean</span>), not an action. Ship is the only action. The flag goes to the review host in the same batch as the text.</li>
-        <li>The label is two words, "Open issue". It uses the host's terminology without an explanation because its reviewers know it. Who resolves it and when is a team agreement that the UI does not describe.</li>
+        <li>Use a switch, not a checkbox or a button: this is a comment property (<span style="font-family:'IBM Plex Mono',monospace">CommentDraft.issue: boolean</span>), not an action. Ship is the only action. The flag goes to the host in the same batch as the text.</li>
+        <li>The label is two words, "Open issue". Use the host term without explanation. The reviewer knows the concept from their host. Who resolves it and when is a team agreement, which the UI does not describe.</li>
         <li>Place it above the editor, below the context heading, so the property is read before the text. Below the editor it would compete with "Save draft". Nothing goes on the right of the row.</li>
         <li>The same row appears in all 3 composer locations (<a href="Sherpa Additions.dc.html#1c" style-hover="color:var(--c-b3bcff)" style-active="color:var(--c-7f8cff)">1c</a>, <a href="Sherpa Additions.dc.html#1d" style-hover="color:var(--c-b3bcff)" style-active="color:var(--c-7f8cff)">1d</a>, thread reply), because a reply can be an issue too.</li>
         <li>A flagged draft has an <span style="font-family:'IBM Plex Mono',monospace">issue</span> chip next to <span style="font-family:'IBM Plex Mono',monospace">draft</span>. After publication, the same <span style="font-family:'IBM Plex Mono',monospace">issue</span> chip stays in the comment header beside the name. It is a flag, not a separate entity. The thread state (open / resolved) works like any other thread. When editing a draft, the switch stays in place and retains its state.</li>
@@ -1198,10 +1198,10 @@ class Component extends DCLogic {
       replies: [
         { ini: 'AS', author: 'asha', meta: '1 h ago', body: 'drop moved inside the unit of work. If save() fails, nothing is committed and there is nothing to invalidate.' },
         { ini: 'MP', author: 'morgan', meta: '52 min ago', body: 'Then TTL only matters for the retry path. Agreed on the order.' },
-        { ini: '◆', bot: true, author: 'ai-review-bot', meta: '40m ago', body: '`retry_edit()` calls drop() outside the unit of work, line 203.' },
+        { ini: '◆', bot: true, author: 'review-bot', meta: '40 min ago', body: '`retry_edit()` calls drop() outside the unit of work, line 203.' },
         { ini: 'RS', author: 'you', meta: 'just now', draft: true, body: 'Good catch. Cover `retry_edit()` with the same test before merging.' }
       ] },
-    { id: 't2', ini: '◆', bot: true, author: 'ai-review-bot', source: 'AI review · bot', meta: 'order_service.py:150 · 5h ago', kind: 'bot', status: 'open', action: 'Reply', hint: 'from the review host, included in the stop\'s 3 comments',
+    { id: 't2', ini: '◆', bot: true, author: 'review-bot', source: 'ai-review · bot', meta: 'order_service.py:150 · 5 h ago', kind: 'bot', status: 'open', action: 'Reply', hint: 'from the host, one of the 3 comments in this stop',
       body: '`cache.drop` is awaited inside the transaction. A slow cache now extends the time the orders table is locked.' },
     { id: 't3', ini: 'AO', author: 'ada', meta: 'order_service.py:145 · yesterday', kind: 'resolved', status: 'resolved', action: 'Reopen', hint: '',
       body: 'naming: drop() → invalidate(), as in the rest of the repo.',
@@ -1224,7 +1224,7 @@ class Component extends DCLogic {
 
   plain(md) { return String(md || '').split('\n')[0].replace(/[`*]/g, ''); }
 
-  DEEP = { id: 'd0', ini: '◆', bot: true, author: 'ai-review-bot', source: 'AI review · bot', meta: 'order_service.py:150 · 5h ago', status: 'open',
+  DEEP = { id: 'd0', ini: '◆', bot: true, author: 'review-bot', source: 'ai-review · bot', meta: 'order_service.py:150 · 5 h ago', status: 'open',
     body: '`cache.drop` is awaited inside the transaction. A slow cache now extends the lock window on the orders table.',
     replies: [
       { ini: 'AS', author: 'asha', meta: '4 h ago', body: 'The cache is local, and p99 for drop is 2 ms. The lock window barely changes.', replies: [
@@ -1246,7 +1246,7 @@ class Component extends DCLogic {
     return "display:inline-flex;align-items:center;gap:4px;height:18px;padding:0 6px 0 5px;border-radius:9px;font-family:'IBM Plex Mono',monospace;font-size:10px;white-space:nowrap;" + (res ? 'color:var(--c-86d9a8);background:var(--c-16211a);border:1px solid var(--c-25422f)' : 'color:var(--c-e2b878);background:var(--c-241f14);border:1px solid var(--c-4a4230)');
   }
 
-  ISSUE_THR = { id: 'i0', ini: '◆', bot: true, author: 'ai-review-bot', source: 'AI review · bot', meta: 'order_service.py:150 · 5h ago', res: true,
+  ISSUE_THR = { id: 'i0', ini: '◆', bot: true, author: 'review-bot', source: 'ai-review · bot', meta: 'order_service.py:150 · 5 h ago', res: true,
     body: '`cache.drop` is awaited inside the transaction. A slow cache now extends the lock window on the orders table.',
     replies: [
       { ini: 'AS', author: 'asha', meta: '4 h ago', body: 'The cache is local, and p99 for drop is 2 ms. The lock window barely changes.', replies: [
@@ -1586,7 +1586,7 @@ class Component extends DCLogic {
       { name: 'drew', ini: 'DK', sub: 'all resolved', count: '4', open: false, bot: false },
     ];
     const bots = [
-      { name: 'ai-review-bot', ini: 'AR', sub: '68 threads · 61 automatically resolved', count: '68', open: false, bot: true },
+      { name: 'review-bot', ini: 'RB', sub: '68 threads · 61 automatically resolved', count: '68', open: false, bot: true },
       { name: 'pci-lint', ini: 'PL', sub: '6 threads · 2 open', count: '6', open: true, bot: true },
     ];
     let parts = [];

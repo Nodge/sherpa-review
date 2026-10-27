@@ -18,12 +18,12 @@ const INDEX = [
 
 describe('document state in index.html', () => {
     it.each([
-        ['dark', false, 'dark'],
-        ['light', false, 'light'],
-        
-        
-    ] as const)('explicit theme %s is set as an attribute without a system script', (theme, expected) => {
-        const html = injectDocumentSettings(INDEX, { theme, textSize: 'm' });
+        ['dark', null, 'dark'],
+        ['light', null, 'light'],
+        ['dark', 'sample', 'sample-dark'],
+        ['light', 'sample', 'sample-light'],
+    ] as const)('explicit theme %s, style %s is set as an attribute without a system theme script', (theme, style, expected) => {
+        const html = injectDocumentSettings(INDEX, { theme, style, textSize: 'm' });
 
         expect(html).toContain(`<html lang="ru" data-textsize="m" data-theme="${expected}">`);
         expect(html).not.toContain('<script>');
@@ -31,12 +31,12 @@ describe('document state in index.html', () => {
     });
 
     it('sets the text size on `<html>` with any theme', () => {
-        expect(injectDocumentSettings(INDEX, { theme: 'dark', textSize: 'l' })).toContain('data-textsize="l"');
-        expect(injectDocumentSettings(INDEX, { theme: 'auto', textSize: 'l' })).toContain('data-textsize="l"');
+        expect(injectDocumentSettings(INDEX, { theme: 'dark', style: null, textSize: 'l' })).toContain('data-textsize="l"');
+        expect(injectDocumentSettings(INDEX, { theme: 'auto', style: 'sample', textSize: 'l' })).toContain('data-textsize="l"');
     });
 
     it('auto: places the script first in `<head>`, before stylesheets', () => {
-        const html = injectDocumentSettings(INDEX, { theme: 'auto', textSize: 'm' });
+        const html = injectDocumentSettings(INDEX, { theme: 'auto', style: null, textSize: 'm' });
 
         expect(html).not.toContain('data-theme=');
         expect(html).toContain('prefers-color-scheme: dark');
@@ -45,12 +45,12 @@ describe('document state in index.html', () => {
     });
 
     it.each([
-        [false, false, 'light'],
-        [false, true, 'dark'],
-        
-        
-    ] as const)('Auto: system dark=%s resolves before CSS', (dark, expected) => {
-        const html = injectDocumentSettings(INDEX, { theme: 'auto', textSize: 'm' });
+        [null, false, 'light'],
+        [null, true, 'dark'],
+        ['sample', false, 'sample-light'],
+        ['sample', true, 'sample-dark'],
+    ] as const)('Auto: style %s, system dark=%s resolve before CSS', (style, dark, expected) => {
+        const html = injectDocumentSettings(INDEX, { theme: 'auto', style, textSize: 'm' });
         const script = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1];
         expect(script).toBeDefined();
         expect(html.indexOf('<script>')).toBeLessThan(html.indexOf('<link rel="stylesheet"'));
@@ -66,9 +66,9 @@ describe('document state in index.html', () => {
     it('replaces existing document attributes without duplicating them', () => {
         const stale = INDEX.replace('<html lang="ru">', '<html lang="ru" data-theme=\'dark\' data-textsize=l>');
 
-        const html = injectDocumentSettings(stale, { theme: 'dark', textSize: 'm' });
+        const html = injectDocumentSettings(stale, { theme: 'dark', style: 'sample', textSize: 'm' });
 
-        expect(html).toContain('<html lang="ru" data-textsize="m" data-theme="dark">');
+        expect(html).toContain('<html lang="ru" data-textsize="m" data-theme="sample-dark">');
         expect([...html.matchAll(/data-theme=/g)]).toHaveLength(1);
         expect([...html.matchAll(/data-textsize=/g)]).toHaveLength(1);
     });
@@ -76,7 +76,7 @@ describe('document state in index.html', () => {
     it('minimal document: tag case and a missing `<head>` do not break injection', () => {
         const upper = injectDocumentSettings('<!DOCTYPE HTML><HTML><BODY>x</BODY></HTML>', {
             theme: 'auto',
-            
+            style: null,
             textSize: 'm',
         });
 
@@ -88,14 +88,14 @@ describe('document state in index.html', () => {
     it('leaves a document without `<html>` unchanged: nowhere to inject', () => {
         const raw = '<!doctype html><title>Sherpa</title>';
 
-        expect(injectDocumentSettings(raw, { theme: 'light', textSize: 'l' })).toBe(raw);
+        expect(injectDocumentSettings(raw, { theme: 'light', style: null, textSize: 'l' })).toBe(raw);
     });
 
     it('static asset wrapper modifies only index.html and reads settings on every request', async () => {
         let theme: 'auto' | 'dark' | 'light' = 'light';
         const assets = withDocumentSettings(staticAssets({ '/index.html': INDEX, '/assets/app.css': 'body{}' }), () => ({
             theme,
-            
+            style: null,
             textSize: 'm',
         }));
 

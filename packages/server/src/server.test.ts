@@ -12,7 +12,7 @@ import { startServer } from './server.js';
 import { deadPid, get, makeTempSherpaDir, removeTempSherpaDir } from './test-support.js';
 import { SERVER_VERSION } from './version.js';
 
-const PR_KEY = 'github-quillmart--quillmart--12345';
+const PR_KEY = 'pr-12345';
 
 describe('startServer', () => {
     let sherpaDir: string;
@@ -31,12 +31,13 @@ describe('startServer', () => {
     });
 
     async function start(prKey = PR_KEY, host?: string): Promise<SherpaServer> {
-        // Tests must not call a live review host (docs/testing.md). Without a host, the route does not warm up,
-        // and this suite's review key stays just a key.
+        // Live hosts are forbidden in tests (docs/testing.md). Without a host, the route doesn't warm up.
         const server = await startServer({
+            updateChannel: null,
+            feedbackChannel: null,
             prKey,
             sherpaDir,
-            reviewHostFactory: () => null,
+            hosts: [],
             ...(host === undefined ? {} : { host }),
         });
         servers.push(server);
@@ -178,7 +179,7 @@ describe('startServer', () => {
 
             await expect(start()).rejects.toThrow(ServerAlreadyRunningError);
 
-            const error = await startServer({ prKey: PR_KEY, sherpaDir, reviewHostFactory: () => null }).catch(
+            const error = await startServer({ updateChannel: null, feedbackChannel: null, prKey: PR_KEY, sherpaDir, hosts: [] }).catch(
                 (caught: unknown) => caught,
             );
             expect(error).toBeInstanceOf(ServerAlreadyRunningError);
@@ -187,9 +188,9 @@ describe('startServer', () => {
 
         it('leaves exactly one server after concurrent starts', async () => {
             const results = await Promise.allSettled([
-                startServer({ prKey: PR_KEY, sherpaDir, reviewHostFactory: () => null }),
-                startServer({ prKey: PR_KEY, sherpaDir, reviewHostFactory: () => null }),
-                startServer({ prKey: PR_KEY, sherpaDir, reviewHostFactory: () => null }),
+                startServer({ updateChannel: null, feedbackChannel: null, prKey: PR_KEY, sherpaDir, hosts: [] }),
+                startServer({ updateChannel: null, feedbackChannel: null, prKey: PR_KEY, sherpaDir, hosts: [] }),
+                startServer({ updateChannel: null, feedbackChannel: null, prKey: PR_KEY, sherpaDir, hosts: [] }),
             ]);
 
             const started = results.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : []));
@@ -219,10 +220,10 @@ describe('startServer', () => {
 
         it('starts another PR alongside it', async () => {
             const first = await start();
-            const second = await start('github-quillmart--quillmart--999');
+            const second = await start('pr-999');
 
             expect(second.port).not.toBe(first.port);
-            expect(await readManifest(manifestPathFor(sherpaDir, 'github-quillmart--quillmart--999'))).not.toBeNull();
+            expect(await readManifest(manifestPathFor(sherpaDir, 'pr-999'))).not.toBeNull();
         });
     });
 
@@ -240,6 +241,6 @@ describe('startServer', () => {
     });
 
     it('prevents an invalid PR key from writing outside the state directory', async () => {
-        await expect(startServer({ prKey: '../escape', sherpaDir })).rejects.toThrow(/Invalid PR key/);
+        await expect(startServer({ updateChannel: null, feedbackChannel: null, prKey: '../escape', sherpaDir, hosts: [] })).rejects.toThrow(/Invalid PR key/);
     });
 });

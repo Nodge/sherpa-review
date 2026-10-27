@@ -631,12 +631,12 @@ describe('diff card list', () => {
 });
 
 describe('height estimates from scroll container CSS', () => {
-    it('changing only the palette preserves measured heights', async () => {
+    it.each([null, 'sample'])('preserves measured heights when only the palette changes (style: %s)', async (style) => {
         const scrollElement = document.createElement('div');
         scrollElement.style.setProperty('--line-height-code', '17px');
         scrollElement.style.setProperty('--diff-card-estimate-chrome-height', '46px');
-        scrollElement.setAttribute('data-theme', 'dark');
-        const settings = createUiSettingsStore({ loaded: true, initial: { theme: 'dark' } });
+        scrollElement.setAttribute('data-theme', style === null ? 'dark' : `${style}-dark`);
+        const settings = createUiSettingsStore({ loaded: true, initial: { theme: 'dark', style } });
         const file = pickFile(MEDIUM.diff.files, isPlain, 'regular text file');
         mount({ files: [file], settings, scrollElement, parse: () => new Promise(() => undefined) });
         const estimate = virtual.instance().estimateSize(0);
@@ -644,7 +644,7 @@ describe('height estimates from scroll container CSS', () => {
 
         await act(async () => {
             settings.update({ theme: 'light' });
-            scrollElement.setAttribute('data-theme', 'light');
+            scrollElement.setAttribute('data-theme', style === null ? 'light' : `${style}-light`);
             await Promise.resolve();
         });
 
@@ -664,8 +664,8 @@ describe('height estimates from scroll container CSS', () => {
         });
         const scrollElement = document.createElement('div');
         scrollElement.className = 'geometry';
-        scrollElement.setAttribute('data-theme', 'light');
-        const settings = createUiSettingsStore({ loaded: true, initial: {} });
+        scrollElement.setAttribute('data-theme', 'sample-light');
+        const settings = createUiSettingsStore({ loaded: true, initial: { style: null } });
         const file = {
             ...pickFile(MEDIUM.diff.files, isPlain, 'regular text file'),
             changeType: 'add' as const,

@@ -1,11 +1,11 @@
 import { execFile } from 'node:child_process';
 
-import type { FileChangeType, LocalVcsKind } from '@sherpa/protocol';
+import type { FileChangeType } from '@sherpa/protocol';
 
 /**
  * Boundary between a working-tree snapshot and version control: the `LocalVcs` interface
  * and a shared command runner. Everything the snapshot asks the VCS is listed here. Output parsing
- * output parsing lives inside the backend (`git-vcs.ts`), which returns parsed structures.
+ * lives inside the backend (for example, `git-vcs.ts`), which returns parsed structures.
  */
 
 /** Output limit for one command: a working-tree patch can be megabytes long. */
@@ -13,9 +13,6 @@ const MAX_OUTPUT_BYTES = 64 * 1024 * 1024;
 
 /** Commands run locally: one second is plenty, but a checkout on FUSE can be slow. */
 const COMMAND_TIMEOUT_MS = 30_000;
-
-/** The VCS behind a local review also forms part of the key prefix (`local-git-`). */
-export type { LocalVcsKind };
 
 /** Command result. stdout contains bytes: `show` can return binary contents too. */
 export interface CommandOutcome {
@@ -26,12 +23,12 @@ export interface CommandOutcome {
 
 /**
  * VCS command runner with a fixed binary and working directory (the project directory).
- * Dependency injection keeps tests from calling the real VCS.
+ * Inject it for tests so they do not call the real VCS.
  */
 export type CommandRunner = (args: readonly string[]) => Promise<CommandOutcome>;
 
 /** Real command runner: binary from PATH, working directory set to the project directory. */
-export function commandRunnerIn(bin: LocalVcsKind, cwd: string): CommandRunner {
+export function commandRunnerIn(bin: string, cwd: string): CommandRunner {
     return async (args) =>
         new Promise<CommandOutcome>((resolve) => {
             execFile(
@@ -54,7 +51,7 @@ function numericCode(error: Error): number | null {
 /** Bytes from a successful command. A nonzero exit code throws with the first meaningful stderr line. */
 export async function commandBytes(
     run: CommandRunner,
-    bin: LocalVcsKind,
+    bin: string,
     args: readonly string[],
 ): Promise<Buffer> {
     const outcome = await run(args);
@@ -67,7 +64,7 @@ export async function commandBytes(
 /** Text output of a successful command. */
 export async function commandText(
     run: CommandRunner,
-    bin: LocalVcsKind,
+    bin: string,
     args: readonly string[],
 ): Promise<string> {
     return (await commandBytes(run, bin, args)).toString('utf8');
@@ -76,7 +73,7 @@ export async function commandText(
 /** Single nonempty output line: fail on an empty response where a commit is expected. */
 export async function commandLine(
     run: CommandRunner,
-    bin: LocalVcsKind,
+    bin: string,
     args: readonly string[],
 ): Promise<string> {
     const line = (await commandText(run, bin, args)).trim();
@@ -124,7 +121,10 @@ export interface NameStatusEntry {
 
 /** Everything a working-tree snapshot asks the VCS. */
 export interface LocalVcs {
-    readonly kind: LocalVcsKind;
+    /** VCS behind local review, also part of the key prefix (`local-git-`). */
+    readonly kind: string;
+    /** Checkout name with an article for rejection messages: `a git checkout`. */
+    readonly checkoutLabel: string;
 
     /** Absolute checkout root. Fail outside a checkout. */
     root(): Promise<string>;

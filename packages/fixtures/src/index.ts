@@ -1,6 +1,6 @@
 /**
  * Fixture host adapter: deterministic PRs for the UI, state gallery and tests.
- * The server selects it for prKey values like `fixture-<name>` (see `hosts/select.ts`), for development and e2e.
+ * The server selects it by a `fixture-<name>` prKey (server plugin `hosts/fixture/plugin.ts`) for dev and e2e.
  */
 export { FixtureHost, makeFixtureHost } from './fixture-host.js';
 export type { FixtureHostOptions } from './fixture-host.js';
@@ -36,11 +36,13 @@ export { routeFixtures } from './data/index.js';
  * Domain object builders: the gallery and tests use them to build thread sets missing from the
  * ready-made fixtures (scale §1e: 86 threads from 85 bots).
  */
-export { anchor, bot, comment, human, lens, singleIteration, thread } from './builders.js';
+export { anchor, bot, comment, human, lens, PCI_AUDIT, singleIteration, thread } from './builders.js';
 export type { CommentSpec, LensSpec, ThreadSpec } from './builders.js';
 /** People photos for the gallery: offline data URIs and a deliberately broken URL for initials fallback. */
 export { GALLERY_AVATAR_BROKEN, GALLERY_AVATAR_PHOTOS, withAvatar, withAvatars } from './avatars.js';
 export type { RouteBrokenResults, RouteFixtures, RouteRawResults, RouteRawResultsEn } from './data/index.js';
+/** Host descriptions for the gallery and UI tests, the same ones returned by server plugins. */
+export { GALLERY_HOSTS } from './hosts.js';
 /** Image outside `medium`: the gallery needs a second side of a different size. */
 export { PNG_SMALL_BASE64 } from './data/images.js';
 /** File text on both sides: the state gallery needs it without a server or host. */

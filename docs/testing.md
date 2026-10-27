@@ -14,7 +14,7 @@ pnpm -r typecheck && pnpm -r lint && pnpm -r test
 
 E2E isn't part of the required checks. `packages/e2e` has no `test` script, only `e2e`. Run Playwright separately before a release and after changes to `packages/e2e`, the server, or UI flows covered by e2e. The performance spec is part of the regular e2e suite (§5).
 
-Tests must not call a live review host or model. The host uses recorded responses, generation uses raw fixture outputs.
+Tests must not use live hosts or a live model. Host calls use recorded responses, and generation uses raw outputs from fixtures.
 
 ## 2. Unit tests by package
 
@@ -30,7 +30,7 @@ Storage uses built-in `node:sqlite`. An append-only migration list (`packages/se
 
 The route validator has coverage from 2 sides: the golden suite (§3) and the negative corpus in `packages/server/src/route/corpus.test.ts`, a table of handwritten malformed results with exact error-message comparisons. Every case of "the model returned something strange" adds a corpus entry.
 
-**`cli`** also has a config with only the global setup that builds the bundle. Unit tests cover argument parsing, the Node version check, opening the browser, task text formatting, the `next` timeout, PR discovery from recorded command output, finding and loading the server module, and the absence of external imports and server code in the built bundle. `up.test.ts` spawns the real built CLI as a daemon, replacing only the server module.
+**`cli`** also configures only global setup to build the bundle. Unit tests cover argument parsing, Node version checks, opening the browser, task text format, the `next` timeout, PR discovery through host plugins, finding and loading the server module, and the absence of external imports and server code in the built bundle. `up.test.ts` spawns the real built CLI as a daemon, replacing only the server module.
 
 `cli.integration.test.ts` calls commands as functions but uses a real server: `up` (finds a running server, doesn't reopen the tab, reports "incomplete distribution" when the adjacent server module is missing), `server` (passes arguments unchanged to the module, reports "incomplete distribution" for a module without `runServer`), `worker register` (state file and permissions, `--lang`, reconnection, session eviction), `task complete/progress/fail` (text limit, another task's number, another session's token, a dead manifest).
 
@@ -52,9 +52,9 @@ Three separate guards check:
 
 ## 3. The `ReviewHost` contract suite
 
-`packages/server/src/hosts/review-host-contract.ts` exports the function `describeReviewHostContract(name, makeHost, { writes?, advance?, viewer?, skip?, slow? })`. The host implementations call it: `FixtureHost` loops over all fixtures, `GithubHost` uses recorded GitHub API responses, and `LocalHost` uses real `git` in a temporary repository. One set of checks runs against all implementations, catching differences where the adapters are defined (`docs/architecture.md §5`).
+`packages/server/src/hosts/review-host-contract.ts` is a function, `describeReviewHostContract(name, makeHost, { writes?, advance?, viewer?, skip?, slow? })`, rather than a test. Adapter tests use a relative import. All 3 implementations call it: `FixtureHost` (a loop over all fixtures), `GithubHost` against the recorded GitHub API, and `LocalHost` against real `git` in a temporary repository. One set of checks covers 3 implementations, catching adapter differences where they arise (`docs/architecture.md §5`).
 
-The local host's git backend (`git-vcs.test.ts`, `local-git-host*.test.ts`) runs against real `git`. Its repository is created in a system temporary directory, outside other checkouts, in an isolated environment. The backend itself runs as in production, using machine configuration. Only the author name is set in the temporary repository's configuration so test logins do not depend on the machine. If `git` is missing, the entire suites are skipped. Starting a process takes about 100 milliseconds, so these suites have their own timeouts.
+The shared `LocalHost` scenarios (`local-host.test.ts`, `local-host-threads.test.ts`, `local-host-rounds.test.ts`, `local-iterations.test.ts`, `local-git-carry.test.ts`, the publishing block in `feedback-orchestration.test.ts`) and Git backend suites (`git-vcs.test.ts`, `local-git-host*.test.ts`) run against real `git` through the `git-fixture.ts`, `git-project.ts` and `git-contract-host.ts` helpers. They create a repository in a system temporary directory (never inside another VCS checkout) with an isolated environment, but invoke the backend as in production, with the machine's config. Only the author name is set in the temporary repository's config so the login in tests doesn't depend on the machine. These scenarios are skipped entirely if `git` isn't installed. Each snapshot takes several `git` invocations, so Git suites have their own timeouts: 30 s per test and 15 s to wait for a polling tick.
 
 What the tests check:
 
@@ -73,7 +73,7 @@ What the tests check:
 
 **Golden tests** cover the route validator, not review rules. `packages/server/src/route/golden.test.ts` takes raw model output from fixtures (the skeleton and section results, exactly as an agent would return them) and the expected finished route snapshot, runs the raw text through the production validator and compares the result verbatim. Coverage includes the plan from the skeleton with the synthetic "Other" stop, identical results when sections are split into batches, stop digests that discard unsupported claims, anchors resolving to files in the active iteration, a second pass after a push, and English generation. There is no regeneration mode. Edit goldens by hand. `packages/fixtures/src/route.test.ts` checks the fixtures themselves.
 
-Review host rules have ordinary unit tests: reviewer-invocation criteria (who counts as an invoked reviewer and how, behaviour on incomplete responses) and the glob dialect in `subpaths` (`**` versus `*`, character classes, groups, escaping, "last match wins", parse errors reported as errors instead of silently not matching).
+
 
 ## 4. E2E
 
@@ -81,13 +81,6 @@ Review host rules have ordinary unit tests: reviewer-invocation criteria (who co
 
 ```
 pnpm --filter @sherpa/e2e exec playwright install chromium
-```
-
-An environment variable sets the mirror:
-
-```
-
-  pnpm --filter @sherpa/e2e exec playwright install chromium
 ```
 
 `global-setup.ts` builds the artifacts that e2e tests run as production once per run: UI static assets and the CLI bundle.

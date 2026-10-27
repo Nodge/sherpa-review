@@ -33,11 +33,11 @@
     white-space: nowrap;
 }
 
-/* Audit scope chip: shortcut to the `pci` filter (docs/design/README.md §Filters). */
-.pr-header__pci {
+/* Audit scope chip, a shortcut to the audit filter (docs/design/README.md §Filters). */
+.pr-header__audit {
     height: 17px;
     padding: 0 6px;
-    border: 1px solid var(--tag-pci-border);
+    border: 1px solid var(--tag-audit-border);
     border-radius: var(--radius-key);
     background: transparent;
     font-family: var(--font-mono);
@@ -49,7 +49,7 @@
     cursor: pointer;
 }
 
-.pr-header__pci.is-active {
+.pr-header__audit.is-active {
     border-color: var(--attention-border-strong);
     background: var(--attention-surface);
     color: var(--attention-text);
@@ -105,9 +105,9 @@
 }
 
 /* Audit scope is only a marker here. The clickable filter shortcut is in the full diff. */
-.pr-header__pci-tag {
+.pr-header__audit-tag {
     padding: 0 5px;
-    border: 1px solid var(--tag-pci-border);
+    border: 1px solid var(--tag-audit-border);
     border-radius: var(--radius-key);
     color: var(--attention-text-dim);
     white-space: nowrap;

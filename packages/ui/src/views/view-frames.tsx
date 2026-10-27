@@ -5,7 +5,7 @@ import { useMemo, useState, useSyncExternalStore } from 'react';
 import { CommandBox } from '../components/command-box.tsx';
 import { PrHeader, prHeaderCounts } from '../components/pr-header.tsx';
 import { reconnectCommand } from '../components/reconnect-command.js';
-import { buildFileFilters, findFilter, PCI_FILTER_ID } from '../filters/lens-filters.js';
+import { buildFileFilters, findAuditFilter } from '../filters/lens-filters.js';
 import { shortCommit, useFormat, useLocale, useT } from '../i18n/index.js';
 import type { SnapshotMenu } from '../iterations/snapshot-picker.tsx';
 import { SnapshotsCard } from '../iterations/snapshot-picker.tsx';
@@ -267,13 +267,12 @@ export function OverviewView({
     );
     const [now] = useState(() => threadNow ?? Date.now());
     // Audit scope chip in the header: the same set of lenses that feeds Full diff filters.
-    const pci = useMemo(
+    const audit = useMemo(
         () =>
             diff === null || lenses === null
                 ? null
-                : findFilter(
+                : findAuditFilter(
                       buildFileFilters({ files: diff.files, ownership: lenses.ownership, extra: lenses.extra, t }),
-                      PCI_FILTER_ID,
                   ),
         [diff, lenses, t],
     );
@@ -321,7 +320,7 @@ export function OverviewView({
                     variant="overview"
                     pr={pr}
                     counts={diff === null ? null : prHeaderCounts(diff)}
-                    pci={pci}
+                    audit={audit}
                     now={now}
                     {...(headerAside === undefined ? {} : { aside: headerAside })}
                 />
@@ -580,7 +579,7 @@ function OwnershipCard({
 
 function OwnershipChip({ kind, owner }: { kind: OwnershipKind; owner: string | null }) {
     const t = useT();
-    // The owner from CODEOWNERS is the host's zone name, used as is without translation.
+    // The owner from the ownership file is the host's zone name. Insert it as is, without translation.
     const label =
         kind === 'mine'
             ? owner === null

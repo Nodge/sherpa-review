@@ -11,15 +11,24 @@ import type { StaticAssets } from './static.js';
  */
 
 /** Settings visible in the first frame. */
-export type DocumentSettings = Pick<UiSettings, 'theme' | 'textSize'>;
+export type DocumentSettings = Pick<UiSettings, 'theme' | 'style' | 'textSize'>;
 
 const HTML_OPEN_TAG = /<html\b[^>]*>/i;
 const HEAD_OPEN_TAG = /<head\b[^>]*>/i;
 const DOCUMENT_ATTRIBUTES = /\s+data-(?:theme|textsize)\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi;
 
+/**
+ * `data-theme` prefix for an extra style. Only the UI build knows the list of styles: the UI
+ * replaces a style missing from the build with the default once it loads.
+ */
+function stylePrefix(style: UiSettings['style']): string {
+    return style === null ? '' : `${style}-`;
+}
+
 /** The UI runtime reads the same request (`settings/document-settings.tsx`). */
-function autoThemeScript(): string {
-    const themes = '"dark":"light"';
+function autoThemeScript(style: UiSettings['style']): string {
+    const prefix = stylePrefix(style);
+    const themes = `"${prefix}dark":"${prefix}light"`;
     return '<script>document.documentElement.setAttribute("data-theme",' +
         `window.matchMedia("(prefers-color-scheme: dark)").matches?${themes})</script>`;
 }
@@ -50,10 +59,10 @@ export function injectDocumentSettings(html: string, settings: DocumentSettings)
 
     const attributes = [`data-textsize="${settings.textSize}"`];
     if (settings.theme !== 'auto') {
-        attributes.push(`data-theme="${settings.theme}"`);
+        attributes.push(`data-theme="${stylePrefix(settings.style)}${settings.theme}"`);
     }
     const withAttributes = html.replace(HTML_OPEN_TAG, () => rewriteHtmlTag(tag[0], attributes));
-    return settings.theme === 'auto' ? withAutoThemeScript(withAttributes) : withAttributes;
+    return settings.theme === 'auto' ? withAutoThemeScript(withAttributes, settings.style) : withAttributes;
 }
 
 function isIndexDocument(pathname: string): boolean {
@@ -67,8 +76,8 @@ function rewriteHtmlTag(tag: string, attributes: readonly string[]): string {
 }
 
 /** The script goes first in `<head>`: it must run before stylesheets, or the first frame changes color. */
-function withAutoThemeScript(html: string): string {
-    const script = autoThemeScript();
+function withAutoThemeScript(html: string, style: UiSettings['style']): string {
+    const script = autoThemeScript(style);
     const head = HEAD_OPEN_TAG.exec(html);
     if (head !== null) {
         return html.replace(HEAD_OPEN_TAG, () => `${head[0]}${script}`);

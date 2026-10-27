@@ -4,24 +4,17 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import type { CommandOutcome, CommandRunner } from './command.js';
+import { gitCliHost } from './hosts/git.js';
+import type { CliHostPlugin } from './hosts/plugin.js';
 import { localPrKey, resolveLocalTarget } from './local.js';
-import type { CommandOutcome, CommandRunner } from './pr-discovery.js';
 
 /**
- * Local review keys and directory resolution. Tests inject the command runner instead of calling a live `git`,
- * but use a real directory. Its path is resolved to an absolute path with realpath.
+ * Local review key and directory resolution through the git plugin. Doesn't call real `git`. Injects the runner
+ * but uses a real directory, resolving its path to an absolute path through realpath.
  */
 
-const INFO = `{
-  "repository":"quillmart/quillmart",
-  "author":"alice",
-  "user_login":"alice",
-  "branch":"sherpa-local-host",
-  "hash":"32b57bd3cec8a32a34b72b757cd9f99a436c515a"
-}
-`;
-
-const NOT_A_CHECKOUT = 'Not a git repository.\n';
+const HOSTS = [gitCliHost];
 
 const NOT_A_GIT_REPO = 'fatal: not a git repository (or any of the parent directories): .git\n';
 
@@ -53,8 +46,8 @@ function runner(
 
 describe('local review key', () => {
     it('directory name plus a hash of the path and branch', () => {
-        expect(localPrKey('git', '/Users/alice/projects/wt/sherpa', 'main')).toMatch(/^local-git-sherpa-[0-9a-f]{8}$/u);
-        expect(localPrKey('git', '/Users/alice/code/app', 'main')).toMatch(/^local-git-app-[0-9a-f]{8}$/u);
+        expect(localPrKey('git', '/home/dev/code/app', 'main')).toMatch(/^local-git-app-[0-9a-f]{8}$/u);
+        expect(localPrKey('hg', '/home/dev/code/app', 'main')).toMatch(/^local-hg-app-[0-9a-f]{8}$/u);
     });
 
     it('same input and branch give the same key, different ones give different keys', () => {
@@ -77,7 +70,7 @@ describe('local review key', () => {
 
     // The key goes into state paths, so its character set is limited by `prKeySchema`.
     it('sanitizes the directory name to the key character set', () => {
-        expect(localPrKey('git', '/repo/my folder', 'main')).toMatch(/^local-git-[-]{9}-[0-9a-f]{8}$/u);
+        expect(localPrKey('git', '/repo/αβγ δεζηθ', 'main')).toMatch(/^local-git-[-]{9}-[0-9a-f]{8}$/u);
         expect(localPrKey('git', '/repo/a.b_c-d', 'main')).toMatch(/^local-git-a\.b_c-d-[0-9a-f]{8}$/u);
         expect(localPrKey('git', '/', 'main')).toMatch(/^local-git-dir-[0-9a-f]{8}$/u);
     });
@@ -94,65 +87,28 @@ describe('local review directory resolution', () => {
         await fs.rm(dir, { recursive: true, force: true });
     });
 
-    it('gets the directory, branch and key from git run in that directory', async () => {
-        const calls: Call[] = [];
-        const run = runner({ root: outcome({ stdout: `${dir}\n` }), info: outcome({ stdout: INFO }) }, calls);
-
-        const target = await resolveLocalTarget(dir, 'main~3', run);
-
-        expect(target).toEqual({
-            prKey: localPrKey('git', dir, 'sherpa-local-host', 'main~3'),
-            vcs: 'git',
-            repo: dir,
-            branch: 'sherpa-local-host',
-            base: 'main~3',
-        });
-        expect(calls.map((call) => call.cwd)).toEqual([dir, dir]);
-        expect(calls.map((call) => call.args.join(' '))).toEqual(['root', 'info --json']);
-    });
-
-    // The directory belongs to a git checkout. Git supplies the directory and branch.
-    it('asks git for the directory and branch', async () => {
-        const calls: Call[] = [];
-        const run = runner(
-            {
-                root: outcome({ exitCode: null, failure: 'not-found' }),
-                'rev-parse': outcome({ stdout: `${dir}\n` }),
-            },
-            calls,
-            (args) => (args.includes('--abbrev-ref') ? outcome({ stdout: 'feature\n' }) : null),
+    /** git that recognizes the directory: root is `root`, branch is `branch`. */
+    function gitIn(root: string, calls: Call[] = [], branch = 'feature'): CommandRunner {
+        return runner({ 'rev-parse': outcome({ stdout: `${root}\n` }) }, calls, (args) =>
+            args.includes('--abbrev-ref') ? outcome({ stdout: `${branch}\n` }) : null,
         );
+    }
 
-        const target = await resolveLocalTarget(dir, undefined, run);
+    it('directory, branch and key come from git invoked in that directory', async () => {
+        const calls: Call[] = [];
+
+        const target = await resolveLocalTarget(dir, 'main~3', HOSTS, gitIn(dir, calls));
 
         expect(target).toEqual({
-            prKey: localPrKey('git', dir, 'feature', undefined),
+            prKey: localPrKey('git', dir, 'feature', 'main~3'),
             vcs: 'git',
             repo: dir,
             branch: 'feature',
-            base: undefined,
+            base: 'main~3',
+            defaultBase: 'merge-base with the default branch',
         });
         expect(target.prKey).toMatch(/^local-git-/u);
-        expect(calls.map((call) => call.args.join(' '))).toEqual([
-            'root',
-            'rev-parse --show-toplevel',
-            'rev-parse --abbrev-ref HEAD',
-        ]);
-    });
-
-    // A nested git clone belongs to its own repository even if an outer checkout contains it.
-    it('uses its own .git even inside another checkout', async () => {
-        await fs.mkdir(path.join(dir, '.git'));
-        const calls: Call[] = [];
-        const run = runner(
-            { root: outcome({ stdout: `${dir}\n` }), 'rev-parse': outcome({ stdout: `${dir}\n` }) },
-            calls,
-            (args) => (args.includes('--abbrev-ref') ? outcome({ stdout: 'feature\n' }) : null),
-        );
-
-        const target = await resolveLocalTarget(dir, undefined, run);
-
-        expect(target.vcs).toBe('git');
+        expect(calls.map((call) => call.cwd)).toEqual([dir, dir]);
         expect(calls.map((call) => call.args.join(' '))).toEqual([
             'rev-parse --show-toplevel',
             'rev-parse --abbrev-ref HEAD',
@@ -161,31 +117,26 @@ describe('local review directory resolution', () => {
 
     // The review belongs to a branch. Without it, there is no basis for the key.
     it('detached git head is rejected with an explanation', async () => {
-        const run = runner(
-            { root: outcome({ exitCode: 1, stderr: NOT_A_CHECKOUT }), 'rev-parse': outcome({ stdout: `${dir}\n` }) },
-            [],
-            (args) => (args.includes('--abbrev-ref') ? outcome({ stdout: 'HEAD\n' }) : null),
+        await expect(resolveLocalTarget(dir, undefined, HOSTS, gitIn(dir, [], 'HEAD'))).rejects.toThrow(
+            'is on a detached HEAD',
         );
-
-        await expect(resolveLocalTarget(dir, undefined, run)).rejects.toThrow('is on a detached HEAD');
     });
 
     it('resolves a relative path to an absolute one', async () => {
         const nested = path.join(dir, 'app');
         await fs.mkdir(nested);
-        const run = runner({ root: outcome({ stdout: `${dir}\n` }), info: outcome({ stdout: INFO }) });
 
-        const target = await resolveLocalTarget(path.join(dir, 'app', '..', 'app'), undefined, run);
+        const target = await resolveLocalTarget(path.join(dir, 'app', '..', 'app'), undefined, HOSTS, gitIn(dir));
 
         expect(target.repo).toBe(nested);
         expect(target.base).toBeUndefined();
     });
 
-    it('rejects a missing directory before running git', async () => {
+    it('rejects a missing directory before calling git', async () => {
         const calls: Call[] = [];
         const run = runner({}, calls);
 
-        await expect(resolveLocalTarget(path.join(dir, 'no-such-directory'), undefined, run)).rejects.toThrow(
+        await expect(resolveLocalTarget(path.join(dir, 'no-such-directory'), undefined, HOSTS, run)).rejects.toThrow(
             'there is no directory',
         );
         expect(calls).toEqual([]);
@@ -195,37 +146,105 @@ describe('local review directory resolution', () => {
         const file = path.join(dir, 'file.txt');
         await fs.writeFile(file, 'x');
 
-        await expect(resolveLocalTarget(file, undefined, runner({}))).rejects.toThrow('is not a directory');
+        await expect(resolveLocalTarget(file, undefined, HOSTS, runner({}))).rejects.toThrow('is not a directory');
     });
 
-    // VCS detection failed. The error includes the reason so the missing requirement is visible.
-    it('reports why checkout detection failed', async () => {
-        const run = runner({
-            root: outcome({ exitCode: 1, stderr: NOT_A_CHECKOUT }),
-            'rev-parse': outcome({ exitCode: 128, stderr: NOT_A_GIT_REPO }),
-        });
+    // The VCS rejection reason in the message shows exactly what is missing.
+    it('rejects a non-git repository with the git reason', async () => {
+        const run = runner({ 'rev-parse': outcome({ exitCode: 128, stderr: NOT_A_GIT_REPO }) });
 
-        await expect(resolveLocalTarget(dir, undefined, run)).rejects.toThrow(
-            'is not inside a git checkout ' +
-                '(' +
-                'git: fatal: not a git repository (or any of the parent directories): .git)',
+        await expect(resolveLocalTarget(dir, undefined, HOSTS, run)).rejects.toThrow(
+            'is not inside a git checkout (git: fatal: not a git repository (or any of the parent directories): .git)',
         );
     });
 
-    it('mentions PATH when the executable is missing', async () => {
-        const run = runner({
-            root: outcome({ exitCode: null, failure: 'not-found' }),
-            'rev-parse': outcome({ exitCode: null, failure: 'not-found' }),
-        });
+    it('rejection for a missing binary mentions PATH', async () => {
+        const run = runner({ 'rev-parse': outcome({ exitCode: null, failure: 'not-found' }) });
 
-        await expect(resolveLocalTarget(dir, undefined, run)).rejects.toThrow(
-            '(`git` is not in PATH)',
+        await expect(resolveLocalTarget(dir, undefined, HOSTS, run)).rejects.toThrow('(`git` is not in PATH)');
+    });
+});
+
+describe('VCS selection among plugins', () => {
+    let dir: string;
+
+    beforeEach(async () => {
+        dir = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'sherpa-cli-local-')));
+    });
+
+    afterEach(async () => {
+        await fs.rm(dir, { recursive: true, force: true });
+    });
+
+    const run: CommandRunner = () => Promise.reject(new Error('fake plugins do not run commands'));
+
+    /** Fake VCS: recognizes the directory or not, with a flag for a marker directly inside it. */
+    function vcs(name: string, found: boolean, calls: string[], owns = false): CliHostPlugin {
+        return {
+            name,
+            detectLocal: {
+                vcs: name,
+                defaultBase: `base of ${name}`,
+                ownsDirectory: () => Promise.resolve(owns),
+                detect: () => {
+                    calls.push(name);
+                    return Promise.resolve(
+                        found
+                            ? { kind: 'found', branch: `${name}-branch` }
+                            : { kind: 'absent', reason: `${name}: nope` },
+                    );
+                },
+            },
+        };
+    }
+
+    it('first plugin in the list to recognize the directory wins', async () => {
+        const calls: string[] = [];
+
+        const hosts = [vcs('one', false, calls), vcs('two', true, calls), vcs('three', true, calls)];
+
+        const target = await resolveLocalTarget(dir, undefined, hosts, run);
+
+        expect(target.vcs).toBe('two');
+        expect(target.branch).toBe('two-branch');
+        expect(target.prKey).toMatch(/^local-two-/u);
+        expect(calls).toEqual(['one', 'two']);
+    });
+
+    it('marker directly in the directory takes priority over list order', async () => {
+        const calls: string[] = [];
+
+        const hosts = [vcs('outer', true, calls), vcs('inner', true, calls, true)];
+
+        const target = await resolveLocalTarget(dir, undefined, hosts, run);
+
+        expect(target.vcs).toBe('inner');
+        expect(calls).toEqual(['inner']);
+    });
+
+    it('marker present but checkout unrecognized moves on down the list without asking again', async () => {
+        const calls: string[] = [];
+
+        const hosts = [vcs('outer', true, calls), vcs('inner', false, calls, true)];
+
+        const target = await resolveLocalTarget(dir, undefined, hosts, run);
+
+        expect(target.vcs).toBe('outer');
+        expect(calls).toEqual(['inner', 'outer']);
+    });
+
+    it('no plugin recognizes it, rejection includes all reasons', async () => {
+        const hosts = [vcs('hg', false, []), vcs('svn', false, [])];
+
+        await expect(resolveLocalTarget(dir, undefined, hosts, run)).rejects.toThrow(
+            'is not inside a hg or svn checkout (hg: nope; svn: nope).\n' +
+                'Local review reads the working tree with `hg` or `svn`',
         );
     });
 
-    it('rejects Git output without a branch instead of building a key from nothing', async () => {
-        const run = runner({ root: outcome({ stdout: `${dir}\n` }), info: outcome({ stdout: '{}' }) });
-
-        await expect(resolveLocalTarget(dir, undefined, run)).rejects.toThrow('it needs the branch name');
+    it('no VCS plugins means no local review', async () => {
+        await expect(resolveLocalTarget(dir, undefined, [{ name: 'host' }], run)).rejects.toThrow(
+            'knows no version control system for local review',
+        );
     });
 });

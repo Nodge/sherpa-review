@@ -11,6 +11,7 @@ import type { OpenBrowserOptions } from './browser.js';
 import { openBrowser } from './browser.js';
 import type { WorkerLabels } from './client.js';
 import { requestComplete, requestFail, requestNext, requestProgress, requestRegister } from './client.js';
+import type { CommandRunner } from './command.js';
 import type { ServerConnection } from './discovery.js';
 import { connect, connectAs, freshWorkerId, resolvePrKey } from './discovery.js';
 import { CliError, userMessage } from './errors.js';
@@ -27,6 +28,7 @@ import {
     taskCompleteCommand,
     workerNextCommand,
 } from './format.js';
+import type { CliHostPlugin } from './hosts/plugin.js';
 import { resolveLocalTarget } from './local.js';
 import {
     manifestPathFor,
@@ -36,7 +38,6 @@ import {
     taskResultFileFor,
     taskResultRootFor,
 } from './paths.js';
-import type { CommandRunner } from './pr-discovery.js';
 import type { EnsureServerOptions, EnsureServerResult } from './up.js';
 import { ensureServer, loadServerModule, resolveServerBin } from './up.js';
 import { CLI_VERSION } from './version.js';
@@ -53,7 +54,9 @@ export interface CliIo {
     readonly entry?: string;
     /** Node flags for the server daemon started by `up`. None by default. */
     readonly daemonNodeFlags?: readonly string[];
-    /** External command runner for PR discovery from cwd. Defaults to the real Git executable. */
+    /** Host plugins from the composition root (`hosts/all.ts`): keys, PR discovery, local checkout. */
+    readonly hosts: readonly CliHostPlugin[];
+    /** Runs external commands for host plugins. Defaults to real binaries from PATH. */
     readonly runCommand?: CommandRunner;
     /** Test substitute for server discovery/startup. */
     readonly ensureServer?: (options: EnsureServerOptions) => Promise<EnsureServerResult>;
@@ -105,13 +108,13 @@ export async function run(argv: readonly string[], io: CliIo): Promise<number> {
  */
 async function up(command: Extract<Command, { kind: 'up' }>, io: CliIo): Promise<number> {
     // Resolve the PR key before starting the server. The server would reject an invalid one too, but later and at a higher cost,
-    // and discovery from cwd (`pr-discovery.ts`) must happen exactly once per command.
+    // and discovery from cwd (the plugins' `discoverPr`) must happen exactly once per command.
     // `--local` names a directory, not a PR. The key comes from the directory and branch, not the host.
     const local =
         command.local === undefined
             ? null
-            : await resolveLocalTarget(command.local, command.base, io.runCommand);
-    const prKey = local?.prKey ?? (await resolvePrKey(command.prKey, io.env, io.runCommand));
+            : await resolveLocalTarget(command.local, command.base, io.hosts, io.runCommand);
+    const prKey = local?.prKey ?? (await resolvePrKey(command.prKey, io.env, io.hosts, io.runCommand));
 
     const sherpaDir = sherpaDirFrom(io.env);
     const target = targetOf(io, prKey);
@@ -150,7 +153,9 @@ async function up(command: Extract<Command, { kind: 'up' }>, io: CliIo): Promise
         formatUpReady(
             server.uiUrl,
             target,
-            local === null ? null : { ...local, verdicts: registered.localVerdicts ?? null },
+            local === null
+                ? null
+                : { ...local, verdicts: registered.localVerdicts ?? null },
         ),
     );
     if (server.started && !command.noOpen) {
@@ -171,7 +176,7 @@ async function server(command: Extract<Command, { kind: 'server' }>, io: CliIo):
 }
 
 async function workerRegister(command: Extract<Command, { kind: 'worker-register' }>, io: CliIo): Promise<number> {
-    const prKey = await resolvePrKey(command.prKey, io.env, io.runCommand);
+    const prKey = await resolvePrKey(command.prKey, io.env, io.hosts, io.runCommand);
     const target = targetOf(io, prKey);
     const response = await registerWorker(prKey, labelsOf(command), io, target);
 
@@ -193,7 +198,7 @@ async function registerWorker(
     target: CommandTarget,
     localVerdicts?: string | null,
 ): Promise<WorkerRegisterResponse> {
-    const connection = await connectAs(prKey, io.env, freshWorkerId(io.env), io.runCommand);
+    const connection = await connectAs(prKey, io.env, freshWorkerId(io.env), io.hosts, io.runCommand);
     return requestRegister(connection, target, labels, localVerdicts);
 }
 
@@ -203,7 +208,7 @@ function labelsOf(command: Extract<Command, { kind: 'up' | 'worker-register' }>)
 }
 
 async function workerNext(command: Extract<Command, { kind: 'worker-next' }>, io: CliIo): Promise<number> {
-    const connection = await connect(command.prKey, io.env, io.runCommand);
+    const connection = await connect(command.prKey, io.env, io.hosts, io.runCommand);
     const target = targetOf(io, connection.prKey);
     const resultDir = await prepareResultDir(io.tmpDir ?? os.tmpdir(), sherpaDirFrom(io.env), connection, target);
     const response = await awaitTask(connection, target);
@@ -288,20 +293,20 @@ async function awaitTask(
 
 async function taskComplete(command: Extract<Command, { kind: 'task-complete' }>, io: CliIo): Promise<number> {
     // Resolve the key before reading the file. The resubmission hint prints the full command with `--pr`.
-    const prKey = await resolvePrKey(command.prKey, io.env, io.runCommand);
+    const prKey = await resolvePrKey(command.prKey, io.env, io.hosts, io.runCommand);
     const target = targetOf(io, prKey);
     // The path is absolute so the resubmission commands in hints work from any cwd.
     const file = path.resolve(command.file);
     const result = await readResultFile(file, command.taskId, target);
 
-    const connection = await connect(prKey, io.env, io.runCommand);
+    const connection = await connect(prKey, io.env, io.hosts, io.runCommand);
     const response = await requestComplete(connection, target, command.taskId, result);
     io.out(formatCompleteResponse(response, command.taskId, file, target));
     return 0;
 }
 
 async function taskProgress(command: Extract<Command, { kind: 'task-progress' }>, io: CliIo): Promise<number> {
-    const connection = await connect(command.prKey, io.env, io.runCommand);
+    const connection = await connect(command.prKey, io.env, io.hosts, io.runCommand);
     const target = targetOf(io, connection.prKey);
     const response = await requestProgress(connection, target, command.taskId, command.text);
     io.out(formatProgressResponse(response, command.taskId, target));
@@ -309,7 +314,7 @@ async function taskProgress(command: Extract<Command, { kind: 'task-progress' }>
 }
 
 async function taskFail(command: Extract<Command, { kind: 'task-fail' }>, io: CliIo): Promise<number> {
-    const connection = await connect(command.prKey, io.env, io.runCommand);
+    const connection = await connect(command.prKey, io.env, io.hosts, io.runCommand);
     const target = targetOf(io, connection.prKey);
     const response = await requestFail(connection, target, command.taskId, command.reason);
     io.out(formatFailResponse(response, command.taskId, target));

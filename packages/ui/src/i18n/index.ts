@@ -18,4 +18,4 @@ export type { Dictionary, MessageKey } from './ru.js';
 export { ru } from './ru.js';
 export { en } from './en.js';
 export type { Translate } from './translate.js';
-export { activeT, createT, relativeTime, resolveLocale, setActiveLocale, translateKey } from './translate.js';
+export { activeT, createT, localized, relativeTime, resolveLocale, setActiveLocale, translateKey } from './translate.js';

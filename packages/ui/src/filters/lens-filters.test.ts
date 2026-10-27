@@ -1,4 +1,4 @@
-import { fixtureIteration } from '@sherpa/fixtures';
+import { fixtureIteration, PCI_AUDIT } from '@sherpa/fixtures';
 import type { FileDiff, Lens } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
@@ -9,6 +9,8 @@ import {
     filterFragmentValue,
     filterStats,
     type FileFilter,
+    activeAuditFilter,
+    findAuditFilter,
     findFilter,
     selectFilter,
     zeroResultText,
@@ -37,7 +39,7 @@ function file(path: string, patch: Partial<FileDiff> = {}): FileDiff {
 }
 
 function lens(id: string, label: string, paths: readonly string[], patch: Partial<Lens> = {}): Lens {
-    return { id, label, paths: [...paths], available: true, note: null, zones: null, ...patch };
+    return { id, label, paths: [...paths], available: true, note: null, zones: null, audit: null, ...patch };
 }
 
 const FILES = [
@@ -60,7 +62,7 @@ describe('buildFileFilters', () => {
         const filters = buildFileFilters({
             files: FILES,
             ownership: lens('mine', 'My files', ['src/a.ts']),
-            extra: [lens('pci', 'PCI DSS', ['src/b.ts'])], t, zoneSource: 'CODEOWNERS',});
+            extra: [lens('pci', 'PCI DSS', ['src/b.ts'], { audit: PCI_AUDIT })], t, zoneSource: 'CODEOWNERS',});
 
         expect(filters.map((filter) => [filter.label, filter.count])).toEqual([
             [ruDictionary['lens.all'], 3],
@@ -68,6 +70,75 @@ describe('buildFileFilters', () => {
             [ruDictionary['lens.audit']('PCI DSS'), 1],
             [ruDictionary['lens.generated'], 1],
         ]);
+    });
+
+    it('an audit lens uses the description name in the UI language instead of its id', () => {
+        const sox = lens('controls', 'SOX controls', ['src/b.ts'], {
+            audit: { name: { en: 'SOX', ru: 'SOX-audit' }, short: { en: 'SOX', ru: 'SOX-ru' }, tag: 'sox' },
+        });
+        const [ru] = buildFileFilters({ files: FILES, ownership: null, extra: [sox], t }).filter(
+            (filter) => filter.id === 'controls',
+        );
+        const [en] = buildFileFilters({ files: FILES, ownership: null, extra: [sox], t: createT('en') }).filter(
+            (filter) => filter.id === 'controls',
+        );
+
+        expect(ru).toMatchObject({ label: ruDictionary['lens.audit']('SOX-audit'), shortLabel: 'SOX-ru', audit: { name: 'SOX-audit', tag: 'sox' } });
+        expect(en).toMatchObject({ label: 'SOX files', shortLabel: 'SOX', audit: { name: 'SOX', tag: 'sox' } });
+    });
+
+    it('a lens without an audit description is an ordinary filter, even with id `pci`', () => {
+        const filters = buildFileFilters({ files: FILES, ownership: null, extra: [lens('pci', 'PCI DSS', ['src/b.ts'])], t });
+
+        expect(findFilter(filters, 'pci')).toMatchObject({ label: 'PCI DSS', shortLabel: 'PCI DSS', audit: null });
+        expect(findAuditFilter(filters)).toBeNull();
+    });
+
+    it('the audit filter is the first audit lens in the list, empty lenses are excluded', () => {
+        const audit = (tag: string) => ({ name: { en: tag, ru: tag }, short: { en: tag, ru: tag }, tag });
+        const filters = buildFileFilters({
+            files: FILES,
+            ownership: null,
+            extra: [
+                lens('empty', 'Empty', [], { audit: audit('empty') }),
+                lens('first', 'First', ['src/a.ts'], { audit: audit('first') }),
+                lens('second', 'Second', ['src/b.ts'], { audit: audit('second') }),
+            ],
+            t,
+        });
+
+        expect(findAuditFilter(filters)?.id).toBe('first');
+    });
+
+    it('an unavailable audit lens does not hide the next available one', () => {
+        const audit = (tag: string) => ({ name: { en: tag, ru: tag }, short: { en: tag, ru: tag }, tag });
+        const filters = buildFileFilters({
+            files: FILES,
+            ownership: null,
+            extra: [
+                lens('broken', 'Broken', ['src/a.ts'], { audit: audit('broken'), available: false }),
+                lens('working', 'Working', ['src/b.ts'], { audit: audit('working') }),
+            ],
+            t,
+        });
+
+        expect(findAuditFilter(filters)?.id).toBe('working');
+    });
+
+    it('the banner describes the active audit filter, even if it is the second audit lens', () => {
+        const audit = (tag: string) => ({ name: { en: tag, ru: tag }, short: { en: tag, ru: tag }, tag });
+        const filters = buildFileFilters({
+            files: FILES,
+            ownership: null,
+            extra: [
+                lens('first', 'First', ['src/a.ts'], { audit: audit('first') }),
+                lens('second', 'Second', ['src/b.ts'], { audit: audit('second') }),
+            ],
+            t,
+        });
+
+        expect(activeAuditFilter(filters, 'second')?.id).toBe('second');
+        expect(activeAuditFilter(filters, 'all')).toBeNull();
     });
 
     it('without a zone source, the My files label omits it', () => {
@@ -276,6 +347,7 @@ describe('zeroResultText', () => {
             available: true,
             note,
             fileIds: new Set(),
+            audit: null,
         };
     }
 

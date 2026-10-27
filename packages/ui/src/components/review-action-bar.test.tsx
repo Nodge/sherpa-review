@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
-import { fixtureIteration } from '@sherpa/fixtures';
+import { fixtureIteration, GALLERY_HOSTS } from '@sherpa/fixtures';
 import type { DraftBufferEntry, PublishResult, Thread, UiSettings, Verdict } from '@sherpa/protocol';
 import { act, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import type { DraftDestination } from '../app/review-state.js';
 import { createDiffViewStore } from '../diff-view/store.js';
 import { ThreadPinProvider } from '../iterations/thread-pin.tsx';
 import { countDraftComments } from '../progress/summary.js';
@@ -28,7 +29,7 @@ const BUFFERED: DraftBufferEntry = {
     draft: { body: 'waiting for a connection', parentId: null, anchor: null },
     commentId: null,
     state: 'failed',
-    error: 'review host: 502',
+    error: 'Host: 502',
     attempts: 1,
     createdAt: '2026-09-03T10:00:00.000Z',
     updatedAt: '2026-09-03T10:00:00.000Z',
@@ -50,7 +51,7 @@ function renderBar(
         /** Active PR iteration, used to count drafts pinned to previous commits. */
         activeDiffId?: string;
         draftBuffer?: readonly DraftBufferEntry[];
-        reviewHost?: string;
+        draftDestination?: DraftDestination;
         /** Saved split-button mode. */
         shipMode?: UiSettings['shipMode'];
     } = {},
@@ -79,7 +80,7 @@ function renderBar(
             threadStore={createThreadStore(threads, FILE_IDS)}
             connection="online"
             hostName="FixtureHost"
-            reviewHost={options.reviewHost ?? 'fixture'}
+            draftDestination={options.draftDestination ?? 'pr'}
             composerTransport={TRANSPORT}
             {...(options.draftBuffer === undefined ? {} : { draftBuffer: options.draftBuffer })}
             onPublish={() => Promise.reject(new Error('not called during static rendering'))}
@@ -130,7 +131,7 @@ function mountBar(): { readonly commentButton: HTMLButtonElement } {
                     threadStore={threadStore}
                     connection="online"
                     hostName="FixtureHost"
-                    reviewHost="fixture"
+                    draftDestination="pr"
                     composerTransport={TRANSPORT}
                     onPublish={() => Promise.reject(new Error('the test does not publish'))}
                     onComplete={() => undefined}
@@ -237,7 +238,7 @@ function mountSharedGate(): { readonly outside: HTMLButtonElement } {
                     threadStore={createThreadStore(DRAFT_THREADS, FILE_IDS)}
                     connection="online"
                     hostName="FixtureHost"
-                    reviewHost="fixture"
+                    draftDestination="pr"
                     composerTransport={TRANSPORT}
                     onPublish={() => Promise.reject(new Error('the test does not publish'))}
                     onComplete={() => undefined}
@@ -300,7 +301,7 @@ function mountShipBar(options: {
                     threadStore={createThreadStore([...(options.threads ?? [])], FILE_IDS)}
                     connection="online"
                     hostName="FixtureHost"
-                    reviewHost="fixture"
+                    draftDestination="pr"
                     composerTransport={TRANSPORT}
                     onPublish={(verdict) => {
                         published.push(verdict);
@@ -465,7 +466,7 @@ describe('publishing without a verdict', () => {
 describe('floating bar mount condition', () => {
     const base = {
         completed: false,
-        reviewHost: 'fixture',
+        reviewHost: GALLERY_HOSTS.fixture,
         pr: DATA.pr,
     } as const;
 
@@ -550,7 +551,7 @@ describe('floating review bar', () => {
     });
 
     it('sends local review drafts to the agent', () => {
-        const html = renderBar({ verdicts: ['comment'], reviewHost: 'local-git' });
+        const html = renderBar({ verdicts: ['comment'], draftDestination: 'agent' });
 
         expect(html).toContain('1 draft goes to the agent');
         expect(html).toContain('title="Hands 1 draft to the agent"');
@@ -558,14 +559,14 @@ describe('floating review bar', () => {
     });
 
     it('shows no comments for the agent in local review without drafts', () => {
-        const html = renderBar({ threads: [], verdicts: ['comment'], reviewHost: 'local-git' });
+        const html = renderBar({ threads: [], verdicts: ['comment'], draftDestination: 'agent' });
 
         expect(html).toContain('<span class="review-action-bar__no-drafts">no comments for the agent</span>');
         expect(html).toMatch(/<button[^>]*disabled=""[^>]*title="no comments for the agent"/);
     });
 
     it('shows Request changes and Ship without a caret for local review with verdicts and sends both to the agent', () => {
-        const html = renderBar({ verdicts: ['request_changes', 'ship'], reviewHost: 'local-git' });
+        const html = renderBar({ verdicts: ['request_changes', 'ship'], draftDestination: 'agent' });
 
         expect(html).toContain('title="Hands 1 draft to the agent and requests changes"');
         expect(html).toMatch(
@@ -577,7 +578,7 @@ describe('floating review bar', () => {
 
     // The session must learn the verdict even without comments: empty Ship and Request changes stay enabled.
     it('enables Ship and Request changes for local review with verdicts and no drafts', () => {
-        const html = renderBar({ threads: [], verdicts: ['request_changes', 'ship'], reviewHost: 'local-git' });
+        const html = renderBar({ threads: [], verdicts: ['request_changes', 'ship'], draftDestination: 'agent' });
 
         expect(html).toContain('review-action-bar__ship-primary');
         expect(html).toContain('Request changes');
@@ -687,9 +688,9 @@ describe('floating review bar', () => {
 
         expect(html).toContain('ship anyway?');
         expect(html).toContain('Approves this snapshot only. A new push drops the approval and asks again.');
-        // The copy is accurate: there is no ownership-zone revocation, only the host's ordinary sticky ship (№36).
+        // The copy is honest: there is no ownership-zone revocation, and the host publishes its regular sticky ship (#36).
         expect(html).toContain('The approval carries over to later pushes — the host’s own sticky ship.');
-        expect(html).not.toContain('CODEOWNERS zone');
+        expect(html).not.toContain('zone');
         expect(html).toContain('Sticky ship is unavailable here.');
         expect(html).toContain('aria-disabled="true"');
     });
@@ -741,7 +742,7 @@ describe('floating review bar', () => {
             threadStore: createThreadStore(DRAFT_THREADS, FILE_IDS),
             connection: 'online' as const,
             hostName: 'FixtureHost',
-            reviewHost: 'fixture',
+            draftDestination: 'pr' as const,
             composerTransport: TRANSPORT,
             onPublish: () => Promise.reject(new Error('not called during static rendering')),
             onComplete: () => undefined,
@@ -761,7 +762,7 @@ describe('floating review bar', () => {
                 threadStore={createThreadStore(DRAFT_THREADS, FILE_IDS)}
                 connection="online"
                 hostName="FixtureHost"
-                reviewHost="fixture"
+                draftDestination="pr"
                 composerTransport={TRANSPORT}
                 onPublish={() => Promise.reject(new Error('not called during static rendering'))}
                 onComplete={() => undefined}
@@ -790,8 +791,8 @@ describe('Review complete screen', () => {
                     verdict: 'sticky_ship',
                     prId: '4821',
                     headCommit: '9f3c1ab012345',
-                    hostName: 'GitHub',
-                    reviewHost: 'github',
+                    hostName: 'Gitea',
+                    draftDestination: 'pr',
                     publishedComments: 2,
                     publishedReplies: 1,
                     progress: {
@@ -812,7 +813,7 @@ describe('Review complete screen', () => {
 
         expect(html).toContain('Sticky ship · PR 4821');
         expect(html).toContain('2 comments published as one batch');
-        expect(html).toContain('delivered to GitHub');
+        expect(html).toContain('delivered to Gitea');
         expect(html).toContain('17 of 18');
         expect(html).toContain('92% of 862 lines');
         expect(html).toContain('2 (1 of them a reply)');
@@ -832,7 +833,7 @@ describe('Review complete screen', () => {
                     prId: '42',
                     headCommit: '9f3c1ab012345',
                     hostName: 'GitHub',
-                    reviewHost: 'github',
+                    draftDestination: 'pr',
                     publishedComments: 2,
                     publishedReplies: 0,
                     progress: { filesSeen: 3, filesTotal: 5, linesSeen: 40, linesTotal: 90, percentSeen: 44 },
@@ -863,7 +864,7 @@ describe('Review complete screen', () => {
                     prId: 'local-git-app-0badc0de',
                     headCommit: '9f3c1ab012345',
                     hostName: 'local checkout',
-                    reviewHost: 'local-git',
+                    draftDestination: 'agent',
                     publishedComments: 1,
                     publishedReplies: 0,
                     progress: {
@@ -894,7 +895,7 @@ describe('Review complete screen', () => {
                     prId: '4821',
                     headCommit: '9f3c1ab012345',
                     hostName: 'GitHub',
-                    reviewHost: 'github',
+                    draftDestination: 'pr',
                     publishedComments: 2,
                     publishedReplies: 1,
                     progress: {
@@ -928,7 +929,7 @@ describe('Review complete screen', () => {
                     prId: '4821',
                     headCommit: '9f3c1ab012345',
                     hostName: 'GitHub',
-                    reviewHost: 'github',
+                    draftDestination: 'pr',
                     publishedComments: 0,
                     publishedReplies: 0,
                     progress: {

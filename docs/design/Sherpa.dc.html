@@ -422,7 +422,7 @@
           <span style="font-family:'IBM Plex Mono',monospace;font-size:0.6875rem;color:var(--c-c9a464);border:1px solid var(--c-4a4230);border-radius:4px;padding:2px 6px;flex:none">PCI DSS</span>
           <div style="min-width:0">
             <div style="font-size:0.8125rem;color:var(--c-e6d7bd)">Showing only the 3 files inside audit scope — 95 of 862 changed lines. Everything else is hidden, not gone.</div>
-            <div style="font-size:0.7813rem;color:var(--c-9a8f7c);margin-top:2px">Scope comes from CODEOWNERS: <span style="font-family:'IBM Plex Mono',monospace">api/v3/handlers.py</span>, <span style="font-family:'IBM Plex Mono',monospace">api/v3/schemas.py</span>, <span style="font-family:'IBM Plex Mono',monospace">application/order_service.py</span>. Changes here need an audit sign-off before the ship counts.</div>
+            <div style="font-size:0.7813rem;color:var(--c-9a8f7c);margin-top:2px">Scope: <span style="font-family:'IBM Plex Mono',monospace">api/v3/handlers.py</span>, <span style="font-family:'IBM Plex Mono',monospace">api/v3/schemas.py</span>, <span style="font-family:'IBM Plex Mono',monospace">application/order_service.py</span>. Changes here need an auditor sign-off.</div>
           </div>
           <div style="flex:1"></div>
           <button onClick="{{ togglePci }}" style="height:28px;padding:0 11px;background:transparent;border:1px solid var(--c-4a4230);border-radius:6px;color:var(--c-c9a464);font-family:inherit;font-size:0.7813rem;cursor:pointer;white-space:nowrap">Show all files</button>
@@ -848,7 +848,7 @@ hint: fix the anchors in the raw snapshot and re-validate without re-running the
                       <div style="min-width:0">
                         <div style="display:flex;align-items:center;gap:9px;margin-bottom:4px">
                           <span style="font-size:0.7813rem;color:var(--c-aeb6ff);font-weight:500">Agent note · asked from lines {{ h.noteRange }}</span>
-                          <span style="font-family:'IBM Plex Mono',monospace;font-size:0.6875rem;color:var(--c-6f76a8)">model answer · not published to review host</span>
+                          <span style="font-family:'IBM Plex Mono',monospace;font-size:0.6875rem;color:var(--c-6f76a8)">model answer · not published to the PR</span>
                         </div>
                         <div style="font-size:0.8125rem;color:var(--c-c9cdf0);line-height:1.6;text-wrap:pretty">{{ h.note }}</div>
                         <div style="display:flex;gap:14px;margin-top:8px">
@@ -1025,7 +1025,7 @@ hint: fix the anchors in the raw snapshot and re-validate without re-running the
             <div style="font-size:0.8125rem;font-weight:600;margin-bottom:11px">Discussion</div>
             <div style="display:flex;flex-direction:column;gap:9px">
               <div style="display:flex;align-items:center;gap:9px;font-size:0.8125rem;color:var(--c-b9bec7)"><span style="width:18px;height:18px;border-radius:50%;background:var(--c-33383f);font-size:0.6875rem;display:flex;align-items:center;justify-content:center">MP</span>morgan<span style="flex:1"></span><span style="font-family:'IBM Plex Mono',monospace;font-size:0.7188rem;color:var(--c-6b7078)">3 open</span></div>
-              <div style="display:flex;align-items:center;gap:9px;font-size:0.8125rem;color:var(--c-8a8f98)"><span style="width:18px;height:18px;border-radius:50%;background:var(--c-22252b);font-size:0.6875rem;display:flex;align-items:center;justify-content:center">◆</span>ai-review-bot<span style="font-family:'IBM Plex Mono',monospace;font-size:0.6875rem;border:1px solid var(--c-2f333a);border-radius:4px;padding:0 4px">bot</span><span style="flex:1"></span><span style="font-family:'IBM Plex Mono',monospace;font-size:0.7188rem;color:var(--c-6b7078)">2</span></div>
+              <div style="display:flex;align-items:center;gap:9px;font-size:0.8125rem;color:var(--c-8a8f98)"><span style="width:18px;height:18px;border-radius:50%;background:var(--c-22252b);font-size:0.6875rem;display:flex;align-items:center;justify-content:center">◆</span>review-bot<span style="font-family:'IBM Plex Mono',monospace;font-size:0.6875rem;border:1px solid var(--c-2f333a);border-radius:4px;padding:0 4px">bot</span><span style="flex:1"></span><span style="font-family:'IBM Plex Mono',monospace;font-size:0.7188rem;color:var(--c-6b7078)">2</span></div>
               <div style="display:flex;align-items:center;gap:9px;font-size:0.8125rem;color:var(--c-6b7078)"><span style="width:18px;height:18px;border-radius:50%;background:var(--c-22252b);font-size:0.6875rem;display:flex;align-items:center;justify-content:center">AO</span>ada<span style="flex:1"></span><span style="font-family:'IBM Plex Mono',monospace;font-size:0.7188rem">1 resolved</span></div>
             </div>
           </div>
@@ -1173,7 +1173,7 @@ hint: fix the anchors in the raw snapshot and re-validate without re-running the
           <div style="padding:15px 18px;border-bottom:1px solid var(--c-1e2126);display:flex;align-items:center;gap:10px">
             <span style="font-size:0.8125rem;color:var(--c-c7cad1)">2 comments published as one batch</span>
             <div style="flex:1"></div>
-            <span style="font-family:'IBM Plex Mono',monospace;font-size:0.7188rem;color:var(--c-6cc38f)">delivered to review host</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:0.7188rem;color:var(--c-6cc38f)">delivered to the PR</span>
           </div>
           <sc-for list="{{ summary }}" as="s" hint-placeholder-count="4">
             <div style="display:flex;align-items:center;gap:14px;padding:12px 18px;border-bottom:1px solid var(--c-191c20)">
@@ -1567,7 +1567,7 @@ class Component extends DCLogic {
   ZONES = [
     { path: 'services/orders/domain', owner: 'you \u00b7 owner', files: 5, lines: 361, plus: '+338', minus: '\u221223', mine: true, note: 'EditPolicy, order aggregate, denial reasons and their tests.', ownerStyle: 'font-family:\'IBM Plex Mono\',monospace;font-size:0.6875rem;color:var(--c-86d9a8);background:var(--c-132019);border:1px solid var(--c-24422f);border-radius:4px;padding:1px 5px;white-space:nowrap' },
     { path: 'services/orders/api/v3', owner: 'you \u00b7 owner', files: 4, lines: 160, plus: '+142', minus: '\u221218', mine: true, note: 'PATCH endpoint, response schema, 409 contract, handler tests.', ownerStyle: 'font-family:\'IBM Plex Mono\',monospace;font-size:0.6875rem;color:var(--c-86d9a8);background:var(--c-132019);border:1px solid var(--c-24422f);border-radius:4px;padding:1px 5px;white-space:nowrap' },
-    { path: 'services/orders \u00b7 application, misc', owner: 'you \u00b7 owner', files: 3, lines: 49, plus: '+38', minus: '\u221211', mine: true, note: 'Cache ordering, logging fields, CODEOWNERS owners line.', ownerStyle: 'font-family:\'IBM Plex Mono\',monospace;font-size:0.6875rem;color:var(--c-86d9a8);background:var(--c-132019);border:1px solid var(--c-24422f);border-radius:4px;padding:1px 5px;white-space:nowrap' },
+    { path: 'services/orders \u00b7 application, misc', owner: 'you \u00b7 owner', files: 3, lines: 49, plus: '+38', minus: '\u221211', mine: true, note: 'Cache ordering, logging fields, CODEOWNERS line.', ownerStyle: 'font-family:\'IBM Plex Mono\',monospace;font-size:0.6875rem;color:var(--c-86d9a8);background:var(--c-132019);border:1px solid var(--c-24422f);border-radius:4px;padding:1px 5px;white-space:nowrap' },
     { path: 'front/checkout', owner: 'front-infra', files: 3, lines: 76, plus: '+72', minus: '\u22124', mine: false, note: 'Disabled edit control. Outside your CODEOWNERS zone.', ownerStyle: 'font-family:\'IBM Plex Mono\',monospace;font-size:0.6875rem;color:var(--c-9ba1ab);border:1px solid var(--c-2f333a);border-radius:4px;padding:1px 5px;white-space:nowrap' },
     { path: 'gen/*', owner: 'generated', files: 3, lines: 216, plus: '+216', minus: '', mine: false, note: 'Regenerated protos \u2014 dimmed by default.', ownerStyle: 'font-family:\'IBM Plex Mono\',monospace;font-size:0.6875rem;color:var(--c-6b7078);border:1px solid var(--c-26292f);border-radius:4px;padding:1px 5px;white-space:nowrap' }
   ];
@@ -1580,7 +1580,7 @@ class Component extends DCLogic {
     { id: 'f1', tag: 'F1', label: 'Triage · main screen', st: { view: 'route', gen: 'ready', genPhase: 'filling', preset: 'triage', chat: false, stale: false, routeFilter: 'all' } },
     { id: 'f2', tag: 'F2', label: 'Full tour + chat', st: { view: 'route', gen: 'ready', genPhase: 'filling', preset: 'tour', chat: true, stale: false, routeFilter: 'all' } },
     { id: 'f3', tag: 'F3', label: 'Second pass · what\u2019s new', st: { view: 'route', gen: 'ready', genPhase: 'filling', stale: true, routeFilter: 'new', chat: false, preset: 'triage' } },
-    { id: 'f4', tag: 'F4', label: 'Threads + AI review', st: { view: 'route', gen: 'ready', genPhase: 'filling', chat: false, stale: false, routeFilter: 'all', preset: 'triage' } },
+    { id: 'f4', tag: 'F4', label: 'Threads + ai-review', st: { view: 'route', gen: 'ready', genPhase: 'filling', chat: false, stale: false, routeFilter: 'all', preset: 'triage' } },
     { id: 'f5', tag: 'F5', label: 'Agent disconnected', st: { view: 'route', gen: 'offline', genPhase: 'filling', chat: false, stale: false, routeFilter: 'all', preset: 'triage' } },
     { id: 'failed', tag: '03', label: 'Generation failed', st: { view: 'route', gen: 'failed', genPhase: 'filling', chat: false, stale: false, routeFilter: 'all', preset: 'triage' } },
     { id: 'diff', tag: '04', label: 'Full diff fallback', st: { view: 'diff', gen: 'ready', genPhase: 'filling', chat: false, stale: false, preset: 'triage', routeFilter: 'all' } },
@@ -1710,13 +1710,13 @@ class Component extends DCLogic {
       body: 'If save() raises after the commit we never reach drop(), so the stale entry survives until TTL. Is that acceptable, or should the drop be a compensating action?', replies: [
       { ini: 'AS', author: 'asha', meta: '1h ago', body: 'The drop moved inside the unit of work \u2014 if save() raises, nothing is committed, so there is no stale entry to invalidate.', replies: [
         { ini: 'MP', author: 'morgan', meta: '52m ago', body: 'Then the TTL only matters for the retry path. Agreed on the ordering.', replies: [
-          { ini: '\u25c6', bot: true, author: 'ai-review-bot', meta: '40m ago', body: 'The retry path calls drop() outside the unit of work in retry_edit(), line 203.', replies: [
+          { ini: '\u25c6', bot: true, author: 'review-bot', meta: '40m ago', body: 'The retry path calls drop() outside the unit of work in retry_edit(), line 203.', replies: [
             { ini: 'RS', author: 'you', meta: 'just now', draft: true, body: 'Good catch \u2014 please cover retry_edit() with the same test before this lands.' }
           ] }
         ] }
       ] }
     ] },
-    { id: 't2', line: 150, ini: '\u25c6', bot: true, author: 'ai-review-bot', source: 'AI review \u00b7 bot', meta: 'order_service.py:150 \u00b7 5h ago', kind: 'bot',
+    { id: 't2', line: 150, ini: '\u25c6', bot: true, author: 'review-bot', source: 'ai-review \u00b7 bot', meta: 'order_service.py:150 \u00b7 5h ago', kind: 'bot',
       body: 'cache.drop is awaited inside the transaction scope; a slow cache now extends the lock window on the orders table.' },
     { id: 't3', line: 145, ini: 'AO', author: 'ada', meta: 'order_service.py:145 \u00b7 yesterday', kind: 'resolved',
       body: 'naming: drop() \u2192 invalidate() to match the repo convention.', replies: [{ ini: 'AS', author: 'asha', meta: 'yesterday', body: 'Renamed.' }] }
@@ -1906,7 +1906,7 @@ class Component extends DCLogic {
       },
       {
         id: 's7', tier: 'other', title: 'Other \u00b7 not placed by the model',
-        para: 'Three ranges the model did not fit into any stop: a logging tweak, a fixture rename and an CODEOWNERS owners line. Coverage is guaranteed structurally, so they land here rather than disappearing.',
+        para: 'Three ranges the model did not fit into any stop: a logging tweak, a fixture rename and a CODEOWNERS line. Coverage is guaranteed structurally, so they land here rather than disappearing.',
         comments: 0, unexplained: true,
         files: [this.f('logging.py', 'services/orders', '+9', '\u22122', 'none'), this.f('conftest.py', 'domain/tests', '+12', '\u22125', 'none'), this.f('CODEOWNERS', '.github', '+6', '', 'none')],
         hunks: []
@@ -2133,6 +2133,7 @@ class Component extends DCLogic {
     { path: 'services/orders/api/tests', label: 'tests', depth: 2, kind: 'dir' },
     { path: 'services/orders/api/tests/test_handlers.py', label: 'test_handlers.py', depth: 3, kind: 'file', plus: '+64', route: '04' },
     { path: 'services/orders/logging.py', label: 'logging.py', depth: 1, kind: 'file', plus: '+9', route: 'not placed' },
+    { path: '.github', label: '.github', depth: 0, kind: 'dir' },
     { path: '.github/CODEOWNERS', label: 'CODEOWNERS', depth: 1, kind: 'file', plus: '+6', route: 'not placed' },
     { path: 'front/checkout', label: 'front/checkout', depth: 0, kind: 'dir', foreign: true },
     { path: 'front/checkout/OrderCard.tsx', label: 'OrderCard.tsx', depth: 1, kind: 'file', plus: '+38', route: '05', foreign: true },
@@ -2382,7 +2383,7 @@ class Component extends DCLogic {
         { label: 'Stops viewed', value: '7 of 7 \u00b7 Other read as raw diff' },
         { label: 'Diff you actually saw', value: '100% of 862 lines' },
         { label: 'Of that, read outside the route', value: '34 lines the model did not place' },
-        { label: 'Comments published', value: '2 \u00b7 1 replying to ai-review-bot' },
+        { label: 'Comments published', value: '2 \u00b7 1 replying to review-bot' },
         { label: 'Signed off on snapshot', value: '9f3c1ab \u00b7 PR head 9f3c1ab \u00b7 sonnet-5' }
       ].map((x) => ({ label: x.label, value: x.value, valueStyle: 'font-family:\'IBM Plex Mono\',monospace;font-size:0.75rem;color:var(--c-c7cad1)' })),
 

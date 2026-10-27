@@ -840,7 +840,7 @@ export class ProgressStore {
     }
 
     /**
-     * Fallback chain from the source iteration's `fileId` to a path. The review host's `fileId` is opaque,
+     * Lookup layers for "source iteration `fileId` → path". The host's `fileId` is opaque,
      * so records from two iterations can only be matched through a path. Layers: the stored iteration
      * patch, followed by anchors left in its route snapshots and chat notes.
      * An iteration recorded by server 0.3.x has no patch and no way to retrieve one, so
@@ -1069,7 +1069,7 @@ function requiredRanges(anchors: readonly RouteAnchor[], index: ReadonlyMap<stri
         if (file === undefined) {
             continue;
         }
-        const key = `${file.fileId} ${anchor.side}`;
+        const key = `${file.fileId}\u0000${anchor.side}`;
         const bucket = lines.get(key) ?? { fileId: file.fileId, side: anchor.side, numbers: [] };
         for (const line of anchor.side === 'old' ? file.old : file.new) {
             if (line >= anchor.start && line <= anchor.end) {
@@ -1098,7 +1098,7 @@ function requiredRanges(anchors: readonly RouteAnchor[], index: ReadonlyMap<stri
 function mergeRanges(rows: readonly SourcedRangeRow[]): Map<string, LineRange[]> {
     const covered = new Map<string, LineRange[]>();
     for (const row of rows) {
-        const key = `${row.file_id} ${sideOf(row.side)}`;
+        const key = `${row.file_id}\u0000${sideOf(row.side)}`;
         const spans = covered.get(key) ?? [];
         const last = spans.at(-1);
         if (last !== undefined && row.start_line <= last.end + 1) {
@@ -1121,7 +1121,7 @@ function coversAll(
         if (pinned.has(range.fileId)) {
             return true;
         }
-        const spans = covered.get(`${range.fileId} ${range.side}`) ?? [];
+        const spans = covered.get(`${range.fileId}\u0000${range.side}`) ?? [];
         return spans.some((span) => span.start <= range.start && span.end >= range.end);
     });
 }
@@ -1134,7 +1134,7 @@ function sideOf(value: string): 'old' | 'new' {
 function canonicalRanges(ranges: readonly UiStopSeenRange[]): UiStopSeenRange[] {
     const unique = new Map<string, UiStopSeenRange>();
     for (const range of ranges) {
-        unique.set(`${range.fileId} ${range.side} ${String(range.start)} ${String(range.end)}`, range);
+        unique.set(`${range.fileId}\u0000${range.side}\u0000${String(range.start)}\u0000${String(range.end)}`, range);
     }
     return [...unique.entries()].sort((left, right) => left[0].localeCompare(right[0])).map(([, range]) => range);
 }

@@ -1,14 +1,15 @@
-import { fixtureIteration } from '@sherpa/fixtures';
-import type { PrMeta, Thread, UiSettings, Verdict } from '@sherpa/protocol';
-import { localHostName } from '@sherpa/protocol';
+import { fixtureIteration, GALLERY_HOSTS } from '@sherpa/fixtures';
+import type { PrMeta, Thread, UiReviewHost, UiSettings, Verdict } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 import { useMemo } from 'react';
 
+import { hostDisplayName } from '../../app/review-state.js';
 import type { PublicationFailure } from '../../components/review-action-model.js';
 import { ReviewActionBar } from '../../components/review-action-bar.tsx';
 import type { ReviewCompletion } from '../../components/review-action-bar.tsx';
 import { ReviewComplete } from '../../components/review-complete.tsx';
 import { createDiffViewStore } from '../../diff-view/store.js';
+import { useT } from '../../i18n/index.js';
 import { SettingsProvider } from '../../settings/context.tsx';
 import { createUiSettingsStore } from '../../settings/settings-store.js';
 import { createThreadStore } from '../../threads/store.js';
@@ -20,7 +21,7 @@ const COMPLETION: ReviewCompletion = {
     prId: DATA.pr.id,
     headCommit: DATA.diff.headCommit,
     hostName: 'FixtureHost',
-    reviewHost: 'fixture',
+    draftDestination: GALLERY_HOSTS.fixture.drafts,
     publishedComments: 2,
     publishedReplies: 1,
     route: null,
@@ -109,19 +110,19 @@ export const REVIEW_COMPLETION_STATES: readonly ReviewCompletionGalleryState[] =
         id: 'review-bar-local',
         group: 'Finish review',
         title: 'local review: drafts go to the agent',
-        render: () => <BarState threads={DRAFT_THREADS} verdicts={COMMENT_ONLY} reviewHost={localHostName('git')} />,
+        render: () => <BarState threads={DRAFT_THREADS} verdicts={COMMENT_ONLY} reviewHost={GALLERY_HOSTS.local} />,
     },
     {
         id: 'review-bar-local-verdicts',
         group: 'Finish review',
         title: 'local review with verdicts: Request changes and Ship without a caret',
-        render: () => <BarState threads={DRAFT_THREADS} verdicts={LOCAL_VERDICTS} reviewHost={localHostName('git')} />,
+        render: () => <BarState threads={DRAFT_THREADS} verdicts={LOCAL_VERDICTS} reviewHost={GALLERY_HOSTS.local} />,
     },
     {
         id: 'review-bar-local-verdicts-empty',
         group: 'Finish review',
         title: 'local review with verdicts, no drafts: Ship available',
-        render: () => <BarState threads={[]} verdicts={LOCAL_VERDICTS} reviewHost={localHostName('git')} />,
+        render: () => <BarState threads={[]} verdicts={LOCAL_VERDICTS} reviewHost={GALLERY_HOSTS.local} />,
     },
     {
         id: 'review-publish-error',
@@ -151,7 +152,7 @@ export const REVIEW_COMPLETION_STATES: readonly ReviewCompletionGalleryState[] =
         title: 'Review complete for local review',
         render: () => (
             <CompleteState
-                completion={{ ...COMPLETION, reviewHost: localHostName('git'), hostName: 'local checkout' }}
+                completion={{ ...COMPLETION, draftDestination: GALLERY_HOSTS.local.drafts, hostName: 'local checkout' }}
             />
         ),
     },
@@ -185,7 +186,7 @@ interface FixtureReviewActionBarProps {
     readonly menuOpen?: boolean;
     readonly failure?: PublicationFailure | null;
     readonly verdicts?: readonly Verdict[];
-    readonly reviewHost?: string;
+    readonly reviewHost?: UiReviewHost;
     /** Saved split-button mode. Falls back to page settings when absent. */
     readonly shipMode?: UiSettings['shipMode'];
 }
@@ -196,9 +197,10 @@ export function FixtureReviewActionBar({
     menuOpen = false,
     failure = null,
     verdicts = DATA.pr.capabilities.publishVerdicts,
-    reviewHost = 'fixture',
+    reviewHost = GALLERY_HOSTS.fixture,
     shipMode,
 }: FixtureReviewActionBarProps) {
+    const t = useT();
     const diffStore = useMemo(() => createDiffViewStore({ files: DATA.diff.files }), []);
     const threadStore = useMemo(
         () => createThreadStore(threads, new Set(DATA.diff.files.map((file) => file.fileId))),
@@ -219,8 +221,8 @@ export function FixtureReviewActionBar({
             diffStore={diffStore}
             threadStore={threadStore}
             connection="online"
-            hostName="FixtureHost"
-            reviewHost={reviewHost}
+            hostName={hostDisplayName(reviewHost, t)}
+            draftDestination={reviewHost.drafts}
             composerTransport={TRANSPORT}
             onPublish={() => Promise.reject(new Error('gallery does not write to the host'))}
             onComplete={() => undefined}

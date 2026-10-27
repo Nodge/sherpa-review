@@ -10,7 +10,7 @@ import type { SherpaServer } from './server.js';
 import { startServer } from './server.js';
 import { makeTempSherpaDir, postJson, removeTempSherpaDir } from './test-support.js';
 
-const PR_KEY = 'github-quillmart--quillmart--24680';
+const PR_KEY = 'pr-24680';
 
 /** Live server threshold for integration checks: fractions of a second instead of a quarter hour. */
 const SHORT_IDLE_SECONDS = 0.3;
@@ -185,12 +185,14 @@ describe('server idle shutdown', () => {
     });
 
     async function start(longPollSeconds?: number): Promise<SherpaServer> {
-        // The review host is irrelevant here, and tests must not call a live host (docs/testing.md).
+        // The review host is irrelevant here, and live hosts are forbidden in tests (docs/testing.md).
         const base = {
             prKey: PR_KEY,
             sherpaDir,
             idleSeconds: SHORT_IDLE_SECONDS,
-            reviewHostFactory: () => null,
+            hosts: [],
+            updateChannel: null,
+            feedbackChannel: null,
         };
         const server = await startServer(
             longPollSeconds === undefined ? base : { ...base, longPollSeconds },
@@ -263,7 +265,7 @@ describe('server idle shutdown', () => {
     });
 
     it('does not shut down with a zero threshold', async () => {
-        const server = await startServer({ prKey: PR_KEY, sherpaDir, idleSeconds: 0, reviewHostFactory: () => null });
+        const server = await startServer({ updateChannel: null, feedbackChannel: null, prKey: PR_KEY, sherpaDir, idleSeconds: 0, hosts: [] });
         servers.push(server);
 
         await delay(OVER_IDLE_MS);

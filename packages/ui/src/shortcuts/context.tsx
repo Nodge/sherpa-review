@@ -20,7 +20,7 @@ export function ShortcutsProvider({
     children,
 }: {
     registry: ShortcutRegistry;
-    /** The page's pointer monitor. Without it, commands target only the focused element. */
+    /** Page pointer tracking. Without it, command targets use focus only. */
     pointer?: PointerTarget;
     children: ReactNode;
 }) {

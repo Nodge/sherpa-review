@@ -3,6 +3,7 @@ import {
     fixtureIteration,
     GALLERY_AVATAR_BROKEN,
     GALLERY_AVATAR_PHOTOS,
+    PCI_AUDIT,
     withAvatar,
     withAvatars,
 } from '@sherpa/fixtures';
@@ -246,6 +247,7 @@ const EMPTY_PCI: Lens = {
     available: true,
     note: 'This PR has no files in the PCI DSS audit scope.',
     zones: null,
+    audit: PCI_AUDIT,
 };
 
 /** Fixture with new filenames: lens membership moves along with the path. */

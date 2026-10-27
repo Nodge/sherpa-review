@@ -64,7 +64,8 @@ export interface FilePanelProps {
     readonly filters: readonly FileFilter[];
     readonly activeFilter: FileFilter;
     readonly onFilter: (id: string) => void;
-    readonly pciFileIds: ReadonlySet<string>;
+    /** Audit filter for the file set (`findAuditFilter`). Its files get a row tag. null means no tags. */
+    readonly auditFilter: FileFilter | null;
     /** null means no ownership lens. Roots outside your ownership zone are not dimmed. */
     readonly mineFileIds: ReadonlySet<string> | null;
     readonly readState: ReadonlyMap<string, FileReadState>;
@@ -179,7 +180,7 @@ function FileTreeView({
     files,
     query,
     onClearQuery,
-    pciFileIds,
+    auditFilter,
     mineFileIds,
     readState,
     activeFileId,
@@ -198,17 +199,19 @@ function FileTreeView({
     const treeCollapsed = usePrState().treeCollapsed;
     const collapsed = useMemo(() => collapsedToMap(treeCollapsed), [treeCollapsed]);
 
+    const auditTag = auditFilter?.audit?.tag ?? null;
+    const auditFileIds = auditFilter?.fileIds ?? null;
     const tree: FileTree = useMemo(
         () =>
             buildFileTree({
                 files: filterByQuery(files, query),
-                pciFileIds,
+                audit: auditTag === null || auditFileIds === null ? null : { tag: auditTag, fileIds: auditFileIds },
                 mineFileIds,
                 readState,
                 routeFiles: route?.files ?? null,
                 collapsed,
             }),
-        [files, query, pciFileIds, mineFileIds, readState, route, collapsed],
+        [files, query, auditTag, auditFileIds, mineFileIds, readState, route, collapsed],
     );
 
     const persist = useCallback(
@@ -483,7 +486,7 @@ function FileRow({
             </button>
             {/* The file label is just its name. The row tooltip keeps the full path. */}
             <Label label={row.label} />
-            {row.pci ? <span className="file-tree__tag">pci</span> : null}
+            {row.auditTag === null ? null : <span className="file-tree__tag">{row.auditTag}</span>}
             {row.generated ? <span className="file-tree__tag file-tree__tag--gen">gen</span> : null}
             {row.conflict ? (
                 <span className="file-tree__tag file-tree__tag--conflict">{t('file.conflict')}</span>

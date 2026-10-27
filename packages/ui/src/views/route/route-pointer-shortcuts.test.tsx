@@ -18,7 +18,7 @@ import { RouteWorkspace } from './route-workspace.tsx';
 
 /**
  * Route shortcuts use the target under the pointer (docs/design/SPEC-elements.md §5). Nothing has focus, and the pointer is over
- * a stop, line or thread. The pointer monitor is mocked because jsdom has no `elementFromPoint`.
+ * a stop, line or thread. `PointerTarget` is stubbed because jsdom has no `elementFromPoint`.
  */
 
 const DATA = fixtureIteration('medium');

@@ -38,7 +38,7 @@ describe('global UI settings', () => {
             composerLayout: 'visual',
             locale: 'auto',
             theme: 'auto',
-            
+            style: null,
             textSize: 'm',
             onboarding: { completedAt: null, step: 0 },
             updates: { dismissedVersion: null },
@@ -85,14 +85,14 @@ describe('global UI settings', () => {
         expect(patches).toEqual([{ theme: 'light' }]);
     });
 
-    
+    it('persists the style choice separately and preserves it after a late GET', async () => {
         const { patches, send } = recording();
-        
-        
-        
-        
+        const store = createUiSettingsStore({ initial: { theme: 'light', style: 'sample' }, send });
+        store.update({ style: null });
+        store.applyLoaded(merged({ theme: 'auto', style: 'sample', textSize: 'l' }));
+        expect(store.getSnapshot()).toMatchObject({ theme: 'auto', style: null, textSize: 'l' });
         await flush();
-        
+        expect(patches).toEqual([{ style: null }]);
     });
 
     it('sends nothing when an already loaded value repeats', async () => {
@@ -157,7 +157,7 @@ describe('global UI settings', () => {
             composerLayout: 'markdown',
             locale: 'auto',
             theme: 'auto',
-            
+            style: null,
             textSize: 'm',
             onboarding: { completedAt: null, step: 0 },
             updates: { dismissedVersion: null },
@@ -169,7 +169,7 @@ describe('global UI settings', () => {
             composerLayout: 'markdown',
             locale: 'auto',
             theme: 'auto',
-            
+            style: null,
             textSize: 'm',
             onboarding: { completedAt: null, step: 0 },
             updates: { dismissedVersion: null },
@@ -187,7 +187,7 @@ describe('global UI settings', () => {
                 composerLayout: 'visual',
                 locale: 'auto',
                 theme: 'auto',
-            
+                style: null,
                 textSize: 'm',
                 onboarding: { completedAt: null, step: 0 },
                 updates: { dismissedVersion: null },

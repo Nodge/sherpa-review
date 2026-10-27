@@ -23,7 +23,7 @@ import { SettingsStore } from './settings-store.js';
 import { directoryAssets } from './static.js';
 import { get, makeTempSherpaDir, patchJson, postJson, removeTempSherpaDir } from './test-support.js';
 
-const PR_KEY = 'github-quillmart--quillmart--4242';
+const PR_KEY = 'pr-4242';
 const WORKER = 'w-ui';
 const WORKER_BASE = { protocolVersion: PROTOCOL_VERSION, cliVersion: '0.1.0', workerId: WORKER };
 /** Minimal UI build document: state injection must handle any valid html. */
@@ -60,14 +60,15 @@ describe('UI endpoints', () => {
     });
 
     async function start(uiDir?: string): Promise<SherpaServer> {
-        // This suite uses a hosted-review key, but tests must not call a live review host (docs/testing.md):
-        // no host means review endpoints return `no_review_host` and SSE only sends state.
+        // Live hosts are forbidden in tests (docs/testing.md): without a host, review endpoints return
+        // `no_review_host`, and SSE remains a state channel.
         const base = {
             prKey: PR_KEY,
             sherpaDir,
             longPollSeconds: 0.3,
-            reviewHostFactory: () => null,
-            feedback: { env: {} },
+            hosts: [],
+            updateChannel: null,
+            feedbackChannel: null,
         };
         const server = await startServer(
             uiDir === undefined ? base : { ...base, assets: directoryAssets(uiDir) },
@@ -106,12 +107,7 @@ describe('UI endpoints', () => {
             expect(state.prKey).toBe(PR_KEY);
             expect(state.worker.kind).toBe('never');
             expect(state.tasks).toEqual([]);
-            expect(state.feedback).toEqual({
-                available: false,
-                reason:
-                    'No token for feedback: none is configured on the server. ' +
-                    'You can send feedback directly to project issues or the Sherpa discussion.',
-            });
+            expect(state.feedback).toBeNull();
             // This suite has no host, so there is no source for PR metadata, and the snapshot is empty.
             expect(state.pr).toBeNull();
         });
@@ -285,11 +281,13 @@ describe('UI endpoints', () => {
         it('reports a broken worker connection to the UI without incoming requests', async () => {
             // Shorten the grace period between calls: no need to wait a minute in a test.
             const server = await startServer({
+                updateChannel: null,
+                feedbackChannel: null,
                 prKey: PR_KEY,
                 sherpaDir,
                 longPollSeconds: 30,
                 workerGapGraceSeconds: 0.3,
-                reviewHostFactory: () => null,
+                hosts: [],
             });
             servers.push(server);
             const stream = await openEvents(server);
@@ -355,10 +353,10 @@ describe('UI endpoints', () => {
         });
 
         it.each([
-            ['dark', false, 'dark'], ['light', false, 'light'],
-            
-        ] as const)('saved theme %s appears in the first frame', async (theme, expected) => {
-            new SettingsStore(sherpaDir).patch({ theme, textSize: 'l' });
+            ['dark', null, 'dark'], ['light', null, 'light'],
+            ['dark', 'sample', 'sample-dark'], ['light', 'sample', 'sample-light'],
+        ] as const)('saved theme %s, style %s arrives in the first frame', async (theme, style, expected) => {
+            new SettingsStore(sherpaDir).patch({ theme, style, textSize: 'l' });
             const server = await start(uiDir);
 
             const html = await (await get(server.port, '/')).text();
@@ -389,8 +387,8 @@ describe('UI endpoints', () => {
             expect(await (await get(server.port, '/')).text()).toContain('data-theme="dark"');
         });
 
-        
-            
+        it('switching to auto preserves the style in the system theme script of the next document', async () => {
+            new SettingsStore(sherpaDir).patch({ theme: 'dark', style: 'sample' });
             const server = await start(uiDir);
 
             const response = await patchJson(server.port, UI_ENDPOINTS.settings, { theme: 'auto' }, server.token);
@@ -401,7 +399,7 @@ describe('UI endpoints', () => {
             expect(document.status).toBe(200);
             expect(html).not.toContain('data-theme=');
             expect(html).toContain('prefers-color-scheme: dark');
-            
+            expect(html).toContain('"sample-dark":"sample-light"');
             expect(html.indexOf('<script>')).toBeLessThan(html.indexOf('<link rel="stylesheet"'));
         });
 

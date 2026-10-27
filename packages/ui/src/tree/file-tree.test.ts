@@ -43,7 +43,7 @@ function file(path: string, patch: Partial<FileDiff> = {}): FileDiff {
 function input(files: readonly FileDiff[], patch: Partial<FileTreeInput> = {}): FileTreeInput {
     return {
         files,
-        pciFileIds: new Set(),
+        audit: null,
         mineFileIds: null,
         readState: new Map(),
         routeFiles: null,
@@ -255,11 +255,15 @@ describe('buildFileTree', () => {
         expect(tagged).toEqual(['services/orders/domain/slot.ts']);
     });
 
-    it('sets the pci tag by lens membership', () => {
-        const tree = buildFileTree(input(FILES, { pciFileIds: new Set(['f-services/orders/domain/order.ts']) }));
-        const tagged = tree.rows.filter((row) => row.kind === 'file' && row.pci).map((row) => row.path);
+    it('tags audit-lens files and leaves the others untagged', () => {
+        const tree = buildFileTree(
+            input(FILES, { audit: { tag: 'sox', fileIds: new Set(['f-services/orders/domain/order.ts']) } }),
+        );
+        const tagged = tree.rows.flatMap((row) =>
+            row.kind === 'file' && row.auditTag !== null ? [[row.path, row.auditTag]] : [],
+        );
 
-        expect(tagged).toEqual(['services/orders/domain/order.ts']);
+        expect(tagged).toEqual([['services/orders/domain/order.ts', 'sox']]);
     });
 });
 

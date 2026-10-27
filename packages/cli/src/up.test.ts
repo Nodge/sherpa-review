@@ -11,7 +11,7 @@ import { CliError } from './errors.js';
 import { manifestPathFor } from './paths.js';
 import { ensureServer, hasExited, loadServerModule, resolveServerBin, terminateChild } from './up.js';
 
-const PR_KEY = 'github-quillmart--quillmart--777';
+const PR_KEY = 'pr-777';
 
 /**
  * Bundled CLI (`src/bundle.global-setup.ts`): the daemon is the same CLI running `sherpa server`, so

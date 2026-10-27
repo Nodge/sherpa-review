@@ -183,7 +183,7 @@ describe('restoring composers from the buffer', () => {
     });
 });
 
-/** A thread with one reply. Its ID equals the root ID, as on a host where the root represents the thread. */
+/** A thread with one reply. The thread id equals the root id, as it does on hosts. */
 function replyThread(): Thread {
     const base = draftThread('root-1', 'thread root');
     const root = { ...base.root, draft: false };

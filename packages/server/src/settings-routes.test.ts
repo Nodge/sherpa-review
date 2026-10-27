@@ -6,8 +6,8 @@ import type { SherpaServer } from './server.js';
 import { startServer } from './server.js';
 import { get, makeTempSherpaDir, patchJson, removeTempSherpaDir } from './test-support.js';
 
-const PR_KEY = 'github-quillmart--quillmart--4242';
-const OTHER_PR_KEY = 'github-quillmart--quillmart--4343';
+const PR_KEY = 'pr-4242';
+const OTHER_PR_KEY = 'pr-4343';
 
 describe('global UI settings endpoint', () => {
     let sherpaDir: string;
@@ -28,11 +28,12 @@ describe('global UI settings endpoint', () => {
     /** No review host is provided on purpose. Settings must work on a server without one. */
     async function start(prKey = PR_KEY): Promise<SherpaServer> {
         const server = await startServer({
+            updateChannel: null,
+            feedbackChannel: null,
             prKey,
             sherpaDir,
             longPollSeconds: 0.3,
-            reviewHostFactory: () => null,
-            feedback: { env: {} },
+            hosts: [],
         });
         servers.push(server);
         return server;
@@ -53,7 +54,7 @@ describe('global UI settings endpoint', () => {
             composerLayout: 'visual',
             locale: 'auto',
             theme: 'auto',
-            
+            style: null,
             textSize: 'm',
             onboarding: { completedAt: null, step: 0 },
             updates: { dismissedVersion: null },
@@ -73,7 +74,7 @@ describe('global UI settings endpoint', () => {
             composerLayout: 'visual',
             locale: 'auto',
             theme: 'auto',
-            
+            style: null,
             textSize: 'm',
             onboarding: { completedAt: null, step: 0 },
             updates: { dismissedVersion: null },
@@ -82,40 +83,40 @@ describe('global UI settings endpoint', () => {
     });
 
     it.each([
-        ['dark', false], ['light', false], ['auto', false],
-        ['dark', true], ['light', true], ['auto', true],
-    ] as const)('theme %s is readable by another server', async (theme) => {
+        ['dark', null], ['light', null], ['auto', null],
+        ['dark', 'sample'], ['light', 'sample'], ['auto', 'sample'],
+    ] as const)('theme %s and style %s can be read by another server', async (theme, style) => {
         const first = await start();
 
-        const response = await patchJson(first.port, UI_ENDPOINTS.settings, { theme }, first.token);
+        const response = await patchJson(first.port, UI_ENDPOINTS.settings, { theme, style }, first.token);
 
         expect(response.status).toBe(200);
-        expect(uiSettingsResponseSchema.parse(await response.json()).settings).toMatchObject({ theme });
-        expect(await readSettings(first)).toMatchObject({ theme });
+        expect(uiSettingsResponseSchema.parse(await response.json()).settings).toMatchObject({ theme, style });
+        expect(await readSettings(first)).toMatchObject({ theme, style });
 
         const second = await start(OTHER_PR_KEY);
-        expect(await readSettings(second)).toMatchObject({ theme });
+        expect(await readSettings(second)).toMatchObject({ theme, style });
     });
 
-    
+    it('theme and style patches do not reset each other', async () => {
         const server = await start();
         await patchJson(server.port, UI_ENDPOINTS.settings, { theme: 'light' }, server.token);
-        
-        
+        await patchJson(server.port, UI_ENDPOINTS.settings, { style: 'sample' }, server.token);
+        expect(await readSettings(server)).toMatchObject({ theme: 'light', style: 'sample' });
 
         await patchJson(server.port, UI_ENDPOINTS.settings, { theme: 'auto' }, server.token);
-        expect(await readSettings(server)).toMatchObject({ theme: 'auto' });
+        expect(await readSettings(server)).toMatchObject({ theme: 'auto', style: 'sample' });
 
-        
-        
+        await patchJson(server.port, UI_ENDPOINTS.settings, { style: null }, server.token);
+        expect(await readSettings(server)).toMatchObject({ theme: 'auto', style: null });
     });
 
-    it.each([{ theme: 'invalid-theme' }])('rejects an invalid new selection: %j', async (patch) => {
+    it.each([{ style: 'Not An Id' }, { style: true }, { theme: 'sample-dark' }])('rejects an invalid new selection: %j', async (patch) => {
         const server = await start();
         const response = await patchJson(server.port, UI_ENDPOINTS.settings, patch, server.token);
 
         expect(response.status).toBe(400);
-        
+        expect(await readSettings(server)).toMatchObject({ theme: 'auto', style: null });
     });
 
     it('replaces a nested patch object in full without changing the language', async () => {
@@ -133,7 +134,7 @@ describe('global UI settings endpoint', () => {
             onboarding: { completedAt: null, step: 3 },
             locale: 'auto',
             theme: 'auto',
-            
+            style: null,
             textSize: 'm',
         });
     });

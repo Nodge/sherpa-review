@@ -254,7 +254,7 @@ test('F3 force-push: the 9f3c1ab → c4f9b17 slice shows changes across the miss
         );
 
         // The tab shows the first iteration snapshot. It is checked and becomes the slice base.
-        // The review host does not compare a gone iteration. Shift-clicking it would simply open the iteration.
+        // The host cannot compare the missing iteration, so Shift+click on it would simply open it.
         await menu.locator('.snapshot-picker__row[aria-checked="true"]').click({ modifiers: ['Shift'] });
         await menu.locator(`.snapshot-picker__row[data-diff="${MEDIUM_DIFF_ID_V3}"]`).click();
         await expect.poll(() => fragmentParam(page, 'base')).toBe(MEDIUM_DIFF_ID);

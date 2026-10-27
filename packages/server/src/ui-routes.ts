@@ -4,7 +4,8 @@ import type {
     PrMeta,
     UiCancelResponse,
     UiChatEvent,
-    UiFeedbackAvailability,
+    UiFeedbackChannel,
+    UiReviewHost,
     UiEnqueueResponse,
     UiProgressEvent,
     UiReviewEvent,
@@ -67,14 +68,14 @@ export interface UiRoutesOptions {
     readonly prKey: string;
     readonly queue: TaskQueue;
     readonly registry: WorkerRegistry;
-    /** This PR's host adapter name. null means no host and no review endpoints. */
-    readonly reviewHost: string | null;
+    /** Host description for this PR in the UI. null means no host, review endpoints are closed. */
+    readonly reviewHost: UiReviewHost | null;
     /** PR metadata for the snapshot: updates also wake SSE clients. */
     readonly prMeta: PrMetaSource;
-    /** A new version in main also wakes SSE clients. */
+    /** New version from the update channel: its arrival also wakes SSE clients. */
     readonly update: UpdateSource;
-    /** Feedback channel availability depends only on credentials in the environment. */
-    readonly feedback: UiFeedbackAvailability;
+    /** Build feedback channel for the snapshot. null means no channel. */
+    readonly feedback: UiFeedbackChannel | null;
     /** Thread revision for SSE. null means this server never has review events. */
     readonly reviewFeed: ReviewFeed | null;
     /** PR iterations: their list is part of the snapshot, and changing the active one makes the route stale. */

@@ -5,9 +5,12 @@ import path from 'node:path';
 
 /**
  * Temporary git repository for backend tests: real `git` in a temporary directory, never
- * inside another checkout. Setup uses an isolated environment and explicit configuration so
+ * inside another checkout. Setup uses an isolated environment and explicit config so
  * machine settings do not affect the result. The backend runs as in production, without them.
  */
+
+/** `user.name` in temporary repositories: the local host author and viewer login in tests. */
+export const GIT_USER_NAME = 'Sherpa Tester';
 
 /** Setup environment excludes user and system config. */
 const SETUP_ENV = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
@@ -15,7 +18,7 @@ const SETUP_ENV = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_N
 /** Setup config: without it, `git` on another machine may refuse to commit or name the branch differently. */
 const SETUP_CONFIG = [
     '-c',
-    'user.name=Sherpa Tester',
+    `user.name=${GIT_USER_NAME}`,
     '-c',
     'user.email=sherpa@example.com',
     '-c',
@@ -70,6 +73,21 @@ export class GitFixture {
         return this.git('rev-parse', 'HEAD').trim();
     }
 
+    /**
+     * Files in the review base: commits only these paths and moves `main` to that commit, so
+     * the default base (merge-base with `main`) is this commit. Other tree changes stay uncommitted.
+     * Used with `makeFeatureRepo`.
+     */
+    commitBase(files: Readonly<Record<string, string | Buffer>>): void {
+        const paths = Object.keys(files);
+        for (const rootPath of paths) {
+            this.write(rootPath, files[rootPath] ?? '');
+        }
+        this.git('add', '--', ...paths);
+        this.git('commit', '-m', 'base', '--', ...paths);
+        this.git('branch', '-f', 'main', 'HEAD');
+    }
+
     cleanup(): void {
         fs.rmSync(this.root, { recursive: true, force: true });
     }
@@ -81,7 +99,18 @@ export function makeGitRepo(prefix = 'sherpa-git-'): GitFixture {
     const fixture = new GitFixture(root);
     fixture.git('init');
     // Set the author name in repository config: the backend reads it too, so the login is machine-independent.
-    fixture.git('config', 'user.name', 'Sherpa Tester');
+    fixture.git('config', 'user.name', GIT_USER_NAME);
+    return fixture;
+}
+
+/**
+ * Repository on `feature`, branched from an empty `main` commit: tests set the base with
+ * `commitBase` and make changes by writing to the tree, in either order.
+ */
+export function makeFeatureRepo(prefix = 'sherpa-git-'): GitFixture {
+    const fixture = makeGitRepo(prefix);
+    fixture.git('commit', '--allow-empty', '-m', 'init');
+    fixture.git('checkout', '-b', 'feature');
     return fixture;
 }
 

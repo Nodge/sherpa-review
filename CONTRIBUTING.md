@@ -26,7 +26,7 @@ These must pass before every commit. E2E is outside the required checks. `packag
 
 `packages/ui` is the reviewer's React application: diff, route, discussions, chat, settings, design tokens in `src/styles/` and development pages in `src/dev/`. vite builds it.
 
-`packages/cli` is the thin `sherpa` CLI (`up`, `worker next`, and others). The worker loop calls it each time, so it starts fast and has no runtime dependencies. One `sherpa.mjs` bundle.
+`packages/cli` is the thin `sherpa` CLI (`up`, `worker next` and other commands). The worker loop calls it on every invocation, so startup is fast and there are no runtime dependencies. It builds into one `sherpa.mjs` bundle. Host adapters live in `src/hosts/` in the server and CLI.
 
 `packages/skill` is the harness distribution: `SKILL.md` plus the CLI and server module in `dist/bin/`. `dist/` itself is a build artifact and is not versioned (`.gitignore` excludes `packages/*/dist/`). Its copy in the root `skill/` directory is versioned. The release script puts it there, and committing this directory delivers the update to users.
 
@@ -42,7 +42,7 @@ Run the server with a fixture PR:
 pnpm --filter @sherpa/server dev --pr fixture-medium
 ```
 
-The key is `fixture-<small|medium|large|edge|huge|empty>` (`FIXTURE_NAMES`, adapter selection in `packages/server/src/hosts/select.ts`). The server prints the port, manifest path and UI link, and runs until Ctrl+C. It has no idle shutdown. It doesn't need the built UI, which vite serves.
+The key is `fixture-<small|medium|large|edge|huge|empty>` (`FIXTURE_NAMES`, plugin at `packages/server/src/hosts/fixture/plugin.ts`). The server prints its port, manifest path and UI link, runs until Ctrl+C, and does not stop when idle. It does not need a built UI because vite serves it.
 
 UI:
 
@@ -69,8 +69,7 @@ To add a state, export a list of cards from a `*-states.tsx` file in `packages/u
 Install Chromium once:
 
 ```
-
-  pnpm --filter @sherpa/e2e exec playwright install chromium
+pnpm --filter @sherpa/e2e exec playwright install chromium
 ```
 
 ```
@@ -91,6 +90,7 @@ Measurements are printed as `PERF …` lines. See `docs/testing.md` and `package
 
 - Everything the model reads or that crosses a process boundary has a schema in `packages/protocol` and passes validation. The server rejects invalid data, and the UI does not consume it.
 - Host-specific behaviour stays inside `ReviewHost` (`packages/protocol/src/review-host.ts`). A new method needs a flag in `HostCapabilities` and a check in the contract test suite at `packages/server/src/hosts/review-host-contract.ts`.
+- Hosts and channels are plugins registered through composition roots.
 - Increment the protocol version (`packages/protocol/src/version.ts`) whenever worker endpoints or the task format change incompatibly.
 
 ## Appearance

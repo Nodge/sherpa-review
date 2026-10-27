@@ -1,5 +1,4 @@
 import type {
-    LocalVcsKind,
     RpcError,
     RpcErrorCode,
     Task,
@@ -18,8 +17,9 @@ export interface CommandTarget {
 
 /**
  * Command the CLI prints for the model: `node <sherpa.mjs> <words> --pr <key> [<placeholder>]`.
- * The full path and key let a command copied verbatim work from any cwd, without a checkout
- * or an inferred skill path. The caller quotes values in `words` with `shellQuote`.
+ * The full path and key let a command copied as is work from any cwd, without the checkout
+ * where the CLI discovers the PR, or substituting the skill path. The caller quotes values in `words`
+ * through `shellQuote`.
  * The placeholder (`--text "..."`) goes last. The model replaces it with its own text.
  */
 function commandLine(target: CommandTarget, words: string, placeholder?: string): string {
@@ -91,7 +91,8 @@ export function formatUiUrl(port: number, token: string, host = '127.0.0.1'): st
 
 /** What is being reviewed locally, as a line in the `up` output. */
 export interface LocalReviewSummary {
-    readonly vcs: LocalVcsKind;
+    /** How the server computes the base when none was given, in the VCS plugin wording. */
+    readonly defaultBase: string;
     readonly repo: string;
     readonly branch: string;
     /** Explicit base. undefined means the server computes it. */
@@ -109,7 +110,7 @@ export function formatUpReady(uiUrl: string, target: CommandTarget, local: Local
     if (local !== null) {
         lines.push(
             `Reviewing the working tree of ${local.repo} on branch ${local.branch}, ` +
-                `base ${local.base ?? defaultBaseWording(local.vcs)}.`,
+                `base ${local.base ?? local.defaultBase}.`,
         );
         if (local.verdicts !== null) {
             lines.push(
@@ -124,11 +125,6 @@ export function formatUpReady(uiUrl: string, target: CommandTarget, local: Local
         `Then run \`${workerNextCommand(target)}\` and follow the instructions in its output.`,
     );
     return lines.join('\n');
-}
-
-/** How the server names an unspecified base: merge-base with the default git branch. */
-function defaultBaseWording(vcs: LocalVcsKind): string {
-    return 'merge-base with the default branch';
 }
 
 /** Worker work is finished. The word DONE tells the session to end (`docs/protocol.md §3`). */
@@ -236,7 +232,7 @@ export function helpText(): string {
         ['sherpa task fail <id> --reason "<text>"', 'refuse a task with a reason'],
     ];
     const flags: readonly (readonly [string, string])[] = [
-        ['--pr <key>', 'the PR to connect to. Defaults to SHERPA_PR, then to the PR of the Git branch here'],
+        ['--pr <key>', 'the PR to connect to; defaults to SHERPA_PR, then to the PR of the current branch here'],
         [
             '--local <path>',
             'review the working tree of this project directory instead of a PR; only for `up`',

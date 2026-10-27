@@ -28,12 +28,12 @@ const task: Task = {
 
 const RESULT_FILE = '/tmp/sherpa/pr-1/42-1.md';
 
-const TARGET: CommandTarget = { cliPath: '/Users/me/.claude/skills/sherpa/bin/sherpa.mjs', prKey: 'github-quillmart--quillmart--1' };
+const TARGET: CommandTarget = { cliPath: '/Users/me/.claude/skills/sherpa/bin/sherpa.mjs', prKey: 'pr-1' };
 /** Path containing a space. The command must survive being copied into a shell as is. */
-const SPACED: CommandTarget = { cliPath: '/Users/Jo Doe/.claude/skills/sherpa/bin/sherpa.mjs', prKey: 'github-quillmart--quillmart--1' };
+const SPACED: CommandTarget = { cliPath: '/Users/Jo Doe/.claude/skills/sherpa/bin/sherpa.mjs', prKey: 'pr-1' };
 const CLI = `node ${TARGET.cliPath}`;
 
-/** A command without the CLI path cannot run outside the skill directory and a checkout. */
+/** A command without a CLI path cannot run outside the skill directory. */
 const BARE_COMMAND = /(^|[^/\w.-])sherpa (up|worker|task)\b/mu;
 
 describe('UI link', () => {
@@ -49,29 +49,21 @@ describe('UI link', () => {
 describe('up output for local review', () => {
     const uiUrl = 'http://127.0.0.1:4317/#t=token';
 
-    it('names the default base in the VCS wording', () => {
-        const git = formatUpReady(uiUrl, { ...TARGET, prKey: 'local-git-app-0badc0de' }, {
-            vcs: 'git',
-            repo: '/repo/app',
-            branch: 'feature',
-            base: undefined,
-            verdicts: null,
-        });
-        const git = formatUpReady(uiUrl, { ...TARGET, prKey: 'local-git-app-0badc0de' }, {
-            vcs: 'git',
+    it('describes the default base in the VCS plugin wording', () => {
+        const ready = formatUpReady(uiUrl, { ...TARGET, prKey: 'local-git-app-0badc0de' }, {
+            defaultBase: 'merge-base with the default branch',
             repo: '/repo/app',
             branch: 'feature',
             base: undefined,
             verdicts: null,
         });
 
-        expect(git).toContain('on branch feature, base merge-base with main.');
-        expect(git).toContain('on branch feature, base merge-base with the default branch.');
+        expect(ready).toContain('on branch feature, base merge-base with the default branch.');
     });
 
     it('prints an explicit base as is', () => {
         const ready = formatUpReady(uiUrl, { ...TARGET, prKey: 'local-git-app-0badc0de' }, {
-            vcs: 'git',
+            defaultBase: 'merge-base with the default branch',
             repo: '/repo/app',
             branch: 'feature',
             base: 'origin/main~2',
@@ -84,7 +76,7 @@ describe('up output for local review', () => {
 
     it('describes verdict mode on a separate line with the instruction', () => {
         const ready = formatUpReady(uiUrl, { ...TARGET, prKey: 'local-git-app-0badc0de' }, {
-            vcs: 'git',
+            defaultBase: 'merge-base with the default branch',
             repo: '/repo/app',
             branch: 'feature',
             base: undefined,
@@ -98,9 +90,9 @@ describe('up output for local review', () => {
     });
 
     it('prints the instruction verbatim in the ready line, without escaping', () => {
-        const verdicts = 'on ship, commit with message "#61: done" in C:\\work\nthen open a PR';
+        const verdicts = 'on ship, commit with message "PROJ-61: done" in C:\\work\nthen open a PR';
         const ready = formatUpReady(uiUrl, { ...TARGET, prKey: 'local-git-app-0badc0de' }, {
-            vcs: 'git',
+            defaultBase: 'merge-base with the default branch',
             repo: '/repo/app',
             branch: 'feature',
             base: undefined,
@@ -130,10 +122,10 @@ describe('task prompt format', () => {
         expect(output).toContain('Return the contents of the file as is.');
         expect(output).toContain('Context: /tmp/sherpa/task-42-context.md');
         expect(output).toContain(`Write the result to ${RESULT_FILE} and submit it:`);
-        expect(output).toContain(`  ${CLI} task complete 42 --file ${RESULT_FILE} --pr github-quillmart--quillmart--1`);
+        expect(output).toContain(`  ${CLI} task complete 42 --file ${RESULT_FILE} --pr pr-1`);
         expect(output).not.toContain('<path>');
-        expect(output).toContain(`Interim status: ${CLI} task progress 42 --pr github-quillmart--quillmart--1 --text "..."`);
-        expect(output).toContain(`Cannot do it: ${CLI} task fail 42 --pr github-quillmart--quillmart--1 --reason "..."`);
+        expect(output).toContain(`Interim status: ${CLI} task progress 42 --pr pr-1 --text "..."`);
+        expect(output).toContain(`Cannot do it: ${CLI} task fail 42 --pr pr-1 --reason "..."`);
         expect(output).not.toMatch(BARE_COMMAND);
     });
 
@@ -141,7 +133,7 @@ describe('task prompt format', () => {
         const output = formatTask(task, '/tmp/Jo Doe/42-1.md', SPACED);
 
         expect(output).toContain(
-            `node '${SPACED.cliPath}' task complete 42 --file '/tmp/Jo Doe/42-1.md' --pr github-quillmart--quillmart--1`,
+            `node '${SPACED.cliPath}' task complete 42 --file '/tmp/Jo Doe/42-1.md' --pr pr-1`,
         );
     });
 
@@ -168,7 +160,7 @@ describe('complete responses', () => {
         );
 
         expect(output).toContain('The result is accepted.');
-        expect(output).toContain(`Call \`${CLI} worker next --pr github-quillmart--quillmart--1\` for the next task.`);
+        expect(output).toContain(`Call \`${CLI} worker next --pr pr-1\` for the next task.`);
     });
 
     it('rejected lists errors as items and asks to call complete again with the same file', () => {
@@ -181,7 +173,7 @@ describe('complete responses', () => {
 
         expect(output).toContain('1. empty');
         expect(output).toContain('2. no summary section');
-        expect(output).toContain(`\`${CLI} task complete 42 --file /work/answer.md --pr github-quillmart--quillmart--1\` again.`);
+        expect(output).toContain(`\`${CLI} task complete 42 --file /work/answer.md --pr pr-1\` again.`);
     });
 
     it('noop prints the server message', () => {
@@ -193,7 +185,7 @@ describe('complete responses', () => {
         );
 
         expect(output).toContain('is already finished');
-        expect(output).toContain(`${CLI} worker next --pr github-quillmart--quillmart--1`);
+        expect(output).toContain(`${CLI} worker next --pr pr-1`);
     });
 });
 
@@ -206,9 +198,9 @@ describe('progress and fail responses', () => {
             formatFailResponse({ kind: 'noop', message: 'Task sherpa/42 has been cancelled.' }, 42, TARGET),
         ];
 
-        expect(outputs[1]).toContain(`${CLI} worker next --pr github-quillmart--quillmart--1`);
-        expect(outputs[2]).toContain(`${CLI} worker next --pr github-quillmart--quillmart--1`);
-        expect(outputs[3]).toContain(`${CLI} worker next --pr github-quillmart--quillmart--1`);
+        expect(outputs[1]).toContain(`${CLI} worker next --pr pr-1`);
+        expect(outputs[2]).toContain(`${CLI} worker next --pr pr-1`);
+        expect(outputs[3]).toContain(`${CLI} worker next --pr pr-1`);
         for (const output of outputs) {
             expect(output).not.toMatch(BARE_COMMAND);
         }
@@ -264,7 +256,7 @@ describe('errors', () => {
 
         expect(output).toContain('512 KB');
         expect(output).toContain('256 KB');
-        expect(output).toContain(`${CLI} task complete 42 --file /tmp/answer.md --pr github-quillmart--quillmart--1`);
+        expect(output).toContain(`${CLI} task complete 42 --file /tmp/answer.md --pr pr-1`);
         expect(output).toContain('The task stays yours');
     });
 
@@ -276,8 +268,8 @@ describe('errors', () => {
             TARGET,
         );
 
-        expect(tooLarge).toContain(`call \`${CLI} worker next --pr github-quillmart--quillmart--1\` for the next one`);
-        expect(lease).toContain(`\`${CLI} worker next --pr github-quillmart--quillmart--1\``);
+        expect(tooLarge).toContain(`call \`${CLI} worker next --pr pr-1\` for the next one`);
+        expect(lease).toContain(`\`${CLI} worker next --pr pr-1\``);
         expect(tooLarge).not.toMatch(BARE_COMMAND);
         expect(lease).not.toMatch(BARE_COMMAND);
     });
@@ -287,7 +279,7 @@ describe('printed commands', () => {
     it('up names worker next as a full command with the path and key', () => {
         const ready = formatUpReady('http://127.0.0.1:4317/#t=token', TARGET);
 
-        expect(ready).toContain(`Then run \`${CLI} worker next --pr github-quillmart--quillmart--1\``);
+        expect(ready).toContain(`Then run \`${CLI} worker next --pr pr-1\``);
         expect(ready).not.toMatch(BARE_COMMAND);
     });
 

@@ -26,7 +26,7 @@ import { UNKNOWN_BASE_COMMIT } from './route-store.js';
  * Iterations carry state (list, active iteration, affected stops), threads carry only a revision.
  *
  * The subscription is lazy, like `ReviewFeed`. It starts with the first SSE client and stops without clients,
- * otherwise the host would poll for no one. Before startup the list is empty and `stale` is `null`,
+ * otherwise host polling would run for nothing. Before startup the list is empty and `stale` is `null`,
  * because there is no active iteration to compare the snapshot against.
  */
 
@@ -89,7 +89,7 @@ export class IterationFeed {
     /** Map of the latest iteration pair, computed once and read on every snapshot change. */
     private map: { pair: string; built: Promise<IterationMap> } | null = null;
     /**
-     * In-flight slice requests by iteration pair. A slice from the review host takes 2.8–3.7 s. After a push,
+     * In-flight slice requests by iteration pair. A host slice can take seconds, and after a push,
      * two consumers request it at once: affected stops and note anchor carryover. The store cache shares the result
      * only after the first response, so in-flight requests need separate deduplication.
      */
@@ -178,7 +178,7 @@ export class IterationFeed {
 
     /**
      * "Stale route" for a snapshot. `affectedStopIds` arrives in a second notification once
-     * the interdiff is computed: the banner cannot wait 2.8–3.7 s for the host.
+     * the interdiff is ready: the banner cannot wait seconds for it.
      */
     staleFor(snapshot: RouteSnapshot | null): UiRouteStale | null {
         const stale = staleFor(snapshot, this.list);
@@ -765,7 +765,7 @@ export class IterationFeed {
 
     /**
      * Line carryover map between the snapshot iteration and the active one. Compute the pair once: a host
-     * request takes 2.8–3.7 s, while recalculating the list for each submitted section must stay cheap.
+     * slice can take seconds, while recalculating the list for each submitted section must be cheap.
      * The pair lives until the next push, so this uses a single slot rather than a cache.
      */
     private iterationMap(host: ReviewHost, snapshot: RouteSnapshot, active: Iteration): Promise<IterationMap> {

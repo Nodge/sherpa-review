@@ -4,7 +4,7 @@ import path from 'node:path';
 import type { Locale, Verdict } from '@sherpa/protocol';
 import { generateJsonSchemas } from '@sherpa/protocol';
 
-import type { FeedbackComment, FeedbackRoundContext, FeedbackThread } from './hosts/select.js';
+import type { FeedbackComment, FeedbackRoundContext, FeedbackThread } from './hosts/plugin.js';
 import { fitPayloadFiles, fitText, unavailableBlock } from './payload-budget.js';
 import type { EnqueueInput } from './queue.js';
 

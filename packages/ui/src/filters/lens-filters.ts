@@ -1,6 +1,7 @@
 import type { FileDiff, Lens } from '@sherpa/protocol';
 
 import type { MessageKey, Translate } from '../i18n/index.js';
+import { localized } from '../i18n/translate.js';
 
 /**
  * Shared file filter model (docs/design/README.md §Filters,
@@ -16,18 +17,17 @@ export const ALL_FILTER_ID = 'all';
 /** Synthetic filter by `FileDiff.generated`. The flag comes from review rules, not a heuristic. */
 export const GENERATED_FILTER_ID = 'generated';
 export const MINE_FILTER_ID = 'mine';
-export const PCI_FILTER_ID = 'pci';
 
 /**
  * Known lens labels: we supply the label, while `Lens.label` arrives
- * in English from the adapter. Unknown ids display the host label unchanged.
+ * in English from the adapter. An unknown id is shown with its host label unchanged,
+ * an audit lens uses the name from `Lens.audit` in the UI language.
  *
- * "My files" is separate. Its label names the ownership zone source (CODEOWNERS) and takes
+ * My files is absent here: its label names the zone source (for example, CODEOWNERS) and takes
  * it as a parameter, see `label`.
  */
 const KNOWN_LABELS: Readonly<Record<string, MessageKey>> = {
     [ALL_FILTER_ID]: 'lens.all',
-    [PCI_FILTER_ID]: 'lens.pci',
     [GENERATED_FILTER_ID]: 'lens.generated',
 };
 
@@ -35,7 +35,6 @@ const KNOWN_LABELS: Readonly<Record<string, MessageKey>> = {
 const SHORT_LABELS: Readonly<Record<string, MessageKey>> = {
     [ALL_FILTER_ID]: 'lens.all.short',
     [MINE_FILTER_ID]: 'lens.mine.short',
-    [PCI_FILTER_ID]: 'lens.pci.short',
     [GENERATED_FILTER_ID]: 'lens.generated.short',
 };
 
@@ -51,6 +50,14 @@ export interface FileFilter {
     readonly note: string | null;
     /** Filter files. null for `all` passes everything through. */
     readonly fileIds: ReadonlySet<string> | null;
+    /** The filter is an audit scope (`Lens.audit`) with labels in the UI language. null means an ordinary filter. */
+    readonly audit: FilterAudit | null;
+}
+
+/** Filter audit scope: name for the header chip and banner, tag for the tree row. */
+export interface FilterAudit {
+    readonly name: string;
+    readonly tag: string;
 }
 
 export interface FileFiltersInput {
@@ -97,6 +104,7 @@ export function buildFileFilters({
             available: true,
             note: null,
             fileIds: null,
+            audit: null,
         },
     ];
 
@@ -127,6 +135,7 @@ export function buildFileFilters({
             available: true,
             note: null,
             fileIds: generated,
+            audit: null,
         });
     }
 
@@ -164,14 +173,27 @@ function fromLens(
         }
     }
 
-    return {
+    const base = {
         id: source.id,
-        label: label(source.id, source.label, t, zoneSource),
-        shortLabel: shortLabel(source.id, source.label, t),
         count: fileIds.size,
         available: source.available,
         note: source.note,
         fileIds,
+    };
+    if (source.audit !== null) {
+        const name = localized(source.audit.name, t);
+        return {
+            ...base,
+            label: t('lens.audit', name),
+            shortLabel: localized(source.audit.short, t),
+            audit: { name, tag: source.audit.tag },
+        };
+    }
+    return {
+        ...base,
+        label: label(source.id, source.label, t, zoneSource),
+        shortLabel: shortLabel(source.id, source.label, t),
+        audit: null,
     };
 }
 
@@ -201,6 +223,21 @@ export function selectFilter(filters: readonly FileFilter[], id: string | null):
 /** Filter by id within the list rendered by the panel and select. */
 export function findFilter(filters: readonly FileFilter[], id: string): FileFilter | null {
     return filters.find((filter) => filter.id === id) ?? null;
+}
+
+/**
+ * The list audit filter supplies the PR header chip and tree tags. If there are several audit lenses,
+ * use the first available one in host order, or the first if none are available: an unavailable lens must not
+ * hide a working neighbour. Empty lenses are excluded from the list, so they are absent here too.
+ */
+export function findAuditFilter(filters: readonly FileFilter[]): FileFilter | null {
+    const audits = filters.filter((filter) => filter.audit !== null);
+    return audits.find((filter) => filter.available) ?? audits[0] ?? null;
+}
+
+/** The active filter if it is an audit filter: the audit-scope banner describes whichever audit lens is selected. */
+export function activeAuditFilter(filters: readonly FileFilter[], filterId: string): FileFilter | null {
+    return filters.find((filter) => filter.id === filterId && filter.audit !== null) ?? null;
 }
 
 export function filterFiles(files: readonly FileDiff[], filter: FileFilter): readonly FileDiff[] {

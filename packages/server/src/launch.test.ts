@@ -20,8 +20,8 @@ describe('server launch', () => {
 
     describe('reading an option', () => {
         it('returns the value after the flag', () => {
-            expect(readOption(['--pr', 'github-quillmart--quillmart--42', '--ui', 'dist'], '--pr')).toBe('github-quillmart--quillmart--42');
-            expect(readOption(['--pr', 'github-quillmart--quillmart--42', '--ui', 'dist'], '--ui')).toBe('dist');
+            expect(readOption(['--pr', 'pr-42', '--ui', 'dist'], '--pr')).toBe('pr-42');
+            expect(readOption(['--pr', 'pr-42', '--ui', 'dist'], '--ui')).toBe('dist');
         });
 
         it('returns no value when the flag is the last argument', () => {

@@ -33,7 +33,7 @@ function file(path: string, depth: number): TreeRow {
         hostFileUrl: null,
         blameUrl: null,
         conflict: false,
-        pci: false,
+        auditTag: null,
         read: readStateOf({ file: { generated: false, viewed: null, additions: 1, deletions: 0 }, record: null }),
         route: null,
     };

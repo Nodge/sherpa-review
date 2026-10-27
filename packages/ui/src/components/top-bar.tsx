@@ -1,4 +1,4 @@
-import type { UiFeedbackAvailability, UiFeedbackRequest, UiFeedbackResponse, UiUpdate } from '@sherpa/protocol';
+import type { UiFeedbackChannel, UiFeedbackRequest, UiFeedbackResponse, UiUpdate } from '@sherpa/protocol';
 import { Fragment, useEffect, useRef, useState } from 'react';
 
 import { useT } from '../i18n/index.js';
@@ -37,7 +37,8 @@ export interface TopBarProps {
     readonly agentConnected: boolean;
     /** Restart the tour pass from the settings menu, like the `tour.replay` palette command. */
     readonly onReplayTour: () => void;
-    readonly feedback: UiFeedbackAvailability;
+    /** Build's feedback channel. null means no Feedback button. */
+    readonly feedback: UiFeedbackChannel | null;
     readonly feedbackContext: FeedbackPreviewContext;
     readonly onSendFeedback: (request: UiFeedbackRequest) => Promise<UiFeedbackResponse>;
 }
@@ -112,7 +113,9 @@ export function TopBar({
                 onToggleChat={onToggleChat}
             />
             <SearchButton onClick={onOpenSearch} />
-            <FeedbackButton availability={feedback} context={feedbackContext} onSend={onSendFeedback} />
+            {feedback === null ? null : (
+                <FeedbackButton channel={feedback} context={feedbackContext} onSend={onSendFeedback} />
+            )}
             <SettingsMenu
                 agentConnected={agentConnected}
                 onOpenCommands={onOpenSearch}

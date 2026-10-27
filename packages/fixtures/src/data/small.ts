@@ -1,6 +1,6 @@
 import type { PrDiff, Thread } from '@sherpa/protocol';
 
-import { anchor, comment, human, lens, singleIteration, thread } from '../builders.js';
+import { anchor, comment, human, lens, PCI_AUDIT, singleIteration, thread } from '../builders.js';
 import { makeFileDiff } from '../patch.js';
 import type { FixtureDataInput } from './types.js';
 
@@ -104,6 +104,7 @@ export function makeSmallFixture(): FixtureDataInput {
             lens({
                 id: 'pci',
                 label: 'PCI DSS',
+                audit: PCI_AUDIT,
                 available: false,
                 note: 'The PCI DSS scope is not published for this commit yet.',
             }),

@@ -10,7 +10,7 @@ describe('readToken', () => {
     });
 
     it('reads the old token for compatibility with a running server', () => {
-        expect(readToken('#pr=github-quillmart--quillmart--1&token=abc123')).toBe('abc123');
+        expect(readToken('#pr=fixture-1&token=abc123')).toBe('abc123');
         expect(readToken('token=abc123')).toBe('abc123');
     });
 

@@ -75,7 +75,7 @@ describe('image card gallery', () => {
         const html = markup('image-too-large');
 
         expect(html).toContain('too large: 11.4 MB');
-        expect(html).toContain('Open on the server');
+        expect(html).toContain('Open on GitHub');
     });
 
     it('Diff shows the same side statuses as 2-up before bytes arrive', () => {

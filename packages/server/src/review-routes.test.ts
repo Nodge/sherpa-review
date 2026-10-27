@@ -2,7 +2,8 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
-import { FixtureHost, makeFixtureHost } from '@sherpa/fixtures';
+import type { FixtureHost } from '@sherpa/fixtures';
+import { makeFixtureHost } from '@sherpa/fixtures';
 import type { Comment, UiState } from '@sherpa/protocol';
 import {
     rpcErrorSchema,
@@ -29,17 +30,17 @@ import {
 } from '@sherpa/protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { selectReviewHost } from './hosts/select.js';
+import { fixtureHostPlugin } from './hosts/fixture/plugin.js';
 import { blobsDirOf, databasePathFor } from './paths.js';
 import { sniffImageMime } from './review-routes.js';
 import { asRawText, mediumRawResults } from './route/fixture-support.js';
 import type { SherpaServer } from './server.js';
 import { startServer } from './server.js';
-import { get, makeTempSherpaDir, postJson, removeTempSherpaDir } from './test-support.js';
+import { get, hostPluginOf, makeTempSherpaDir, postJson, removeTempSherpaDir } from './test-support.js';
 
 /**
  * Server review endpoints and the thread change SSE event, using the fixture host.
- * prKey `fixture-medium` selects it through the same mechanism as a hosted review key.
+ * The `fixture-medium` prKey selects it through the same mechanism as any other host key.
  */
 
 interface IterationRow {
@@ -74,10 +75,12 @@ describe('server review endpoints', () => {
 
     async function start(prKey: string, host?: FixtureHost): Promise<SherpaServer> {
         const server = await startServer({
+            updateChannel: null,
+            feedbackChannel: null,
             prKey,
             sherpaDir,
             longPollSeconds: 0.3,
-            ...(host === undefined ? {} : { reviewHostFactory: () => ({ name: 'fixture', host }) }),
+            hosts: [host === undefined ? fixtureHostPlugin : hostPluginOf({ name: 'fixture', ui: fixtureHostPlugin.ui, host })],
         });
         servers.push(server);
         return server;
@@ -151,12 +154,12 @@ describe('server review endpoints', () => {
         }
     });
 
-    it('includes the host name in UI state', async () => {
+    it('the plugin host description appears in UI state', async () => {
         const server = await start(FIXTURE_PR);
 
         const state = uiStateSchema.parse(await (await get(server.port, UI_ENDPOINTS.state, server.token)).json());
 
-        expect(state.reviewHost).toBe('fixture');
+        expect(state.reviewHost).toEqual({ id: 'fixture', ...fixtureHostPlugin.ui });
     });
 
     it('the state snapshot carries PR metadata', async () => {
@@ -1290,19 +1293,6 @@ describe('server review endpoints', () => {
             // Reading progress is local, so its event is in the channel even without a host. The review event is absent.
             await expect(nextReview(stream, 300)).rejects.toThrow(/timed out waiting for an SSE event/);
         });
-    });
-});
-
-describe('host selection by PR key', () => {
-    it('selects the fixture host and rejects other keys', () => {
-        
-        expect(selectReviewHost('fixture-medium')?.name).toBe('fixture');
-        expect(selectReviewHost('fixture-edge')?.host).toBeInstanceOf(FixtureHost);
-
-        
-        
-        expect(selectReviewHost('fixture-unknown')).toBeNull();
-        expect(selectReviewHost('unknown-777')).toBeNull();
     });
 });
 

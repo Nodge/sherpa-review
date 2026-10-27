@@ -300,7 +300,7 @@ function occupy(occupancy: Occupancy, planIndex: number, anchors: readonly Route
 }
 
 function occupancyKey(fileId: string, side: 'old' | 'new'): string {
-    return `${fileId} ${side}`;
+    return `${fileId}\u0000${side}`;
 }
 
 /** The schema does not catch `end < start` because its two fields are independent. */

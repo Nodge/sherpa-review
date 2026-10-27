@@ -33,9 +33,9 @@ describe('storage', () => {
     });
 
     it('creates the PR database in WAL mode on the server', async () => {
-        // Tests must not call a live review host (docs/testing.md). Without a host, route warm-up makes no requests.
-        servers.push(await startServer({ prKey: 'github-quillmart--quillmart--42', sherpaDir, reviewHostFactory: () => null }));
-        const file = databasePathFor(sherpaDir, 'github-quillmart--quillmart--42');
+        // Live hosts are forbidden in tests (docs/testing.md). Without a host, route warmup makes no requests.
+        servers.push(await startServer({ updateChannel: null, feedbackChannel: null, prKey: 'pr-42', sherpaDir, hosts: [] }));
+        const file = databasePathFor(sherpaDir, 'pr-42');
 
         await expect(fs.stat(file)).resolves.toBeDefined();
 

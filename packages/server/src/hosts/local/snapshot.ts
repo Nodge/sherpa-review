@@ -5,7 +5,7 @@ import path from 'node:path';
 import type { FileChangeType, FileDiff, FileImage, ImageSide } from '@sherpa/protocol';
 import { IMAGE_BLOB_MAX_BYTES, imageMimeOf } from '@sherpa/protocol';
 
-
+import { countPatchStats, splitPatchByFile } from '../../patch/split.js';
 
 import type { LocalIterationFile } from './iterations-store.js';
 import { isBinaryPatch, synthesizeAddPatch } from './patch.js';
@@ -26,7 +26,7 @@ const MAX_UNTRACKED_FILES = 1_000;
 
 /**
  * How many bytes of one file side the adapter will keep in memory and serve as text.
- * The limit matches the review host adapter (`MAX_CONTENT_BYTES`). Larger files get `patch: null` and `getFileContent`
+ * Remote host adapters use the same limit. Larger sides get `patch: null` and `getFileContent`
  * without contents: the diff endpoint response must have a size limit.
  */
 export const MAX_FILE_BYTES = 2_000_000;
@@ -46,7 +46,7 @@ export interface LocalRepo {
 export async function openLocalRepo(vcs: LocalVcs, projectDir: string): Promise<LocalRepo> {
     const printed = (await vcs.root()).trim();
     if (printed === '') {
-        throw new Error(`${projectDir} is not ${checkoutName(vcs.kind)}`);
+        throw new Error(`${projectDir} is not ${vcs.checkoutLabel}`);
     }
 
     // Resolve both sides through realpath: symlinks and `/var` → `/private/var` otherwise produce different paths,
@@ -58,11 +58,6 @@ export async function openLocalRepo(vcs: LocalVcs, projectDir: string): Promise<
         throw new Error(`${real} is outside the ${vcs.kind} checkout ${root}`);
     }
     return { vcs, projectDir: real, root, prefix };
-}
-
-/** Checkout name with an article, used in human-readable refusal messages. */
-function checkoutName(kind: LocalVcs['kind']): string {
-    return 'a git checkout';
 }
 
 /** Cheap check for changes: checkout state without parsing the diff itself. */
@@ -85,7 +80,7 @@ export interface LocalProbe {
 
 /**
  * Checkout state without reading the diff: branch and HEAD, base, changed files and their mtime.
- * The base is recalculated on every check because main can move under the checkout.
+ * Recompute the base on every check because the base branch can move under the checkout.
  */
 export async function probeLocal(repo: LocalRepo, explicitBase: string | null): Promise<LocalProbe> {
     const info = await repo.vcs.info();
@@ -253,7 +248,7 @@ export async function buildLocalSnapshot(
             oldPath: draft.oldPath,
             changeType: draft.changeType,
             binary: draft.binary,
-            // CODEOWNERS review rules are not reproduced locally, so there is nothing to dim.
+            // Host review rules are not reproduced locally: there is nothing to dim.
             generated: false,
             additions: draft.additions,
             deletions: draft.deletions,

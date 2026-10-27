@@ -13,7 +13,7 @@ export interface ReviewProgressSummary {
 /**
  * Shared panel and Review complete counts use the same read-state model as the tree.
  * Conflict files (docs/design/SPEC-elements.md §4.1) are excluded from both numerator and denominator. They are resolved
- * in the review host, so requiring them to be read before ship would be unfair.
+ * on the host, so requiring them to be read before shipping would be unfair.
  */
 export function reviewProgressSummary(
     files: readonly FileDiff[],

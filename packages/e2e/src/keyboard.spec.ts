@@ -273,13 +273,27 @@ test('keyboard: the SPEC-elements §5 map on fixture-medium', async ({ page, lau
         await page.keyboard.press('k');
         expect(await settledDiffScroll(page)).toBeLessThan(afterNext);
 
+        // Two steps forward and one back: `p` from the first unviewed file wraps around
+        // to the end of the diff. The first file in the fixture is generated and counts as viewed.
+        // `n`/`p` count from the top file, which catches up with scrolling asynchronously: before each
+        // keypress, wait for the active tree row to change.
         await scrollDiffToTop(page);
+        const firstFile = await page.locator('.file-card[data-file]').first().getAttribute('data-file');
+        await expect.poll(() => activeTreeFile(page)).toBe(firstFile);
+
         await page.keyboard.press('n');
         const afterUnread = await settledDiffScroll(page);
         expect(afterUnread).toBeGreaterThan(0);
+        await expect.poll(() => activeTreeFile(page)).not.toBe(firstFile);
+        const unreadFile = await activeTreeFile(page);
+
+        await page.keyboard.press('n');
+        const afterSecondUnread = await settledDiffScroll(page);
+        expect(afterSecondUnread).toBeGreaterThan(afterUnread);
+        await expect.poll(() => activeTreeFile(page)).not.toBe(unreadFile);
 
         await page.keyboard.press('p');
-        expect(await settledDiffScroll(page)).toBeLessThan(afterUnread);
+        expect(await settledDiffScroll(page)).toBeLessThan(afterSecondUnread);
     });
 
     await test.step('thread marker: tab stop, Enter and Space, collapsed thread leaves the DOM', async () => {
@@ -491,6 +505,12 @@ async function settledDiffScroll(page: Page): Promise<number> {
 
 async function diffScrollTop(page: Page): Promise<number> {
     return page.locator('.full-diff').evaluate((element) => element.scrollTop);
+}
+
+/** The top file as the full-diff view sees it: the tree highlights it with the active row. */
+async function activeTreeFile(page: Page): Promise<string | null> {
+    const row = page.locator('.file-tree [role="treeitem"][aria-selected="true"]');
+    return (await row.count()) === 0 ? null : row.first().getAttribute('data-file');
 }
 
 async function scrollDiffToTop(page: Page): Promise<void> {

@@ -12,7 +12,7 @@ import { memoryThreadsStore } from './threads-store.js';
 import { commandRunnerIn } from './vcs.js';
 
 /**
- * Local host on real `git`: the working-tree snapshot is read through the git
+ * Local host using real `git`: the same working-tree snapshot as for any VCS, with a different
  * backend. Checks diff contents, review metadata and reading file sides.
  */
 

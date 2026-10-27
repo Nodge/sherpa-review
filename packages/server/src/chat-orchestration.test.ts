@@ -18,12 +18,13 @@ import {
 import { makeFixtureHost } from '@sherpa/fixtures';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { fixtureHostPlugin } from './hosts/fixture/plugin.js';
 import { chatPayloadDirOf, databasePathFor, routePayloadDirOf, sharedPayloadDirOf } from './paths.js';
 import { MAX_RESULT_REJECTIONS } from './queue.js';
 import { asRawText, mediumDiff, mediumRawResults, mediumReadySnapshot } from './route/fixture-support.js';
 import { bannedPhrases } from './route/voice.js';
 import { type SherpaServer, startServer } from './server.js';
-import { get, makeTempSherpaDir, postJson, removeTempSherpaDir } from './test-support.js';
+import { get, hostPluginOf, makeTempSherpaDir, postJson, removeTempSherpaDir } from './test-support.js';
 
 const PR = 'fixture-medium';
 const LOCAL_PR = 'unknown-777';
@@ -64,11 +65,13 @@ describe('chat and notes', () => {
 
     async function start(prKey = LOCAL_PR): Promise<SherpaServer> {
         const server = await startServer({
+            updateChannel: null,
+            feedbackChannel: null,
             prKey,
             sherpaDir,
             longPollSeconds: 0.1,
             now: () => new Date(Date.now() + clockOffsetMs),
-            ...(prKey === LOCAL_PR ? { reviewHostFactory: () => null } : {}),
+            hosts: prKey === LOCAL_PR ? [] : [fixtureHostPlugin],
         });
         servers.push(server);
         return server;
@@ -478,10 +481,12 @@ describe('chat and notes', () => {
         pushed.advanceIteration();
         pushed.getDiff = () => Promise.reject(new Error('host is down'));
         const server = await startServer({
+            updateChannel: null,
+            feedbackChannel: null,
             prKey: PR,
             sherpaDir,
             longPollSeconds: 0.1,
-            reviewHostFactory: () => ({ name: 'fixture', host: pushed }),
+            hosts: [hostPluginOf({ name: 'fixture', ui: fixtureHostPlugin.ui, host: pushed })],
         });
         servers.push(server);
 

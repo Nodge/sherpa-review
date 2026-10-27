@@ -8,6 +8,11 @@ import { DocumentSettingsSync, readDocumentAppearance } from './document-setting
 import type { UiSettingsStore } from './settings-store.js';
 import { createUiSettingsStore, DEFAULT_UI_SETTINGS } from './settings-store.js';
 
+/** Test style. The mechanism is independent of the contents of `styles/extra/`. */
+vi.mock('../styles/extra-styles.js', () => ({
+    EXTRA_STYLES: [{ id: 'sample', label: { en: 'Sample style', ru: 'Sample style (ru)' } }],
+}));
+
 describe('document attributes from settings', () => {
     afterEach(() => {
         vi.unstubAllGlobals();
@@ -57,53 +62,82 @@ describe('document attributes from settings', () => {
         expect(document.documentElement.getAttribute('data-textsize')).toBeNull();
     });
 
-    
+    it('follows Auto and preserves the style when the theme is changed explicitly', () => {
         const system = stubSystemTheme('light');
-        
+        const settings = createUiSettingsStore({ loaded: true, initial: { style: 'sample' } });
         const unmount = mount(settings);
-        
+        expect(themeAttribute()).toBe('sample-light');
         act(() => { system.switchTo('dark'); });
-        
+        expect(themeAttribute()).toBe('sample-dark');
         act(() => { settings.update({ theme: 'light' }); });
-        
+        expect(themeAttribute()).toBe('sample-light');
         act(() => { system.switchTo('light'); });
         act(() => { system.switchTo('dark'); });
-        
-        
+        expect(themeAttribute()).toBe('sample-light');
+        act(() => { settings.update({ style: null }); });
         expect(themeAttribute()).toBe('light');
         unmount();
     });
 
-    it.each(['dark', 'light'] as const)('the first HTML sets %s appearance before GET', (theme) => {
-        document.documentElement.setAttribute('data-theme', theme);
-        document.documentElement.setAttribute('data-textsize', 'l');
-        expect(readDocumentAppearance(document.documentElement)).toEqual({ theme, textSize: 'l' });
+    it('uses the base theme for a saved style absent from the build', () => {
+        stubSystemTheme('dark');
+        const unmount = mount(createUiSettingsStore({ loaded: true, initial: { theme: 'light', style: 'missing' } }));
+
+        expect(themeAttribute()).toBe('light');
+        unmount();
     });
 
-    
+    it.each(['dark', 'light'] as const)('initial style HTML with theme %s sets appearance before GET', (theme) => {
+        document.documentElement.setAttribute('data-theme', `sample-${theme}`);
+        document.documentElement.setAttribute('data-textsize', 'l');
+        expect(readDocumentAppearance(document.documentElement)).toEqual({ theme, style: 'sample', textSize: 'l' });
+    });
+
+    it.each(['dark', 'light'] as const)('initial HTML with base theme %s resets the style', (theme) => {
+        document.documentElement.setAttribute('data-theme', theme);
+        expect(readDocumentAppearance(document.documentElement)).toEqual({ theme, style: null });
+    });
+
+    it('uses the base style theme when the initial HTML style is absent from the build', () => {
+        document.documentElement.setAttribute('data-theme', 'missing-dark');
+        document.documentElement.setAttribute('data-textsize', 'm');
+        expect(readDocumentAppearance(document.documentElement)).toEqual({ theme: 'dark', style: null, textSize: 'm' });
+    });
+
+    it('preserves the initial HTML theme without a GET response when the style is absent from the build', () => {
+        document.documentElement.setAttribute('data-theme', 'missing-light');
+        stubSystemTheme('dark');
+        const settings = createUiSettingsStore({ initial: readDocumentAppearance(document.documentElement) });
+        const unmount = mount(settings);
+
+        expect(themeAttribute()).toBe('light');
+        unmount();
+    });
+
+    it('applies a style choice before GET and preserves it after a late response', () => {
         document.documentElement.setAttribute('data-theme', 'light');
         stubSystemTheme('light');
         const settings = createUiSettingsStore({ initial: readDocumentAppearance(document.documentElement) });
         const unmount = mount(settings);
-        
-        
-        
-        
-        
+        act(() => { settings.update({ style: 'sample' }); });
+        expect(themeAttribute()).toBe('sample-light');
+        act(() => { settings.applyLoaded({ ...DEFAULT_UI_SETTINGS, theme: 'auto', style: null }); });
+        expect(themeAttribute()).toBe('sample-light');
+        expect(settings.getSnapshot()).toMatchObject({ theme: 'auto', style: 'sample' });
         unmount();
     });
 
-    
-        
+    it('keeps the server-rendered style appearance until the setting loads', () => {
+        document.documentElement.setAttribute('data-theme', 'sample-dark');
         stubSystemTheme('light');
         const settings = createUiSettingsStore({ initial: readDocumentAppearance(document.documentElement) });
         const unmount = mount(settings);
 
-        
+        expect(themeAttribute()).toBe('sample-dark');
         act(() => {
-            
+            settings.applyLoaded({ ...DEFAULT_UI_SETTINGS, theme: 'dark', style: 'sample' });
         });
-        
+        expect(themeAttribute()).toBe('sample-dark');
         unmount();
     });
 

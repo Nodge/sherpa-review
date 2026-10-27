@@ -101,7 +101,7 @@ const BUFFERED_PR: DraftBufferEntry = {
     draft: { body: 'PR comment waiting for a connection.', parentId: null, anchor: null },
     commentId: null,
     state: 'failed',
-    error: 'review host: 502',
+    error: 'Host: 502',
     attempts: 1,
     createdAt: '2026-08-31T11:30:00.000Z',
     updatedAt: '2026-08-31T11:30:00.000Z',

@@ -1,6 +1,6 @@
 # Sherpa spec changes, 2026-09-20
 
-> **Implementation departures (2026-09-21, `../decisions.md`, "Threads, issues and composer").** The issue switch defaults to on, not off. Only a resolved thread without my draft is collapsed by default. Everything else, including bot threads beside the code and in the modal, is expanded. There is no tracking of "new replies since the last pass" or amber dot. Thread expansion lives in tab memory and is not stored per session. The host adapter determines whether a thread is resolved, not the client. The capability is called `commentIssues`. The issue flag goes to the host when a draft is saved, not when it is published. The Resolve button appears on every issue comment (§5), not only the root as in the prototype. New tokens get semantic names. The "· N issues" suffix is on the floating panel's draft counter, not inside the ship menu. Reviewer identity is passed in `PrMeta.viewer`. Without it, the host does not declare `editPublished`.
+> **Implementation departures (2026-09-21, `../decisions.md`, "Threads, issues and composer" section).** The issue switch defaults to on, not off. Only resolved threads without my draft are collapsed by default. Everything else, including bot threads beside the code and in the modal, is expanded. There is no "new reply since the last pass" tracking or amber dot. Thread expansion state lives in tab memory, with no per-session persistence. The host adapter computes the resolved-thread rule, not the client. The capability is named `commentIssues`. The issue flag goes to the host when saving a draft, and publishing does not carry it. Every comment with an issue has a Resolve button (§5), not just the root as in the prototype. New tokens get semantic names. The "· N issues" suffix appears on the floating panel's draft counter, not inside the ship menu. Reviewer identity travels in `PrMeta.viewer`. Without it, the host does not declare `editPublished`.
 
 Five changes on top of production (08-26 handoff + 09-02 onboarding + 09-12 theme): 4 changes requested by the customer (§1–4) and a redesign
 of base controls, with one rule for hover / pressed / disabled / focus across all buttons, links, switches, tabs, chips,
@@ -17,8 +17,8 @@ The colours below are dark values. In production, use tokens from `SPEC-theming-
 **What.** Above the editor border, below the context heading ("new comment · line 118" /
 "replying to …" / "NEW COMMENT ON THE PR"), a 22px row with a switch + label and nothing on the right.
 
-An issue is a review host concept: a flag on a review comment that must be resolved before merging
-(not a ticket in an issue tracking system). The team decides who resolves it. The UI does not explain this. The switch marks the comment as an issue, and the flag goes to the host together
+An issue is a review-host concept: a flag on a comment that raises a concern and must be resolved before merge
+(not a ticket in a task management system). The team agrees on who resolves it. The UI does not explain this. The switch marks the comment as an issue. The flag goes to the host together
 with the text on Ship.
 
 | Element | Spec |
@@ -93,7 +93,7 @@ Remove the "N replies ›/⌄" button (collapse replies only, release 1) beside 
   (these have an `e2954c` dot next to the counter until first expanded). **Resolved threads always start collapsed**, both beside code and in the PR modal,
   regardless of drafts/new replies. Their marker is a muted `✓`.
 - **What counts as a resolved thread.** Hosts without per-comment resolution (GitHub): resolved = the host's thread status.
-  The review host (per-comment resolution): a thread is resolved if **it has at least one comment with the `issue` flag and all
+  Hosts with per-comment resolution: a thread is resolved if **it has at least one comment with the `issue` flag and all
   comments with `issue` are resolved**. A thread without any `issue` is open (there is nothing to resolve or close.
   The resolved rule does not collapse it). The client computes this from `watchThreads`, recalculating on every Resolve / Reopen.
 - "Collapse all / expand all" (quiet mono, h20) in the hunk header appears when the file has ≥ 2 threads and acts on the file. There is no "N threads · K expanded" counter in the header. The markers replace it.
@@ -104,7 +104,7 @@ Remove the "N replies ›/⌄" button (collapse replies only, release 1) beside 
   with avatar and name marking each message's start. Each message's body and action row use `padding-left:27px` from its own avatar (18 + gap 9), avatars are 18 at every level.
   Nesting uses `min(depth, 4) × 27px` left indentation, placing a reply's avatar under the parent's text column. The limit is the fourth level (108px).
   Beyond that, indentation stops growing. A mono "↳ recipient" label names the recipient inline in the message header (after the author, before the metadata), with no separate line above the message.
-  Resolve appears only at the root if the host cannot resolve individual comments. If it can, the button appears on every comment with `issue`, as stated above.
+  Resolve appears only on the root if the host lacks per-comment resolution. If supported, each comment with `issue` gets the button, as above.
   Per-session state: `threadOpen: {threadId → bool}`.
 - Actions below the message text: "Reply" (accent) for everyone. Your own messages also have "Edit · Delete" (Link muted. "Delete" hover `e0736c`). Deleting replaces the action row with a confirmation in the same position: "Delete comment?" immediately followed (gap 9) by Danger solid "Delete" and Ghost "Cancel" (h23), with no hints. Esc = Cancel. No modal. "Edit" puts the editor in place of the text.
 - A new reply in a collapsed thread (reactively from the host) adds an `e2954c` dot to the marker. The thread does not expand itself.
@@ -209,7 +209,7 @@ New tokens: `--focus`, `--chip-bg-hover` (`#262c52` / `#dfe2fb`), `--chip-bg-act
 
 ## 6. State and contracts (delta)
 
-- `CommentDraft.issue: boolean`. `ReviewHost.capabilities.issueComments: boolean` (review host true, GitHub false).
+- `CommentDraft.issue: boolean`. `ReviewHost.capabilities.issueComments: boolean` (true for hosts with issue comments, GitHub false).
 - `publishBatch` passes the `issue` flag to the host with the comment. Issue status (open/resolved) is read reactively through `watchThreads`.
 - per-session: `threadClosed: {id → bool}`, `prThreadClosed`, `replyOpen`.
 - Stop schema: `paragraph` stays a string using a Markdown subset. The validator uses the vocabulary and budget in §2.
@@ -234,7 +234,7 @@ New tokens: `--focus`, `--chip-bg-hover` (`#262c52` / `#dfe2fb`), `--chip-bg-act
 3. Drafts and published comments with the flag carry an `issue` chip after the author's name. The Ship menu counts issues.
 4. A description with multiple paragraphs, a list (ul or ol) and a link renders according to §2. Headings/code blocks/text > 840 characters fail validation.
 5. Inline code in descriptions looks identical to inline code in comments (same token).
-6. Beside the code (§3): a collapsed thread has a marker on the left edge of the card at its line, with no reserved column or change to code width. All threads are collapsed by default except drafts and new replies. Resolved threads are always collapsed (the review host requires ≥ 1 `issue` with every `issue` resolved). Clicking expands the thread below the line with a 108px inset to the code column. In the PR modal (§4), it is a collapsed row with a preview and "N replies".
+6. Beside code (§3): a collapsed thread is a marker on the card's left edge at its line, with no reserved column and no change to code width. All start collapsed except drafts and new replies. Resolved threads always start collapsed (hosts with issue: ≥ 1 `issue` and all `issue` resolved). Clicking expands below the line, with 108px padding to the code column. In the PR modal (§4), a collapsed row has a preview and "N replies".
 7. "Collapse all" appears in the hunk header with ≥ 2 threads. The toolbar has no "Comments from" filter. Counters stay unchanged.
 8. PR modal at 1440: 979px, at 1920: 1120. List up to 640px. Body ≤ 760.
 9. Replies to PR comments are written in place, with the issue switch. Replies are visible without clicking.

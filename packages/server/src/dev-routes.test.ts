@@ -2,9 +2,10 @@ import { MEDIUM_DIFF_ID, MEDIUM_DIFF_ID_V2 } from '@sherpa/fixtures';
 import { rpcErrorSchema, UI_DEV_ENDPOINTS, uiReviewDiffResponseSchema, uiReviewWriteAckSchema } from '@sherpa/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { fixtureHostPlugin } from './hosts/fixture/plugin.js';
 import type { SherpaServer } from './server.js';
 import { startServer } from './server.js';
-import { get, makeTempSherpaDir, postJson, removeTempSherpaDir } from './test-support.js';
+import { get, makeTempSherpaDir, plainHostPlugin, postJson, removeTempSherpaDir } from './test-support.js';
 
 /**
  * The "fixture receives a push" dev endpoint exists only for a fixture prKey and uses the same
@@ -28,7 +29,7 @@ describe('server dev endpoints', () => {
     });
 
     async function start(prKey: string): Promise<SherpaServer> {
-        const server = await startServer({ prKey, sherpaDir, longPollSeconds: 0.3 });
+        const server = await startServer({ updateChannel: null, feedbackChannel: null, prKey, sherpaDir, longPollSeconds: 0.3, hosts: [fixtureHostPlugin, plainHostPlugin] });
         servers.push(server);
         return server;
     }
@@ -68,8 +69,8 @@ describe('server dev endpoints', () => {
         expect(rpcErrorSchema.parse(await response.json()).error.code).toBe('bad_request');
     });
 
-    it('has no such endpoint for a non-fixture prKey', async () => {
-        const server = await start('github-quillmart--quillmart--4821');
+    it('does not register this route for a prKey from another host', async () => {
+        const server = await start('plain-4821');
 
         const response = await postJson(
             server.port,

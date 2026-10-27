@@ -3,12 +3,13 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import type { ServerManifest } from '@sherpa/protocol';
-import { githubPrKey, parseGithubPrUrl, serverManifestSchema } from '@sherpa/protocol';
+import { serverManifestSchema } from '@sherpa/protocol';
 
+import type { CommandRunner } from './command.js';
+import { runCommand } from './command.js';
 import { CliError } from './errors.js';
+import type { CliHostPlugin } from './hosts/plugin.js';
 import { assertValidPrKey, manifestPathFor, sherpaDirFrom, workerIdPathFor } from './paths.js';
-import type { CommandRunner } from './pr-discovery.js';
-import { discoverPrKeyFromCheckout, runVcsCommand } from './pr-discovery.js';
 
 /** Everything the CLI needs to call the PR server. */
 export interface ServerConnection {
@@ -26,9 +27,10 @@ const STATE_DIR_MODE = 0o700;
 export async function connect(
     prKeyArg: string | undefined,
     env: Readonly<Record<string, string | undefined>>,
+    hosts: readonly CliHostPlugin[],
     run?: CommandRunner,
 ): Promise<ServerConnection> {
-    const prKey = await resolvePrKey(prKeyArg, env, run);
+    const prKey = await resolvePrKey(prKeyArg, env, hosts, run);
     const sherpaDir = sherpaDirFrom(env);
     const workerId = await resolveWorkerId(sherpaDir, prKey, env);
 
@@ -43,9 +45,10 @@ export async function connectAs(
     prKeyArg: string | undefined,
     env: Readonly<Record<string, string | undefined>>,
     workerId: string,
+    hosts: readonly CliHostPlugin[],
     run?: CommandRunner,
 ): Promise<ServerConnection> {
-    const prKey = await resolvePrKey(prKeyArg, env, run);
+    const prKey = await resolvePrKey(prKeyArg, env, hosts, run);
     return openConnection(sherpaDirFrom(env), prKey, workerId);
 }
 
@@ -55,43 +58,67 @@ async function openConnection(sherpaDir: string, prKey: string, workerId: string
 }
 
 /**
- * PR key: `--pr` → `SHERPA_PR` → PR of the current Git checkout branch (`pr-discovery.ts`).
+ * PR key: `--pr` → `SHERPA_PR` → current branch PR from plugins with `discoverPr`, in list order.
  * Explicit sources take priority over discovery. The session may have started from a different directory,
  * so a discovered PR must not silently replace the supplied one.
  */
 export async function resolvePrKey(
     prKeyArg: string | undefined,
     env: Readonly<Record<string, string | undefined>>,
-    run: CommandRunner = runVcsCommand,
+    hosts: readonly CliHostPlugin[],
+    run: CommandRunner = runCommand,
 ): Promise<string> {
     const explicit = (prKeyArg ?? env.SHERPA_PR ?? '').trim();
     if (explicit !== '') {
-        return assertValidPrKey(normalizePrKey(explicit));
+        return assertValidPrKey(normalizePrKey(explicit, hosts));
     }
 
-    const discovered = await discoverPrKeyFromCheckout(run);
-    if (discovered.kind === 'found') {
-        return assertValidPrKey(discovered.prKey);
+    const hints: string[] = [];
+    const suggestions: string[] = [];
+    for (const host of hosts) {
+        if (host.discoverPr === undefined) {
+            continue;
+        }
+        const discovered = await host.discoverPr.discover(run);
+        if (discovered.kind === 'found') {
+            return assertValidPrKey(discovered.prKey);
+        }
+        hints.push(discovered.hint);
+        suggestions.push(host.discoverPr.suggestion);
     }
-    throw new CliError(unclearWhichPr(discovered.hint));
+    throw new CliError(unclearWhichPr(hints, suggestions));
 }
 
 /**
- * A github.com PR URL also identifies a PR. It is converted to a key before all checks,
- * and the normalized key then travels through the session.
+ * A PR link or number also identifies a PR. The first plugin to recognize it converts it
+ * to a key before any checks, and the session then uses the normalized key. If no plugin
+ * recognizes it, the value stays as is: a ready-made key or an error that validation will catch.
  */
-function normalizePrKey(value: string): string {
-    const github = parseGithubPrUrl(value);
-    return github === null ? value : githubPrKey(github);
+function normalizePrKey(value: string, hosts: readonly CliHostPlugin[]): string {
+    for (const host of hosts) {
+        const key = host.normalizeKey?.(value) ?? null;
+        if (key !== null) {
+            return key;
+        }
+    }
+    return value;
 }
 
-/** Failed discovery asks the user for input, with a reason and three ways to answer. */
-function unclearWhichPr(hint: string): string {
+/** Failed discovery asks the user for input, with reasons and ways to respond. */
+function unclearWhichPr(hints: readonly string[], suggestions: readonly string[]): string {
+    const tried =
+        hints.length === 0
+            ? 'Sherpa cannot detect the PR of the current directory.\n'
+            : `Tried to detect it from the current directory: ${hints.join('; ')}.\n`;
+    const ways = [
+        'Run the command through the Sherpa skill (it fills the PR in)',
+        'pass `--pr <pr key>`',
+        ...suggestions,
+    ];
     return (
         'sherpa: it is unclear which PR to connect to.\n' +
-        `Tried to detect it from the current directory: ${hint}.\n` +
-        'Run the command through the Sherpa skill (it fills the PR in), pass `--pr <pr key>`, ' +
-        'or run it from a Git checkout with the PR branch checked out.'
+        tried +
+        `${ways.slice(0, -1).join(', ')}, or ${ways.at(-1) ?? ''}.`
     );
 }
 

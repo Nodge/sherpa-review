@@ -16,14 +16,15 @@ import {
 } from '@sherpa/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { fixtureHostPlugin } from './hosts/fixture/plugin.js';
 import { selectReviewHost } from './hosts/select.js';
 import { REQUEST_BODY_MAX_BYTES } from './http.js';
 import { workerIdPathFor } from './paths.js';
 import type { SherpaServer } from './server.js';
 import { startServer } from './server.js';
-import { makeTempSherpaDir, postJson, postRaw, removeTempSherpaDir } from './test-support.js';
+import { hostPluginOf, makeTempSherpaDir, postJson, postRaw, removeTempSherpaDir } from './test-support.js';
 
-const PR_KEY = 'github-quillmart--quillmart--777';
+const PR_KEY = 'pr-777';
 const WORKER = 'w-1';
 const BASE = { protocolVersion: PROTOCOL_VERSION, cliVersion: '0.1.0', workerId: WORKER };
 
@@ -49,12 +50,14 @@ describe('worker endpoints', () => {
     /** The test sets the long-poll window. There is no need to wait the contract's 4 minutes in tests. */
     async function start(longPollSeconds = 0.3): Promise<SherpaServer> {
         const server = await startServer({
+            updateChannel: null,
+            feedbackChannel: null,
             prKey: PR_KEY,
             sherpaDir,
             longPollSeconds,
             now: () => new Date(Date.now() + clockOffsetMs),
-            // Tests must not call a live review host (docs/testing.md). Without a host, route warm-up makes no network requests.
-            reviewHostFactory: () => null,
+            // Live hosts are forbidden in tests (docs/testing.md). Without a host, route warmup never uses the network.
+            hosts: [],
         });
         servers.push(server);
         return server;
@@ -62,12 +65,14 @@ describe('worker endpoints', () => {
 
     async function startWithShortUiGrace(longPollSeconds = 30): Promise<SherpaServer> {
         const server = await startServer({
+            updateChannel: null,
+            feedbackChannel: null,
             prKey: PR_KEY,
             sherpaDir,
             longPollSeconds,
             uiGoneGraceSeconds: 0.1,
             now: () => new Date(Date.now() + clockOffsetMs),
-            reviewHostFactory: () => null,
+            hosts: [],
         });
         servers.push(server);
         return server;
@@ -247,21 +252,25 @@ describe('worker endpoints', () => {
         // The running server cannot see launch arguments. Local review verdict mode arrives through `up` registration.
         it('passes the localVerdicts instruction to the host and leaves the mode unchanged without the field', async () => {
             const calls: (string | null)[] = [];
-            const fixture = selectReviewHost('fixture-small');
+            const fixture = selectReviewHost('fixture-small', {}, [fixtureHostPlugin]);
             if (fixture === null) {
                 throw new Error('fixture host was not selected');
             }
             const server = await startServer({
+                updateChannel: null,
+                feedbackChannel: null,
                 prKey: PR_KEY,
                 sherpaDir,
                 longPollSeconds: 0.3,
-                reviewHostFactory: () => ({
-                    ...fixture,
-                    setLocalVerdicts: (instruction) => {
-                        calls.push(instruction);
-                        return true;
-                    },
-                }),
+                hosts: [
+                    hostPluginOf({
+                        ...fixture,
+                        setLocalVerdicts: (instruction) => {
+                            calls.push(instruction);
+                            return true;
+                        },
+                    }),
+                ],
             });
             servers.push(server);
 
@@ -489,12 +498,14 @@ describe('worker endpoints', () => {
 
         async function startWithShortGrace(longPollSeconds: number): Promise<SherpaServer> {
             const server = await startServer({
+                updateChannel: null,
+                feedbackChannel: null,
                 prKey: PR_KEY,
                 sherpaDir,
                 longPollSeconds,
                 workerGapGraceSeconds: GAP_GRACE_SECONDS,
                 now: () => new Date(Date.now() + clockOffsetMs),
-                reviewHostFactory: () => null,
+                hosts: [],
             });
             servers.push(server);
             return server;

@@ -90,7 +90,7 @@ export interface ReviewRoutesOptions {
 export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
     const mirrorFileViewed = createViewedMirror(options.host);
     // One queue per ID: resolving a thread, resolving a comment and editing a published comment target the same
-    // host object (when a thread is its root), and must be applied in arrival order.
+    // host object (a host thread can also be its own root comment) and must run in the order received.
     const queueWrite = createKeyedWriteQueue((_id: string, write: (host: ReviewHost) => Promise<void>) =>
         call(() => write(hostOf(options))),
     );
@@ -654,7 +654,7 @@ async function diffOfIteration(
     return stored.diff;
 }
 
-/** The host computes a slice between iterations, the local cache retains it (the host takes 2.8–3.7 s). */
+/** A slice between iterations: the host computes it, the local cache remembers it (host calls can take seconds). */
 async function interdiffOf(
     options: ReviewRoutesOptions,
     host: ReviewHost,
@@ -993,7 +993,7 @@ function hostOf(options: ReviewRoutesOptions): ReviewHost {
     if (options.host === null) {
         throw new RpcFailure(
             'no_review_host',
-            'This review has no host adapter. The key was not recognized as hosted, local or fixture.',
+            'This review has no host adapter: the key does not match any host in this build.',
         );
     }
     return options.host;

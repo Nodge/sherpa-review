@@ -30,7 +30,7 @@ export function settingsPathFor(sherpaDir: string): string {
 
 /**
  * New-version check cache: one file per user beside the settings.
- * Restarting servers for any PR must not hit the review host more than once every 30 minutes.
+ * Restarting servers for any PR must not hit the update channel more than once every 30 minutes.
  */
 export function updateCheckPathFor(sherpaDir: string): string {
     return path.join(sherpaDir, 'update-check.json');

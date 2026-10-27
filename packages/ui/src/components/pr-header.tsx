@@ -8,7 +8,7 @@ import { Avatar } from './avatar.tsx';
 import './pr-header.css';
 
 /**
- * PR header (docs/design/README.md §1): metadata row `+N −M · K files · branch · PCI DSS chip`, title and author.
+ * PR header (docs/design/README.md §1): metadata row `+N −M · K files · branch · audit scope chip`, title and author.
  * This shared component also appears in the route view, so it knows nothing about
  * data loading or the chip destination. Both come through props.
  *
@@ -33,10 +33,10 @@ export interface PrHeaderDefaultProps {
     readonly ref?: Ref<HTMLElement>;
     readonly pr: PrMeta;
     readonly counts: PrHeaderCounts | null;
-    /** Audit scope lens for the shortcut chip, visible only when `available && count > 0`. */
-    readonly pci: FileFilter | null;
-    readonly pciActive: boolean;
-    readonly onTogglePci: () => void;
+    /** Audit filter (`findAuditFilter`) for the shortcut chip. Visible only when `available && count > 0`. */
+    readonly audit: FileFilter | null;
+    readonly auditActive: boolean;
+    readonly onToggleAudit: () => void;
     /** Right edge of the bottom header row, the snapshot indicator in the route view. */
     readonly aside?: ReactNode;
 }
@@ -48,12 +48,12 @@ export interface PrHeaderOverviewProps {
     /** Diff counters. null means the diff has not arrived yet and the metadata row only has the PR number. */
     readonly counts: PrHeaderCounts | null;
     /**
-     * Audit scope lens. This chip is only a marker. The filter shortcut lives in Full diff.
+     * Audit filter (`findAuditFilter`). The chip is only a marker here. The filter shortcut is in the full diff.
      * The marker has no counter or disabled state, so show it only when the lens
      * works and the PR actually contains its files. Otherwise a PR outside the audit scope
      * would receive an unrelated label.
      */
-    readonly pci: FileFilter | null;
+    readonly audit: FileFilter | null;
     /** Reference time for relative timestamps, injected to keep the gallery deterministic. */
     readonly now: number;
     /** Right edge of the author row, also the snapshot indicator here (docs/design/README.md §1). */
@@ -77,7 +77,7 @@ export function PrHeader(props: PrHeaderProps) {
     return props.variant === 'overview' ? <OverviewHeader {...props} /> : <DefaultHeader {...props} />;
 }
 
-function DefaultHeader({ ref, pr, counts, pci, pciActive, onTogglePci, aside = null }: PrHeaderDefaultProps) {
+function DefaultHeader({ ref, pr, counts, audit, auditActive, onToggleAudit, aside = null }: PrHeaderDefaultProps) {
     const t = useT();
     const { count } = useFormat();
     return (
@@ -95,18 +95,18 @@ function DefaultHeader({ ref, pr, counts, pci, pciActive, onTogglePci, aside = n
                 <span className="pr-header__branches">
                     {pr.toBranch} ← {pr.fromBranch}
                 </span>
-                {/* Decision #11: an empty or unavailable PCI scope leaves no chip in the header. */}
-                {pci === null || !pci.available || pci.count === 0 ? null : (
+                {/* Decision #11: an empty or unavailable audit scope leaves no chip in the header. */}
+                {audit?.audit == null || !audit.available || audit.count === 0 ? null : (
                     <>
                         <Separator />
                         <button
                             type="button"
-                            className={`pr-header__pci${pciActive ? ' is-active' : ''}`}
-                            aria-pressed={pciActive}
-                            title={t('pr.pci.title')}
-                            onClick={onTogglePci}
+                            className={`pr-header__audit${auditActive ? ' is-active' : ''}`}
+                            aria-pressed={auditActive}
+                            title={t('pr.audit.title', audit.audit.name)}
+                            onClick={onToggleAudit}
                         >
-                            {t('pr.pci.label', pci.count)}
+                            {t('pr.audit.label', audit.audit.name, audit.count)}
                         </button>
                     </>
                 )}
@@ -132,7 +132,7 @@ function DefaultHeader({ ref, pr, counts, pci, pciActive, onTogglePci, aside = n
     );
 }
 
-function OverviewHeader({ ref, pr, counts, pci, now, aside = null }: PrHeaderOverviewProps) {
+function OverviewHeader({ ref, pr, counts, audit, now, aside = null }: PrHeaderOverviewProps) {
     const t = useT();
     const locale = useLocale();
     const { count } = useFormat();
@@ -149,10 +149,10 @@ function OverviewHeader({ ref, pr, counts, pci, now, aside = null }: PrHeaderOve
                         <span>{t('pr.files', counts.files)}</span>
                     </>
                 )}
-                {pci === null || !pci.available || pci.count === 0 ? null : (
+                {audit?.audit == null || !audit.available || audit.count === 0 ? null : (
                     <>
                         <Separator />
-                        <span className="pr-header__pci-tag">PCI DSS</span>
+                        <span className="pr-header__audit-tag">{audit.audit.name}</span>
                     </>
                 )}
             </div>

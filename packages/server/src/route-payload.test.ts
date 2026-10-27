@@ -416,7 +416,7 @@ describe('separate patch files', () => {
         const many = context({ ...diff, files });
         // The path is as long as the real directory path, under a key made of 2 full commit hashes.
         const patchesDir = path.join(
-            '/home/reviewer/.sherpa/prs/github-quillmart--quillmart--1/payload/shared/diff',
+            '/home/reviewer/.sherpa/prs/fixture-1/payload/shared/diff',
             `${'a'.repeat(40)}-${'b'.repeat(40)}`,
             'patches-v2',
         );
@@ -938,7 +938,7 @@ describe('regeneration context after a push', () => {
         expect(previous).toContain(`- Built for commit: ${mediumReadySnapshot().commit}`);
         expect(previous).toContain(`- Current diff is for commit: ${mediumDiffV2().headCommit}`);
         expect(previous).toContain('The author has pushed since it was built');
-        expect(previous).toContain('compare this route with the current diff in `pr-diff.md`');
+        expect(previous).toContain(`compare this route with the current diff in \`${PR_DIFF_FILE}\``);
         expect(previous).toContain('cannot carry what the reviewer\nhas already read');
         expect(previous).not.toContain('touched by the push |');
         expect(threads).toContain('could not tell which files the push touched');

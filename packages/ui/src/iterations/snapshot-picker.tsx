@@ -17,7 +17,7 @@ import './snapshot-picker.css';
  * The prototype has no menu. It uses the indicator tokens and follows the file filter
  * select: Esc closes it and restores focus, arrows navigate, ⏎ selects.
  *
- * Select a slice between iterations in two steps: Shift-click (or Shift+⏎ in the menu) to select
+ * Selecting a slice between iterations takes 2 steps: Shift+click (or Shift+⏎ in the menu)
  * the first iteration, then click the second. `rowAction` defines the rules. The first edge is local state
  * in the menu and card. It never enters the URL or `Viewing`.
  */

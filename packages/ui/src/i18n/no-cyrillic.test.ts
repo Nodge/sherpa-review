@@ -8,11 +8,13 @@ import { describe, expect, it } from 'vitest';
  * `title` attributes or messages. This test checks translation completeness.
  *
  * Excluded: comments (documentation for developers, outside the reviewer interface), the Russian
- * the `i18n/ru.ts` dictionary, tests, and `dev/**`. The gallery uses fixtures and state labels,
- * which the reviewer never sees.
+ * dictionary `i18n/ru.ts`, tests and their shared modules (`*.test-support.ts`), `dev/**` (the gallery
+ * uses fixtures and state labels and is hidden from reviewers), and descriptors for extra
+ * styles with their e2e expectations: style labels use `LocalizedText` in both languages, like server labels.
  */
 function skipped(file: string): boolean {
-    return file.startsWith('dev/') || file.includes('.test.') || file === 'i18n/ru.ts';
+    return file.startsWith('dev/') || file.includes('.test.') || file.includes('.test-support.')
+        || file === 'i18n/ru.ts' || /^styles\/extra\/[^/]+\/(?:index|e2e)\.ts$/.test(file);
 }
 
 const CYRILLIC = /[\u0400-\u04FF]/u;

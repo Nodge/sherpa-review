@@ -1,7 +1,7 @@
 import path from 'node:path';
 
 import { ServerAlreadyRunningError } from './errors.js';
-import { feedbackOptionsFor } from './feedback-launch.js';
+import { ALL_HOSTS, FEEDBACK_CHANNEL, UPDATE_CHANNEL } from './hosts/all.js';
 import { formatUiUrl, readOption, resolveUiDir, UI_BUILD_HINT } from './launch.js';
 import { readListenHost } from './listen-host.js';
 import { DEFAULT_SHERPA_DIR, manifestPathFor } from './paths.js';
@@ -25,7 +25,7 @@ async function main(argv: readonly string[]): Promise<number> {
 
     const sherpaDir = readOption(argv, '--sherpa-dir') ?? DEFAULT_SHERPA_DIR;
     const uiDir = await resolveUiDir(readOption(argv, '--ui'));
-    // As in the bundle: both the gallery and e2e need installation classification for the update toast.
+    // As in the bundle, the gallery and e2e need the update hint from the install directory.
     const installDir = readOption(argv, '--install-dir');
     const host = readListenHost(process.env);
     // Local review uses the same project directory, comparison base and branch arguments as the bundle.
@@ -38,13 +38,15 @@ async function main(argv: readonly string[]): Promise<number> {
     const options = {
         prKey,
         sherpaDir,
+        hosts: ALL_HOSTS,
         host,
         idleSeconds: 0,
         ...(repo === null ? {} : { repo: path.resolve(repo) }),
         ...(reviewBase === null ? {} : { base: reviewBase }),
         ...(reviewBranch === null ? {} : { branch: reviewBranch }),
+        updateChannel: UPDATE_CHANNEL,
         updateCheck: installDir === null ? {} : { installDir },
-        feedback: feedbackOptionsFor(installDir),
+        feedbackChannel: FEEDBACK_CHANNEL({ installDir }),
     };
 
     let server: SherpaServer;

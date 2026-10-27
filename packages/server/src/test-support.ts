@@ -4,10 +4,29 @@ import os from 'node:os';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
+import { makeFixtureHost } from '@sherpa/fixtures';
 import type { AgentNote } from '@sherpa/protocol';
 
 import type { SherpaDatabase } from './db.js';
+import { fixtureHostPlugin } from './hosts/fixture/plugin.js';
+import type { HostPlugin, SelectedHost } from './hosts/plugin.js';
 import { isProcessAlive } from './manifest.js';
+
+/**
+ * A host without the fixture host's dev capabilities: the `medium` fixture diff, without dev "push" or disabled
+ * update checks. This is how the server sees any production host.
+ */
+export const plainHostPlugin: HostPlugin = {
+    name: 'plain',
+    keyPrefix: 'plain-',
+    ui: fixtureHostPlugin.ui,
+    make: () => ({ host: makeFixtureHost('medium') }),
+};
+
+/** Plugin that returns a ready-made host for any key: an empty prefix matches every key. */
+export function hostPluginOf(selected: SelectedHost): HostPlugin {
+    return { name: selected.name, ui: selected.ui, keyPrefix: '', make: () => selected };
+}
 
 /** Temporary state root for one test. */
 export async function makeTempSherpaDir(): Promise<string> {

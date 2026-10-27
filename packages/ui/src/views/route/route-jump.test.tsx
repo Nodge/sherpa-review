@@ -85,6 +85,7 @@ const PARTIAL_LENS: Lens = {
     available: true,
     note: null,
     zones: null,
+    audit: null,
 };
 const GENERATED_FILE = DATA.diff.files.find((file) => file.path === 'pnpm-lock.yaml');
 if (GENERATED_FILE === undefined) {
@@ -97,6 +98,7 @@ const WITHOUT_GENERATED_LENS: Lens = {
     available: true,
     note: null,
     zones: null,
+    audit: null,
 };
 const DIGEST_NON_TEST_ANCHOR = (() => {
     const anchor = SNAPSHOT.stops.find((stop) => stop.id === 's01')?.anchors[0];
@@ -112,6 +114,7 @@ const DIGEST_NON_TEST_LENS: Lens = {
     available: true,
     note: null,
     zones: null,
+    audit: null,
 };
 
 /** Add a non-test file to s04 so a lens can keep the stop while hiding all its test code. */

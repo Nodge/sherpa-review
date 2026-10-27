@@ -1,3 +1,4 @@
+import { GALLERY_HOSTS } from '@sherpa/fixtures';
 import type { UiState } from '@sherpa/protocol';
 import { UI_ENDPOINTS } from '@sherpa/protocol';
 import { describe, expect, it, vi } from 'vitest';
@@ -6,12 +7,12 @@ import type { Store, StreamHandlers } from './store.js';
 import { createStore } from './store.js';
 
 const STATE: UiState = {
-    prKey: 'github-quillmart--quillmart--1',
-    reviewHost: 'github',
+    prKey: 'fixture-1',
+    reviewHost: GALLERY_HOSTS.github,
     // PR metadata has not arrived yet: the server fills its cache outside snapshot assembly.
     pr: null,
     worker: { kind: 'never' },
-    feedback: { available: true, reason: null },
+    feedback: { kind: 'issues', available: true, reason: null, discussionUrl: null },
     iterations: [],
     update: null,
     generationCap: null,
@@ -153,6 +154,18 @@ describe('UI store', () => {
         emit(JSON.stringify({ ...STATE, pr: PR_META }));
 
         expect(store.getSnapshot().state?.pr).toEqual(PR_META);
+    });
+
+    it('an unchanged host description keeps the same object', () => {
+        const { store, emit } = makeStore();
+        emit(JSON.stringify(STATE));
+        const host = store.getSnapshot().state?.reviewHost;
+
+        emit(JSON.stringify({ ...STATE, pr: PR_META }));
+        expect(store.getSnapshot().state?.reviewHost).toBe(host);
+
+        emit(JSON.stringify({ ...STATE, reviewHost: GALLERY_HOSTS.local }));
+        expect(store.getSnapshot().state?.reviewHost).toEqual(GALLERY_HOSTS.local);
     });
 
     it('a progress event brings the revision without changing state', () => {

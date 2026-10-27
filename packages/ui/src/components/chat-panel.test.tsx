@@ -100,7 +100,7 @@ function mountPanel(overrides: Partial<ChatPanelProps> = {}) {
         notes: [],
         loading: false,
         error: null,
-        reconnectCommand: '/sherpa github-quillmart--quillmart--4821',
+        reconnectCommand: '/sherpa fixture-4821',
         anchor: null,
         focusRequest: 0,
         scrollRequest: null,
@@ -383,7 +383,7 @@ describe('chat panel composer', () => {
                     notes={[]}
                     loading={false}
                     error={null}
-                    reconnectCommand="/sherpa github-quillmart--quillmart--4821"
+                    reconnectCommand="/sherpa fixture-4821"
                     anchor={ANCHOR}
                     focusRequest={0}
                     scrollRequest={null}

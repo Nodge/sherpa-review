@@ -52,7 +52,7 @@ An existing pending review with an empty body (started on GitHub's website or by
 
 ## Cost per polling tick
 
-GitHub GraphQL counts points by connection nodes, not fields: 5000 points per hour per user. A tick is one `SherpaPrTick` with `reviewThreads(first: 50)`, `reviews(last: 50)`, and `comments(last: 50)`. It costs a few points (the GitHub formula sums the requested `first`/`last` values, divides by 100, and adds parent nodes). A 15 s polling interval produces about 240 ticks per hour, well within the limit. That is why the interval is 15 s rather than 7 s and polling pages stay small.
+GitHub GraphQL charges points for connection nodes, not fields, with 5000 points per hour per user. A tick is one `SherpaPrTick` with `reviewThreads(first: 50)`, `reviews(last: 50)`, `comments(last: 50)`, and costs a few points (GitHub's formula sums the requested `first`/`last` values, divides by 100, and adds parent nodes). A 15 s polling interval gives about 240 ticks per hour. This fits within the limit with room to spare, but it is also why the interval is 15 s rather than a few seconds, and why polling pages are small.
 
 Every **read** includes `rateLimit { cost remaining resetAt }`. Below 200 remaining points, the client waits until `resetAt` before its next request. A 403/429 with `x-ratelimit-remaining: 0` makes it wait until `x-ratelimit-reset` without spending retries on exponential backoff. A wait longer than 5 minutes returns `host_unavailable`. Telling the reviewer that the limit is exhausted is better than leaving them waiting without an explanation.
 

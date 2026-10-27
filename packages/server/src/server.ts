@@ -15,10 +15,10 @@ import { createDevRoutes } from './dev-routes.js';
 import { DraftBufferStore, DraftBufferWriter } from './draft-buffer.js';
 import { ServerAlreadyRunningError } from './errors.js';
 import { FeedbackOrchestrator } from './feedback-orchestrator.js';
-import type { FeedbackIntegrationOptions } from './feedback-routes.js';
-import { createFeedbackRoutes, feedbackAvailability } from './feedback-routes.js';
+import type { FeedbackChannel } from './feedback-channel.js';
+import { createFeedbackRoutes, feedbackChannelState } from './feedback-routes.js';
 import { FeedbackStore } from './feedback-store.js';
-import type { ReviewHostFactory } from './hosts/select.js';
+import type { HostPlugin } from './hosts/plugin.js';
 import { selectReviewHost } from './hosts/select.js';
 import type { RequestListenerOptions, Route } from './http.js';
 import { createRequestListener } from './http.js';
@@ -67,6 +67,7 @@ import type { StaticAssets } from './static.js';
 import { withDocumentSettings } from './ui-document.js';
 import { UiPresence } from './ui-presence.js';
 import { createUiRoutes } from './ui-routes.js';
+import type { UpdateChannel } from './update-channel.js';
 import type { UpdateCheckOptions } from './update-check.js';
 import { UpdateChecker } from './update-check.js';
 import { SERVER_VERSION } from './version.js';
@@ -77,6 +78,8 @@ import { createWorkerRoutes } from './worker-routes.js';
 export interface StartServerOptions {
     /** PR key in `<host>-<pr>` format, used as the manifest and state directory name. */
     prKey: string;
+    /** Host plugins from the composition root (`hosts/all.ts`). An empty list means no review endpoints. */
+    hosts: readonly HostPlugin[];
     /** State root, defaults to `~/.sherpa`. */
     sherpaDir?: string;
     /** TCP listen address, defaults to local IPv4 loopback. */
@@ -108,11 +111,6 @@ export interface StartServerOptions {
     /** UI departure grace period. The contract default is overridden only in server tests. */
     uiGoneGraceSeconds?: number;
     /**
-     * Selects a host adapter by PR key. Defaults to `selectReviewHost`. Tests can inject a host
-     * without a live service (`() => null` runs the server without review endpoints).
-     */
-    reviewHostFactory?: ReviewHostFactory;
-    /**
      * Local review project directory (`--repo`), comparison base (`--base`) and branch used by
      * the CLI to build the key (`--branch`). Needed only for `local-*` keys. Without them, the local host
      * starts from the state saved by the previous run.
@@ -125,17 +123,16 @@ export interface StartServerOptions {
      * changes. Like the base, it only applies when `repo` is provided.
      */
     verdicts?: string;
-    /** Feedback channel transport and environment. Tests replace fetch and credentials without a live issue service. */
-    feedback?: FeedbackIntegrationOptions;
+    /** Build feedback channel from the composition root. null means no channel and no Feedback button in the UI. */
+    feedbackChannel: FeedbackChannel | null;
     /**
      * Route thresholds and section batching (`DEFAULT_ROUTE_CONFIG`). Internal server policy:
      * the UI and CLI don't know about it. Latency measurements adjust section batch sizes here.
      */
     route?: Partial<RouteConfig>;
-    /**
-     * Update check injection point: transport, clock, cache and distribution path
-     * path.
-     */
+    /** Build update channel from the composition root. null disables checks and keeps `uiState.update` null. */
+    updateChannel: UpdateChannel | null;
+    /** Update check injection point. Tests replace the install directory, transport, clock and cache. */
     updateCheck?: UpdateCheckOptions;
 }
 
@@ -176,6 +173,8 @@ const CLAIM_ATTEMPTS = 5;
  */
 export async function startServer(options: StartServerOptions): Promise<SherpaServer> {
     const prKey = assertValidPrKey(options.prKey);
+    // Reject a channel that violates the contract before claiming the manifest or port. The UI would reject its snapshot anyway.
+    const feedbackState = feedbackChannelState(options.feedbackChannel);
     const sherpaDir = options.sherpaDir ?? DEFAULT_SHERPA_DIR;
     const host = options.host ?? DEFAULT_LISTEN_HOST;
     // A link to `[::]` doesn't work, so an external listener uses the machine name in the UI.
@@ -268,13 +267,14 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             iterations: iterationStore,
             ...(options.now === undefined ? {} : { now: options.now }),
         });
-        const reviewHost = (options.reviewHostFactory ?? selectReviewHost)(prKey, {
+        const hostOptions = {
             sherpaDir,
             repo: options.repo ?? null,
             base: options.base ?? null,
             branch: options.branch ?? null,
             verdicts: options.verdicts ?? null,
-        });
+        };
+        const reviewHost = selectReviewHost(prKey, hostOptions, options.hosts);
         const advanceIteration = reviewHost?.advanceIteration;
         // Without a host, there are no review events. The SSE channel carries state only.
         // A review status change (someone else's ship) reloads metadata so verdicts reach the UI snapshot.
@@ -296,13 +296,12 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             store: new DraftBufferStore(options.now === undefined ? { db } : { db, now: options.now }),
             reviewFeed,
         });
-        // Check for a newer version in main. Disabled on the fixture host, where the version
-        // comes from a dev endpoint instead of the review host.
         const updateChecker = new UpdateChecker({
             ...options.updateCheck,
+            channel: options.updateChannel,
             sherpaDir,
             settings: settingsStore,
-            enabled: reviewHost?.name !== 'fixture',
+            enabled: reviewHost?.disablesUpdateCheck !== true,
         });
         // The route, like reading progress, is local. Without a host, it stays in the `none` phase.
         const routeStore = new RouteStore(options.now === undefined ? { db } : { db, now: options.now });
@@ -399,12 +398,12 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
                 prKey,
                 queue,
                 registry: workerRegistry,
-                reviewHost: reviewHost?.name ?? null,
+                reviewHost: reviewHost === null ? null : { id: reviewHost.name, ...reviewHost.ui },
                 reviewFeed,
                 iterationFeed,
                 prMeta,
                 update: updateChecker,
-                feedback: feedbackAvailability(options.feedback),
+                feedback: feedbackState,
                 progress,
                 route: routeStore,
                 chat: chatStore,
@@ -430,10 +429,13 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
                       }),
             }),
             ...createFeedbackRoutes({
+                channel: options.feedbackChannel,
+                ...(feedbackState?.kind === 'issues'
+                    ? { availability: { available: feedbackState.available, reason: feedbackState.reason } }
+                    : {}),
                 prKey,
                 workerStatus: () => workerRegistry.status(),
                 ...(reviewHost?.currentUser === undefined ? {} : { currentUser: reviewHost.currentUser }),
-                ...options.feedback,
             }),
             // Settings are global. The endpoint depends on neither the review host nor this PR's state.
             ...createSettingsRoutes({

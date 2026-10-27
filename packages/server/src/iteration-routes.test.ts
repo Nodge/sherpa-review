@@ -27,6 +27,7 @@ import {
 } from '@sherpa/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { fixtureHostPlugin } from './hosts/fixture/plugin.js';
 import { openDatabase } from './db.js';
 import { MIGRATIONS } from './migrations.js';
 import { databasePathFor, prStateDirOf } from './paths.js';
@@ -36,7 +37,7 @@ import type { TaskRecord } from './queue.js';
 import type { SherpaServer } from './server.js';
 import { startServer } from './server.js';
 import { PR_DIFF_FILE } from './shared-payload.js';
-import { get, makeTempSherpaDir, postJson, removeTempSherpaDir } from './test-support.js';
+import { get, hostPluginOf, makeTempSherpaDir, postJson, removeTempSherpaDir } from './test-support.js';
 
 /**
  * Iteration endpoints and progress carryover on the fixture host: the list
@@ -102,14 +103,19 @@ describe('iterations in UI endpoints', () => {
             host.listIterations = () => Promise.reject(new Error('host is down'));
         }
         const server = await startServer({
+            updateChannel: null,
+            feedbackChannel: null,
             prKey: PR,
             sherpaDir,
             longPollSeconds: 0.3,
-            reviewHostFactory: () => ({
-                name: 'fixture',
-                host,
-                advanceIteration: () => host.advanceIteration(),
-            }),
+            hosts: [
+                hostPluginOf({
+                    name: 'fixture',
+                    ui: fixtureHostPlugin.ui,
+                    host,
+                    advanceIteration: () => host.advanceIteration(),
+                }),
+            ],
         });
         servers.push(server);
         server.workerRegistry.register(WORKER, 'claude-code', 'opus-5');
@@ -526,14 +532,19 @@ describe('generation and questions on their own iteration', () => {
     async function start(): Promise<{ server: SherpaServer; stream: SseStream }> {
         const host = makeFixtureHost('medium');
         const server = await startServer({
+            updateChannel: null,
+            feedbackChannel: null,
             prKey: PR,
             sherpaDir,
             longPollSeconds: 0.3,
-            reviewHostFactory: () => ({
-                name: 'fixture',
-                host,
-                advanceIteration: () => host.advanceIteration(),
-            }),
+            hosts: [
+                hostPluginOf({
+                    name: 'fixture',
+                    ui: fixtureHostPlugin.ui,
+                    host,
+                    advanceIteration: () => host.advanceIteration(),
+                }),
+            ],
         });
         servers.push(server);
         const stream = await openSse(
@@ -770,14 +781,19 @@ describe('progress carryover between iterations', () => {
             return getDiff(slice);
         };
         const server = await startServer({
+            updateChannel: null,
+            feedbackChannel: null,
             prKey: PR,
             sherpaDir,
             longPollSeconds: 0.3,
-            reviewHostFactory: () => ({
-                name: 'fixture',
-                host,
-                advanceIteration: () => host.advanceIteration(),
-            }),
+            hosts: [
+                hostPluginOf({
+                    name: 'fixture',
+                    ui: fixtureHostPlugin.ui,
+                    host,
+                    advanceIteration: () => host.advanceIteration(),
+                }),
+            ],
         });
         servers.push(server);
         const stream = await openSse(
@@ -1061,14 +1077,19 @@ describe('regeneration after a push: what changed context', () => {
     /** Server on a given host: a second server on the same host and state simulates a restart. */
     async function start(host: FixtureHost): Promise<SherpaServer> {
         const server = await startServer({
+            updateChannel: null,
+            feedbackChannel: null,
             prKey: PR,
             sherpaDir,
             longPollSeconds: 0.3,
-            reviewHostFactory: () => ({
-                name: 'fixture',
-                host,
-                advanceIteration: () => host.advanceIteration(),
-            }),
+            hosts: [
+                hostPluginOf({
+                    name: 'fixture',
+                    ui: fixtureHostPlugin.ui,
+                    host,
+                    advanceIteration: () => host.advanceIteration(),
+                }),
+            ],
         });
         servers.push(server);
         server.workerRegistry.register(WORKER, 'claude-code', 'opus-5');
@@ -1321,14 +1342,19 @@ describe('server on a database accumulated by a previous version', () => {
     async function start(): Promise<{ server: SherpaServer; stream: SseStream }> {
         const host = makeFixtureHost('medium');
         const server = await startServer({
+            updateChannel: null,
+            feedbackChannel: null,
             prKey: PR,
             sherpaDir,
             longPollSeconds: 0.3,
-            reviewHostFactory: () => ({
-                name: 'fixture',
-                host,
-                advanceIteration: () => host.advanceIteration(),
-            }),
+            hosts: [
+                hostPluginOf({
+                    name: 'fixture',
+                    ui: fixtureHostPlugin.ui,
+                    host,
+                    advanceIteration: () => host.advanceIteration(),
+                }),
+            ],
         });
         servers.push(server);
         const stream = await openSse(

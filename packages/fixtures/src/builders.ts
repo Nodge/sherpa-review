@@ -1,4 +1,4 @@
-import type { Comment, FileAnchor, HostId, Lens, LensZone, PrDiff, ReviewUser, Thread, ThreadPin } from '@sherpa/protocol';
+import type { Comment, FileAnchor, HostId, Lens, LensAudit, LensZone, PrDiff, ReviewUser, Thread, ThreadPin } from '@sherpa/protocol';
 
 import type { FixtureIteration } from './data/types.js';
 import { makeFileId } from './patch.js';
@@ -92,7 +92,15 @@ export interface LensSpec {
     available?: boolean;
     note?: string;
     zones?: readonly LensZone[] | null;
+    audit?: LensAudit | null;
 }
+
+/** PCI DSS audit description for fixtures. */
+export const PCI_AUDIT: LensAudit = {
+    name: { en: 'PCI DSS', ru: 'PCI DSS' },
+    short: { en: 'PCI', ru: 'PCI' },
+    tag: 'pci',
+};
 
 export function lens(spec: LensSpec): Lens {
     return {
@@ -102,6 +110,7 @@ export function lens(spec: LensSpec): Lens {
         available: spec.available ?? true,
         note: spec.note ?? null,
         zones: spec.zones?.map((zone) => ({ ...zone, paths: [...zone.paths] })) ?? null,
+        audit: spec.audit ?? null,
     };
 }
 

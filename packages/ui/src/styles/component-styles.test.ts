@@ -5,19 +5,20 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 /**
- * System rule: values live only in `tokens.css`, component styles use
- * variables. Checked mechanically, since a second set of colors can appear unnoticed
- * and drift from the handoff.
+ * System rule: values live only in `tokens.css` and extra-style palettes
+ * (`styles/extra/`, checked by the style directory test). Component styles use variables.
+ * Check this mechanically, otherwise a second set of colours appears unnoticed and drifts from the handoff.
  */
 
 const SRC = fileURLToPath(new URL('..', import.meta.url));
 const TOKENS = path.join(SRC, 'styles', 'tokens.css');
+const EXTRA_STYLES_DIR = path.join(SRC, 'styles', 'extra');
 
 function cssFiles(dir: string): string[] {
     return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
         const full = path.join(dir, entry.name);
         if (entry.isDirectory()) {
-            return cssFiles(full);
+            return full === EXTRA_STYLES_DIR ? [] : cssFiles(full);
         }
         return entry.isFile() && entry.name.endsWith('.css') && full !== TOKENS ? [full] : [];
     });

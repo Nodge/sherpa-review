@@ -11,6 +11,7 @@ import { ShortcutsProvider } from '../shortcuts/context.tsx';
 import { attachShortcuts, createShortcutRegistry } from '../shortcuts/registry.js';
 import { SettingsProvider } from '../settings/context.tsx';
 import type { UiSettingsStore } from '../settings/settings-store.js';
+import type { UiStyle } from '../styles/extra-styles.js';
 import { createUiSettingsStore } from '../settings/settings-store.js';
 import { createThreadStore } from '../threads/store.js';
 import { FilterSelect } from './filter-select.tsx';
@@ -18,6 +19,13 @@ import { ReviewActionBar } from './review-action-bar.tsx';
 import { SettingsMenu } from './settings-menu.tsx';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+/** Extra build styles: the test provides its own, so the mechanism is independent of `styles/extra/` contents. */
+const extraStyles = vi.hoisted(() => [] as UiStyle[]);
+vi.mock('../styles/extra-styles.js', () => ({ EXTRA_STYLES: extraStyles }));
+
+const SAMPLE: UiStyle = { id: 'sample', label: { en: 'Sample style', ru: 'Sample style (ru)' } };
+const SECOND: UiStyle = { id: 'second', label: { en: 'Second style', ru: 'Second style (ru)' } };
 
 const t = createT('en');
 const EDGE = fixtureIteration('edge');
@@ -39,6 +47,7 @@ afterEach(() => {
     for (const unmount of mounted.splice(0)) {
         unmount();
     }
+    extraStyles.splice(0);
 });
 
 interface Harness {
@@ -67,7 +76,7 @@ function mount({ agentConnected = true }: { agentConnected?: boolean } = {}): Ha
                     <FilterSelect filters={FILTERS} active={selectFilter(FILTERS, 'all')} onSelect={() => undefined} />
                     <ReviewActionBar
                         pr={MEDIUM.pr}
-                        reviewHost="fixture"
+                        draftDestination="pr"
                         diff={MEDIUM.diff}
                         diffStore={createDiffViewStore({ files: MEDIUM.diff.files })}
                         threadStore={createThreadStore(MEDIUM.threads, MEDIUM_FILE_IDS)}
@@ -230,25 +239,53 @@ describe('settings menu beside other popovers', () => {
 });
 
 describe('settings from the menu', () => {
-    
+    it('extra style switches independently of the three theme options', () => {
+        extraStyles.push(SAMPLE);
         const { host, settings } = mount();
         press(trigger(host));
         const themes = host.querySelector('[role="group"][aria-label="Theme"]');
         expect(themes?.querySelectorAll('button')).toHaveLength(3);
-        
-        
+        const sample = button(host, '[role="switch"][aria-label="Sample style"]', 'Sample style');
+        expect(sample.getAttribute('aria-checked')).toBe('false');
 
-        
-        
-        
+        press(sample);
+        expect(settings.getSnapshot()).toMatchObject({ theme: 'auto', style: 'sample' });
+        expect(sample.getAttribute('aria-checked')).toBe('true');
         for (const theme of ['light', 'dark'] as const) {
             press(segment(host, t(`settings.theme.${theme}`)));
-            expect(settings.getSnapshot()).toMatchObject({ theme });
+            expect(settings.getSnapshot()).toMatchObject({ theme, style: 'sample' });
         }
-        
-        
-        
+        press(sample);
+        expect(settings.getSnapshot()).toMatchObject({ theme: 'dark', style: null });
+        expect(sample.getAttribute('aria-checked')).toBe('false');
         expect(panel(host)).not.toBeNull();
+    });
+
+    it('each style has its own switch and only one can be on', () => {
+        extraStyles.push(SAMPLE, SECOND);
+        const { host, settings } = mount();
+        press(trigger(host));
+        const switches = [...host.querySelectorAll<HTMLButtonElement>('.settings-menu__panel [role="switch"]')];
+        expect(switches.map((element) => element.getAttribute('aria-label'))).toEqual(['Sample style', 'Second style']);
+        const [sample, second] = switches;
+        if (sample === undefined || second === undefined) {
+            throw new Error('menu does not have two style switches');
+        }
+
+        press(sample);
+        press(second);
+
+        expect(settings.getSnapshot().style).toBe('second');
+        expect(sample.getAttribute('aria-checked')).toBe('false');
+        expect(second.getAttribute('aria-checked')).toBe('true');
+    });
+
+    it('has no style switch without extra styles', () => {
+        const { host } = mount();
+        press(trigger(host));
+
+        expect(panel(host)).not.toBeNull();
+        expect(host.querySelector('.settings-menu__panel [role="switch"]')).toBeNull();
     });
 
     it('segments write the selection to the settings store', () => {

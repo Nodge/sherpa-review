@@ -1,14 +1,11 @@
 import { localIterationsDirOf, localReviewPathFor } from '../../paths.js';
 
-
-import { gitVcs } from './git-vcs.js';
 import { fileIterationsStore } from './iterations-store.js';
 import { LocalHost } from './local-host.js';
 import type { LocalHostState } from './state.js';
 import { readLocalHostState, writeLocalHostState } from './state.js';
 import { fileThreadsStore } from './threads-store.js';
-import type { LocalVcs, LocalVcsKind } from './vcs.js';
-import { commandRunnerIn } from './vcs.js';
+import type { LocalVcs } from './vcs.js';
 
 export { LocalHost } from './local-host.js';
 export type { LocalHostOptions } from './local-host.js';
@@ -17,8 +14,8 @@ export type { LocalHostState } from './state.js';
 
 export interface LocalHostSetup {
     readonly prKey: string;
-    /** The key prefix names the VCS behind it. */
-    readonly vcs: LocalVcsKind;
+    /** VCS backend for the project directory: the plugin selects it by key prefix. */
+    readonly vcs: (repo: string) => LocalVcs;
     readonly sherpaDir: string;
     /** Project directory from `--repo`. If null, use the saved key state. */
     readonly repo: string | null;
@@ -56,7 +53,7 @@ export function makeLocalHost(setup: LocalHostSetup): LocalHost | null {
 
     return new LocalHost({
         prKey: setup.prKey,
-        vcs: vcsIn(setup.vcs, state.repo),
+        vcs: setup.vcs(state.repo),
         projectDir: state.repo,
         base: state.base,
         branch: state.branch,
@@ -70,12 +67,6 @@ export function makeLocalHost(setup: LocalHostSetup): LocalHost | null {
             persist({ verdicts });
         },
     });
-}
-
-/** VCS backend that works with the project directory. */
-function vcsIn(kind: LocalVcsKind, repo: string): LocalVcs {
-    const run = commandRunnerIn(kind, repo);
-    return gitVcs(run);
 }
 
 /**

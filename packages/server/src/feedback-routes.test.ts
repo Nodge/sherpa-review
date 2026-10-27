@@ -8,13 +8,17 @@ import {
 } from '@sherpa/protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { fixtureHostPlugin } from './hosts/fixture/plugin.js';
+import { RpcFailure } from './errors.js';
+import type { FeedbackChannel, FeedbackIssueInput, FeedbackIssueOutcome, IssuesFeedbackChannel } from './feedback-channel.js';
+import { linkFeedbackChannel } from './feedback-channel.js';
 import type { SherpaServer } from './server.js';
 import { startServer } from './server.js';
-import { makeTempSherpaDir, postJson, removeTempSherpaDir, get } from './test-support.js';
+import { makeTempSherpaDir, postJson, removeTempSherpaDir, get, hostPluginOf } from './test-support.js';
 import { SERVER_VERSION } from './version.js';
 
 const PR_KEY = 'fixture-medium';
-
+const ISSUES_URL = 'https://github.com/example/sherpa/issues';
 
 describe('feedback channel', () => {
     let sherpaDir: string;
@@ -33,7 +37,7 @@ describe('feedback channel', () => {
     });
 
     async function start(
-        options: Parameters<typeof startServer>[0]['feedback'] = {},
+        feedbackChannel: FeedbackChannel | null,
         currentUser: () => string | null | Promise<string | null> = () => 'alice',
     ): Promise<SherpaServer> {
         const host = makeFixtureHost('medium');
@@ -41,29 +45,39 @@ describe('feedback channel', () => {
             prKey: PR_KEY,
             sherpaDir,
             idleSeconds: 0,
-            reviewHostFactory: () => ({ name: 'fixture', host, currentUser }),
-            feedback: {
-                env: { SHERPA_ISSUE_TOKEN: ISSUE_TOKEN },
-                retryBaseMs: 0,
-                sleep: () => Promise.resolve(),
-                random: () => 0,
-                ...options,
-            },
+            hosts: [hostPluginOf({ name: 'fixture', ui: fixtureHostPlugin.ui, host, currentUser })],
+            updateChannel: null,
+            feedbackChannel,
         });
         servers.push(server);
         return server;
     }
 
-    it('creates a subissue with the full automatic context', async () => {
-        const requests: { url: string; init: RequestInit | undefined }[] = [];
-        const server = await start({
-            fetch: (url, init) => {
-                requests.push({ url, init });
-                return Promise.resolve(new Response(JSON.stringify({ key: '#123456' }), { status: 201 }));
-            },
-        });
+    async function readState(server: SherpaServer) {
+        return uiStateSchema.parse(await (await get(server.port, UI_ENDPOINTS.state, server.token)).json());
+    }
+
+    function issuesChannel(
+        create: (input: FeedbackIssueInput) => Promise<FeedbackIssueOutcome>,
+        overrides: Partial<IssuesFeedbackChannel> = {},
+    ): IssuesFeedbackChannel {
+        return {
+            kind: 'issues',
+            availability: () => ({ available: true, reason: null }),
+            create,
+            discussionUrl: 'https://chat.example/sherpa',
+            ...overrides,
+        };
+    }
+
+    it('creates an issue with the first line as its title and full automatic context', async () => {
+        const create = vi.fn((_input: FeedbackIssueInput) =>
+            Promise.resolve<FeedbackIssueOutcome>({ kind: 'created', key: 'FB-123', url: 'https://issues.example/FB-123' }),
+        );
+        const server = await start(issuesChannel(create));
         server.workerRegistry.register('w-feedback', 'claude-code', 'claude-opus-5');
 
+        const state = await readState(server);
         const response = await postJson(
             server.port,
             UI_ENDPOINTS.feedback,
@@ -75,43 +89,37 @@ describe('feedback channel', () => {
             server.token,
         );
 
+        expect(state.feedback).toEqual({
+            kind: 'issues',
+            available: true,
+            reason: null,
+            discussionUrl: 'https://chat.example/sherpa',
+        });
         expect(response.status).toBe(200);
         expect(uiFeedbackResponseSchema.parse(await response.json())).toEqual({
             outcome: 'created',
-            issueKey: '#123456',
-            issueUrl: 'https://github.com/quillmart/quillmart/issues/123456',
+            issueKey: 'FB-123',
+            issueUrl: 'https://issues.example/FB-123',
             message: null,
         });
-        expect(requests).toHaveLength(1);
-        
-        expect(new Headers(requests[0]?.init?.headers).get('authorization')).toBe(`Bearer ${ISSUE_TOKEN}`);
-        const body = jsonRequestBody(requests[0]?.init) as Record<string, string>;
-        expect(body).toMatchObject({
-            queue: 'SHERPA',
-            summary: 'Publication status is not visible',
-        });
-        expect(body).not.toHaveProperty('parent');
-        expect(body.description).toContain('Publication status is not visible\nProblem details.');
-        expect(body.description).toContain(`Version: UI 0.6.0, server ${SERVER_VERSION}, protocol ${PROTOCOL_VERSION}`);
-        expect(body.description).toContain('PR: fixture-medium');
-        expect(body.description).toContain('View: overview');
-        expect(body.description).toContain('Route phase: ready');
-        expect(body.description).toContain('claude-code · claude-opus-5 · connected');
-        expect(body.description).toContain('User: alice');
+        expect(create).toHaveBeenCalledTimes(1);
+        const input = create.mock.calls[0]?.[0];
+        expect(input?.summary).toBe('Publication status is not visible');
+        expect(input?.description).toContain('Publication status is not visible\nProblem details.');
+        expect(input?.description).toContain(`Version: UI 0.6.0, server ${SERVER_VERSION}, protocol ${PROTOCOL_VERSION}`);
+        expect(input?.description).toContain('PR: fixture-medium');
+        expect(input?.description).toContain('View: overview');
+        expect(input?.description).toContain('Route phase: ready');
+        expect(input?.description).toContain('claude-code · claude-opus-5 · connected');
+        expect(input?.description).toContain('User: alice');
     });
 
     it('sends text as is without context and does not request the login', async () => {
         const currentUser = vi.fn(() => 'alice');
-        let description = '';
-        const server = await start(
-            {
-                fetch: (_url, init) => {
-                    description = (jsonRequestBody(init) as { description: string }).description;
-                    return Promise.resolve(new Response(JSON.stringify({ key: '#2' }), { status: 201 }));
-                },
-            },
-            currentUser,
+        const create = vi.fn((_input: FeedbackIssueInput) =>
+            Promise.resolve<FeedbackIssueOutcome>({ kind: 'created', key: null, url: null }),
         );
+        const server = await start(issuesChannel(create), currentUser);
 
         const response = await postJson(
             server.port,
@@ -121,19 +129,26 @@ describe('feedback channel', () => {
         );
 
         expect(response.status).toBe(200);
-        expect(description).toBe('Text without context');
+        expect(uiFeedbackResponseSchema.parse(await response.json())).toEqual({
+            outcome: 'created',
+            issueKey: null,
+            issueUrl: null,
+            message: null,
+        });
+        expect(create.mock.calls[0]?.[0].description).toBe('Text without context');
         expect(currentUser).not.toHaveBeenCalled();
     });
 
-    it('without credentials reports reduced functionality in the snapshot and endpoint, does not call fetch', async () => {
-        const fetchMock = vi.fn((_url: string, _init?: RequestInit) =>
-            Promise.resolve(new Response(JSON.stringify({ key: 'FB-unexpected' }), { status: 201 })),
+    it('includes the unavailable channel reason in the snapshot and endpoint response without calling create', async () => {
+        const create = vi.fn(() => Promise.reject(new Error('not called')));
+        const server = await start(
+            issuesChannel(create, {
+                availability: () => ({ available: false, reason: 'No access. Write in the chat.' }),
+                discussionUrl: null,
+            }),
         );
-        const server = await start({ env: {}, fetch: fetchMock });
 
-        const state = uiStateSchema.parse(
-            await (await get(server.port, UI_ENDPOINTS.state, server.token)).json(),
-        );
+        const state = await readState(server);
         const response = await postJson(
             server.port,
             UI_ENDPOINTS.feedback,
@@ -141,60 +156,25 @@ describe('feedback channel', () => {
             server.token,
         );
 
-        expect(state.feedback.available).toBe(false);
-        
-        expect(state.feedback.reason).toContain('project issues');
+        expect(state.feedback).toEqual({
+            kind: 'issues',
+            available: false,
+            reason: 'No access. Write in the chat.',
+            discussionUrl: null,
+        });
         expect(uiFeedbackResponseSchema.parse(await response.json())).toEqual({
             outcome: 'unavailable',
             issueKey: null,
             issueUrl: null,
-            message: state.feedback.reason,
+            message: 'No access. Write in the chat.',
         });
-        expect(fetchMock).not.toHaveBeenCalled();
+        expect(create).not.toHaveBeenCalled();
     });
 
-    
-        const requests: RequestInit[] = [];
-        const server = await start({
-            env: {},
-            
-            fetch: (_url, init) => {
-                requests.push(init ?? {});
-                
-            },
-        });
-
-        const state = uiStateSchema.parse(
-            await (await get(server.port, UI_ENDPOINTS.state, server.token)).json(),
+    it('returns reduced functionality with the channel message when sending discovers unavailability', async () => {
+        const server = await start(
+            issuesChannel(() => Promise.resolve({ kind: 'unavailable', reason: 'Credentials could not be obtained.' })),
         );
-        expect(state.feedback).toEqual({ available: true, reason: null });
-
-        for (const text of ['First', 'Second']) {
-            const response = await postJson(
-                server.port,
-                UI_ENDPOINTS.feedback,
-                { text, includeContext: false, context: null },
-                server.token,
-            );
-            expect(response.status).toBe(200);
-            expect(uiFeedbackResponseSchema.parse(await response.json()).outcome).toBe('created');
-        }
-
-        
-        expect(requests.map((init) => new Headers(init.headers).get('authorization'))).toEqual([
-        ]);
-    });
-
-    
-        const fetchMock = vi.fn((_url: string, _init?: RequestInit) =>
-            Promise.resolve(new Response(JSON.stringify({ key: 'FB-unexpected' }), { status: 201 })),
-        );
-        const server = await start({
-            env: {},
-            
-            
-            fetch: fetchMock,
-        });
 
         const response = await postJson(
             server.port,
@@ -204,18 +184,20 @@ describe('feedback channel', () => {
         );
 
         expect(response.status).toBe(200);
-        const body = uiFeedbackResponseSchema.parse(await response.json());
-        expect(body.outcome).toBe('unavailable');
-        
-        expect(body.message).toContain('project issues');
-        expect(fetchMock).not.toHaveBeenCalled();
+        expect(uiFeedbackResponseSchema.parse(await response.json())).toEqual({
+            outcome: 'unavailable',
+            issueKey: null,
+            issueUrl: null,
+            message: 'Credentials could not be obtained.',
+        });
     });
 
-    it('returns host_unavailable after three 503 responses', async () => {
-        const fetchMock = vi.fn(() =>
-            Promise.resolve(new Response('temporary', { status: 503, statusText: 'Service Unavailable' })),
+    it('returns an RPC error with the channel message when sending fails', async () => {
+        const server = await start(
+            issuesChannel(() =>
+                Promise.reject(new RpcFailure('host_unavailable', 'The channel did not respond. Your text is saved.')),
+            ),
         );
-        const server = await start({ fetch: fetchMock, retryAttempts: 3 });
 
         const response = await postJson(
             server.port,
@@ -227,30 +209,52 @@ describe('feedback channel', () => {
         expect(response.status).toBe(502);
         const error = rpcErrorSchema.parse(await response.json());
         expect(error.error.code).toBe('host_unavailable');
-        expect(error.error.message).toContain('Your text has been saved');
-        expect(fetchMock).toHaveBeenCalledTimes(3);
+        expect(error.error.message).toBe('The channel did not respond. Your text is saved.');
     });
 
-    it('does not retry network errors: retries only for 429 and 5xx', async () => {
-        const fetchMock = vi.fn(() => Promise.reject(new Error('connection refused')));
-        const server = await start({ fetch: fetchMock, retryAttempts: 3 });
+    it('returns the link channel URL in the snapshot and reduced functionality from the send endpoint', async () => {
+        const server = await start(linkFeedbackChannel(ISSUES_URL));
 
+        const state = await readState(server);
         const response = await postJson(
             server.port,
             UI_ENDPOINTS.feedback,
-            { text: 'Retry manually', includeContext: false, context: null },
+            { text: 'Outside the UI', includeContext: false, context: null },
             server.token,
         );
 
-        expect(response.status).toBe(502);
-        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(state.feedback).toEqual({ kind: 'link', url: ISSUES_URL });
+        expect(response.status).toBe(200);
+        const body = uiFeedbackResponseSchema.parse(await response.json());
+        expect(body.outcome).toBe('unavailable');
+        expect(body.message).toContain(ISSUES_URL);
     });
 
-    it('checks required fields and the text limit before calling the issue service', async () => {
-        const fetchMock = vi.fn(() =>
-            Promise.resolve(new Response(JSON.stringify({ key: '#3' }), { status: 201 })),
+    it('returns null in the snapshot and reduced functionality from the endpoint without a channel', async () => {
+        const server = await start(null);
+
+        const state = await readState(server);
+        const response = await postJson(
+            server.port,
+            UI_ENDPOINTS.feedback,
+            { text: 'Nowhere', includeContext: false, context: null },
+            server.token,
         );
-        const server = await start({ fetch: fetchMock });
+
+        expect(state.feedback).toBeNull();
+        expect(response.status).toBe(200);
+        expect(uiFeedbackResponseSchema.parse(await response.json()).outcome).toBe('unavailable');
+    });
+
+    it('prevents server startup when the channel URL violates the contract', async () => {
+        await expect(start(linkFeedbackChannel('javascript:alert(1)'))).rejects.toThrow(/contract/u);
+    });
+
+    it('validates required fields and the text limit before calling the channel', async () => {
+        const create = vi.fn(() =>
+            Promise.resolve<FeedbackIssueOutcome>({ kind: 'created', key: 'FB-3', url: 'https://issues.example/FB-3' }),
+        );
+        const server = await start(issuesChannel(create));
 
         const empty = await postJson(
             server.port,
@@ -275,13 +279,6 @@ describe('feedback channel', () => {
         expect(tooLong.status).toBe(400);
         expect(badContext.status).toBe(400);
         expect((await empty.json() as { error: { details?: string[] } }).error.details?.[0]).toContain('text:');
-        expect(fetchMock).not.toHaveBeenCalled();
+        expect(create).not.toHaveBeenCalled();
     });
 });
-
-function jsonRequestBody(init: RequestInit | undefined): unknown {
-    if (typeof init?.body !== 'string') {
-        throw new Error('test expected a string JSON body');
-    }
-    return JSON.parse(init.body) as unknown;
-}

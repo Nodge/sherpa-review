@@ -2,6 +2,7 @@ import type { Comment, PrDiff, RouteSnapshot, RouteStop, Thread } from '@sherpa/
 
 import type { IterationMap } from './iterations/index.js';
 import { byteLength, fitText, unavailableBlock } from './payload-budget.js';
+import { PR_DIFF_FILE } from './shared-payload.js';
 
 /**
  * Context files for route regeneration after a push: the previous route and discussion
@@ -93,7 +94,7 @@ const HEAD_LEAD: Record<RegenerationKind, readonly string[]> = {
     ],
     pushed_without_interdiff: [
         'The route this pull request already had. The author has pushed since it was built, but the server',
-        'could not get the interdiff of that push: compare this route with the current diff in `pr-diff.md`',
+        `could not get the interdiff of that push: compare this route with the current diff in \`${PR_DIFF_FILE}\``,
         'yourself. Stop numbers carry the progress of the reviewer: keep the plan, its order and its titles',
         'wherever the code did not change, and rewrite what did. The server cannot carry what the reviewer',
         'has already read over to the new route.',
@@ -149,7 +150,7 @@ function stopTableBlock(stops: readonly RouteStop[], map: IterationMap | null, k
             '|---|---|---|---|---|',
         ],
         pushed_without_interdiff: [
-            'The server could not tell which stops the push touched: compare them with `pr-diff.md` yourself.',
+            `The server could not tell which stops the push touched: compare them with \`${PR_DIFF_FILE}\` yourself.`,
             '',
             ...plainHeader,
         ],

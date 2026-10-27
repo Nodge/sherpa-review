@@ -34,7 +34,7 @@ export interface LaunchOptions {
      * apply across all PRs. The test creates and removes the directory. The fixture leaves it alone.
      */
     readonly sherpaDir?: string;
-    /** Distribution directory (`--install-dir`): determines the update command in the toast. */
+    /** Distribution directory (`--install-dir`). The update hint in the toast depends on it. */
     readonly installDir?: string;
     /**
      * The onboarding tour starts for users who have not taken it yet, which means
@@ -92,18 +92,26 @@ export async function advanceIteration(page: Page, server: SherpaServerHandle): 
     expect(response.status(), await response.text()).toBe(200);
 }
 
+/** Update fields from the dev endpoint response used by e2e tests. */
+export interface AnnouncedUpdate {
+    readonly install: { readonly dir: string | null; readonly command: string | null; readonly readmeUrl: string | null };
+}
+
 /**
  * Dev endpoint `POST /api/dev/update-available` (`UI_DEV_ENDPOINTS`): the fixture server "learns"
- * about a new version in main. No network calls are made, since checks are disabled for fixtures.
+ * about a new version. No network requests are made because the fixture disables the check. The response is the update
+ * as the UI will see it. null means there is nothing to show (the version was rejected or there is no channel).
  */
 export async function announceUpdate(
     page: Page,
     server: SherpaServerHandle,
     update: { version: string; whatsNew: string | null; releasedAt: string | null },
-): Promise<void> {
+): Promise<AnnouncedUpdate | null> {
     const url = new URL('/api/dev/update-available', server.url).href;
     const response = await page.request.post(url, { headers: sherpaAuth(server), data: update });
     expect(response.status(), await response.text()).toBe(200);
+    const body = (await response.json()) as { update: AnnouncedUpdate | null };
+    return body.update;
 }
 
 /** URL fragment parameter. The UI stores iteration selection and filters there. */

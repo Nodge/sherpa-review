@@ -129,7 +129,7 @@ export function revealWhenReady(reveal: () => boolean, timeoutMs: number): () =>
 function flash(element: HTMLElement, className: string): void {
     element.classList.remove(className);
     // Restart the animation: without a forced reflow, another visit to the same target does nothing.
-    void element.offsetWidth;
+    element.getBoundingClientRect();
     element.classList.add(className);
     element.addEventListener(
         'animationend',

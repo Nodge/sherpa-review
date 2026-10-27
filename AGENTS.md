@@ -15,7 +15,8 @@ Before every commit, `pnpm -r typecheck && pnpm -r lint && pnpm -r test` must pa
 ## Contracts
 
 - Everything the model reads or that crosses a process boundary has a schema in `packages/protocol` and passes validation. The UI consumes only data that passes its schema. The server rejects task results that fail validation (fail closed).
-- Host-specific code stays behind the `ReviewHost` adapter (`packages/protocol/src/review-host.ts`). Every new host method needs a flag in `HostCapabilities` and a check in the contract suite at `packages/server/src/hosts/review-host-contract.ts`.
+- Review hosts and update and feedback channels are plugins registered through the composition roots in `packages/server/src/hosts/all.ts` and `packages/cli/src/hosts/all.ts`. The core does not know hosts by name. Host-specific behaviour stays inside the `ReviewHost` adapter (`packages/protocol/src/review-host.ts`). A new host method needs a flag in `HostCapabilities` and a check in the contract test suite at `packages/server/src/hosts/review-host-contract.ts`.
+
 - The CLI is one self-contained `.mjs` with no runtime dependencies. The server is one bundle with the UI embedded. Any new dependency in `cli` or `server` must be bundled by esbuild.
 - Increment the protocol version (`packages/protocol/src/version.ts`) whenever worker endpoints or the task format change incompatibly.
 

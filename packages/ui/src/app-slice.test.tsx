@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fixtureInterdiff, fixtureIteration } from '@sherpa/fixtures';
+import { fixtureInterdiff, fixtureIteration, GALLERY_HOSTS } from '@sherpa/fixtures';
 import type { Iteration, PrDiff, UiState } from '@sherpa/protocol';
 import { UI_ENDPOINTS } from '@sherpa/protocol';
 import { act } from 'react';
@@ -54,7 +54,7 @@ function mountApp(options: {
     readonly view?: ViewId;
     /** Slice endpoint response. Defaults to the fixture interdiff. */
     readonly interdiff?: PrDiff;
-    /** The slice endpoint fails with this text (400 from the review host, 502 from the fixture). */
+    /** The slice endpoint rejects the request with this message (400 for a real host, 502 for the fixture). */
     readonly sliceError?: string;
     /** PR iterations. Defaults to previous v1 and active v2. */
     readonly iterations?: readonly Iteration[];
@@ -120,9 +120,9 @@ function mountApp(options: {
         prKey: 'fixture/medium',
         worker: { kind: 'never' },
         tasks: [],
-        reviewHost: 'fixture',
+        reviewHost: GALLERY_HOSTS.fixture,
         pr: V2.pr,
-        feedback: { available: false, reason: 'The test feedback channel is unavailable.' },
+        feedback: { kind: 'issues', available: false, reason: 'The test feedback channel is unavailable.', discussionUrl: null },
         iterations: [...(options.iterations ?? ITERATIONS)],
         update: null,
         generationCap: null,

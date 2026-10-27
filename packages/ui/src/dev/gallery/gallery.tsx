@@ -7,6 +7,7 @@ import './gallery.css';
 import { SettingsProvider } from '../../settings/context.tsx';
 import { DocumentSettingsSync } from '../../settings/document-settings.tsx';
 import { createUiSettingsStore } from '../../settings/settings-store.js';
+import { EXTRA_STYLES } from '../../styles/extra-styles.js';
 import type { GalleryState } from './states.tsx';
 import { GALLERY_STATES } from './states.tsx';
 
@@ -16,7 +17,7 @@ import { GALLERY_STATES } from './states.tsx';
  *
  * The locale is selected in the header and stored in the URL (`#locale=ru`): states need inspection in both
  * languages, so the provider gets the language as an explicit prop. Theme and text size live in the local settings
- * settings and in the URL (`#theme=light`, `#textsize=l`). The gallery has its own switches:
+ * store and in the URL (`#theme=light`, `#style=<id>`, `#textsize=l`). The switches belong to the stage:
  * in the product they live in the settings menu, which itself is one of the gallery states.
  * The theme defaults to dark here rather than the product's `auto`: cards must render identically
  * under any system theme unless `#theme=auto` is explicitly requested.
@@ -25,19 +26,19 @@ export function Gallery({
     initialId,
     initialLocale = 'en',
     initialTheme = 'dark',
-    
+    initialStyle = null,
     initialTextSize = 'm',
 }: {
     initialId: string | null;
     initialLocale?: Locale;
     initialTheme?: UiSettings['theme'];
-    
+    initialStyle?: UiSettings['style'];
     initialTextSize?: UiSettings['textSize'];
 }) {
     const [settings] = useState(() =>
         createUiSettingsStore({
             loaded: true,
-            initial: { theme: initialTheme, textSize: initialTextSize },
+            initial: { theme: initialTheme, style: initialStyle, textSize: initialTextSize },
         }),
     );
     useEffect(() => {
@@ -45,7 +46,7 @@ export function Gallery({
             const snapshot = settings.getSnapshot();
             const fragment = updateFragment(window.location.hash, {
                 theme: snapshot.theme,
-                
+                style: snapshot.style,
                 textsize: snapshot.textSize,
             });
             history.replaceState(null, '', fragment);
@@ -58,7 +59,7 @@ export function Gallery({
     // `DocumentSettingsSync` sets the attribute on `<html>` from the store, as in the product.
     const textSize = useSyncExternalStore(settings.subscribe, () => settings.getSnapshot().textSize);
     const theme = useSyncExternalStore(settings.subscribe, () => settings.getSnapshot().theme);
-    
+    const style = useSyncExternalStore(settings.subscribe, () => settings.getSnapshot().style);
     const selected = GALLERY_STATES.find((state) => state.id === selectedId) ?? GALLERY_STATES[0];
 
     const select = (id: string): void => {
@@ -128,19 +129,24 @@ export function Gallery({
                                         </button>
                                     ))}
                                 </div>
-                                <div className="gallery__themes">
-                                    <button
-                                        type="button"
-                                        role="switch"
-                                        
-                                        
-                                        onClick={() => {
-                                            
-                                        }}
-                                    >
-                                        
-                                    </button>
-                                </div>
+                                {EXTRA_STYLES.length === 0 ? null : (
+                                    <div className="gallery__themes">
+                                        {EXTRA_STYLES.map((extra) => (
+                                            <button
+                                                key={extra.id}
+                                                type="button"
+                                                role="switch"
+                                                aria-label={extra.label.en}
+                                                aria-checked={style === extra.id}
+                                                onClick={() => {
+                                                    settings.update({ style: style === extra.id ? null : extra.id });
+                                                }}
+                                            >
+                                                {extra.label.en}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
                                 <div className="gallery__locales" role="group" aria-label="Interface language">
                                     {LOCALES.map((option) => (
                                         <button
@@ -202,9 +208,9 @@ export function parseGalleryTheme(value: string | null): UiSettings['theme'] {
     return value === 'light' || value === 'auto' ? value : 'dark';
 }
 
-
-
-    return value === '1';
+/** `#style=<id>` selects a style in this build. An unknown or empty value selects the main style. */
+export function parseGalleryStyle(value: string | null): UiSettings['style'] {
+    return EXTRA_STYLES.find((extra) => extra.id === value)?.id ?? null;
 }
 
 /** `#textsize=l`. Any other value uses the normal size. */

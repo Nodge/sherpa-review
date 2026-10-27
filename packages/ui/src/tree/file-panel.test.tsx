@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fixtureIteration } from '@sherpa/fixtures';
+import { fixtureIteration, PCI_AUDIT } from '@sherpa/fixtures';
 import type { FileDiff, Lens } from '@sherpa/protocol';
 import { createRef } from 'react';
 import { act } from 'react';
@@ -7,7 +7,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { FileFilter } from '../filters/lens-filters.js';
-import { buildFileFilters, selectFilter } from '../filters/lens-filters.js';
+import { buildFileFilters, findAuditFilter, selectFilter } from '../filters/lens-filters.js';
 import { ReadOnlyIterationProvider } from '../iterations/read-only.tsx';
 import type { FileReadState, ReadState } from '../progress/read-state.js';
 import { PrStateProvider } from '../pr-state/context.tsx';
@@ -52,6 +52,7 @@ const EMPTY_PCI: Lens = {
     available: false,
     note: 'No files of this PR are in the PCI DSS scope.',
     zones: null,
+    audit: PCI_AUDIT,
 };
 const FILTERS = buildFileFilters({ files: FILES, ownership: EDGE.ownership, extra: [EMPTY_PCI], t});
 
@@ -88,7 +89,7 @@ function mount(
                             filters={filters}
                             activeFilter={selectFilter(filters, 'all')}
                             onFilter={onFilter}
-                            pciFileIds={new Set()}
+                            auditFilter={null}
                             mineFileIds={new Set()}
                             readState={new Map()}
                             route={null}
@@ -123,6 +124,29 @@ describe('tree row tags', () => {
 
         expect(tags.map((tag) => tag.textContent)).toEqual(['conflict']);
         expect(FILES.filter((file) => file.changeType === 'conflict')).toHaveLength(1);
+    });
+
+    it('gives audit-filter files its tag regardless of scope', () => {
+        const [first] = FILES;
+        if (first === undefined) {
+            throw new Error('the edge fixture has no files');
+        }
+        const sox: Lens = {
+            id: 'sox',
+            label: 'SOX',
+            paths: [first.path],
+            available: true,
+            note: null,
+            zones: null,
+            audit: { name: { en: 'SOX', ru: 'SOX' }, short: { en: 'SOX', ru: 'SOX' }, tag: 'sox' },
+        };
+        const filters = buildFileFilters({ files: FILES, ownership: null, extra: [sox], t });
+        const { host } = mount(false, filters, undefined, { auditFilter: findAuditFilter(filters) });
+        const tags = [...host.querySelectorAll('.file-tree__tag')].filter(
+            (tag) => !tag.classList.contains('file-tree__tag--conflict') && !tag.classList.contains('file-tree__tag--gen'),
+        );
+
+        expect(tags.map((tag) => tag.textContent)).toEqual(['sox']);
     });
 });
 
@@ -493,13 +517,13 @@ describe('tree geometry from CSS', () => {
         const style = document.createElement('style');
         style.textContent = `
             .file-tree { --tree-row-height: 31px; --tree-indent-step: 27px; }
-            [data-theme="light"] .file-tree { --tree-row-height: 19px; --tree-indent-step: 15px; }
+            [data-theme="sample-light"] .file-tree { --tree-row-height: 19px; --tree-indent-step: 15px; }
         `;
         document.head.append(style);
         mounted.push(() => {
             style.remove();
         });
-        
+        const settings = createUiSettingsStore({ loaded: true, initial: { style: 'sample' } });
         const { host } = mount(false, FILTERS, settings);
         const rows = [...host.querySelectorAll<HTMLElement>('[role="treeitem"]')];
         const secondRow = rows[1];
@@ -509,7 +533,7 @@ describe('tree geometry from CSS', () => {
 
         virtual.measure.mockClear();
         await act(async () => {
-            host.setAttribute('data-theme', 'light');
+            host.setAttribute('data-theme', 'sample-light');
             await Promise.resolve();
         });
 

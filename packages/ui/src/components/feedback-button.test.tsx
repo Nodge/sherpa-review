@@ -1,18 +1,21 @@
 // @vitest-environment jsdom
-import type { UiFeedbackRequest } from '@sherpa/protocol';
+import type { UiFeedbackChannel, UiFeedbackRequest } from '@sherpa/protocol';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { FeedbackButton, SHERPA_CHAT_URL } from './feedback-button.tsx';
+import { FeedbackButton } from './feedback-button.tsx';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const mounted: (() => void)[] = [];
 
+const CHAT_URL = 'https://chat.example/sherpa';
+const AVAILABLE: UiFeedbackChannel = { kind: 'issues', available: true, reason: null, discussionUrl: CHAT_URL };
+
 const CONTEXT = {
     uiVersion: '0.6.0',
-    prKey: 'github-quillmart--quillmart--4821',
+    prKey: 'fixture-4821',
     view: 'overview',
     routePhase: 'ready',
     worker: {
@@ -32,7 +35,7 @@ afterEach(() => {
 });
 
 function mountFeedback(
-    availability: { available: boolean; reason: string | null },
+    channel: UiFeedbackChannel,
     onSend: (request: UiFeedbackRequest) => Promise<{
         outcome: 'created' | 'unavailable';
         issueKey: string | null;
@@ -44,7 +47,7 @@ function mountFeedback(
     document.body.append(host);
     const root = createRoot(host);
     act(() => {
-        root.render(<FeedbackButton availability={availability} context={CONTEXT} onSend={onSend} />);
+        root.render(<FeedbackButton channel={channel} context={CONTEXT} onSend={onSend} />);
     });
     mounted.push(() => {
         act(() => {
@@ -75,10 +78,10 @@ function typeText(host: HTMLElement, value: string): void {
 }
 
 describe('Feedback form', () => {
-    it('without credentials shows the reason and keeps the text available to copy', () => {
-        const reason = 'You can send feedback directly to project issues.';
+    it('shows reason for an unavailable channel and keeps the text available for copying', () => {
+        const reason = 'Feedback can be sent directly to the project issue queue.';
         const host = mountFeedback(
-            { available: false, reason },
+            { kind: 'issues', available: false, reason, discussionUrl: CHAT_URL },
             () => Promise.reject(new Error('sending unavailable')),
         );
 
@@ -92,13 +95,27 @@ describe('Feedback form', () => {
         expect([...host.querySelectorAll('button')].some((item) => item.textContent.trim() === 'Send')).toBe(false);
     });
 
+    it('keeps a channel unavailable without a reason, with generic text and no send action', () => {
+        const host = mountFeedback(
+            { kind: 'issues', available: false, reason: null, discussionUrl: CHAT_URL },
+            () => Promise.reject(new Error('sending unavailable')),
+        );
+
+        act(() => {
+            button(host, 'Feedback').click();
+        });
+
+        expect(host.textContent).toContain('The feedback channel is unavailable right now.');
+        expect([...host.querySelectorAll('button')].some((item) => item.textContent.trim() === 'Send')).toBe(false);
+    });
+
     it('restores sending after closing the form following an unavailable response and preserves the text', async () => {
         const responses = [
             { outcome: 'unavailable' as const, issueKey: null, issueUrl: null, message: 'Cannot obtain a token.' },
             {
                 outcome: 'created' as const,
                 issueKey: '#7',
-                issueUrl: 'https://github.com/quillmart/quillmart/issues/7',
+                issueUrl: 'https://github.com/example/sherpa/issues/7',
                 message: null,
             },
         ];
@@ -109,7 +126,7 @@ describe('Feedback form', () => {
             }
             return Promise.resolve(next);
         });
-        const host = mountFeedback({ available: true, reason: null }, onSend);
+        const host = mountFeedback(AVAILABLE, onSend);
         act(() => {
             button(host, 'Feedback').click();
         });
@@ -135,20 +152,45 @@ describe('Feedback form', () => {
         });
 
         expect(onSend).toHaveBeenCalledTimes(2);
-        expect(host.querySelector('a[href="https://github.com/quillmart/quillmart/issues/7"]')).not.toBeNull();
+        expect(host.querySelector('a[href="https://github.com/example/sherpa/issues/7"]')).not.toBeNull();
     });
 
-    it('includes a link to the Sherpa discussion in the form', () => {
-        const host = mountFeedback({ available: true, reason: null }, () => Promise.reject(new Error('not called')));
+    it('shows the discussion link supplied by the channel', () => {
+        const host = mountFeedback(AVAILABLE, () => Promise.reject(new Error('not called')));
 
         act(() => {
             button(host, 'Feedback').click();
         });
 
         const link = host.querySelector<HTMLAnchorElement>('.feedback-popover__chat a');
-        expect(link?.href).toBe(SHERPA_CHAT_URL);
+        expect(link?.href).toBe(CHAT_URL);
         expect(link?.target).toBe('_blank');
         expect(link?.textContent).toBe('Sherpa chat');
+    });
+
+    it('omits the chat line without a discussion link', () => {
+        const host = mountFeedback({ ...AVAILABLE, discussionUrl: null }, () => Promise.reject(new Error('not called')));
+
+        act(() => {
+            button(host, 'Feedback').click();
+        });
+
+        expect(host.querySelector('textarea')).not.toBeNull();
+        expect(host.querySelector('.feedback-popover__chat')).toBeNull();
+    });
+
+    it('opens a link channel in a new tab without a form', () => {
+        const url = 'https://github.com/example/sherpa/issues';
+        const host = mountFeedback({ kind: 'link', url }, () => Promise.reject(new Error('not called')));
+
+        const link = host.querySelector<HTMLAnchorElement>('a.feedback-button');
+        expect(link?.href).toBe(url);
+        expect(link?.target).toBe('_blank');
+        expect(link?.rel).toBe('noreferrer');
+        expect(link?.className).toBe('ctl ctl--ghost ctl--topbar feedback-button');
+        expect(link?.textContent).toBe('Feedback');
+        expect(host.querySelector('button')).toBeNull();
+        expect(host.querySelector('.feedback-popover')).toBeNull();
     });
 
     it('shows a link to the created issue after successful submission', async () => {
@@ -156,11 +198,11 @@ describe('Feedback form', () => {
             Promise.resolve({
                 outcome: 'created' as const,
                 issueKey: '#123456',
-                issueUrl: 'https://github.com/quillmart/quillmart/issues/123456',
+                issueUrl: 'https://github.com/example/sherpa/issues/123456',
                 message: null,
             }),
         );
-        const host = mountFeedback({ available: true, reason: null }, onSend);
+        const host = mountFeedback(AVAILABLE, onSend);
         act(() => {
             button(host, 'Feedback').click();
         });
@@ -187,7 +229,41 @@ describe('Feedback form', () => {
             includeContext: true,
             context: { view: 'overview', routePhase: 'ready', uiVersion: '0.6.0' },
         });
-        const link = host.querySelector<HTMLAnchorElement>('a[href="https://github.com/quillmart/quillmart/issues/123456"]');
+        const link = host.querySelector<HTMLAnchorElement>('a[href="https://github.com/example/sherpa/issues/123456"]');
         expect(link?.textContent).toBe('#123456');
+    });
+
+    it.each([
+        { issueKey: null, issueUrl: null, summary: 'Issue created.' },
+        { issueKey: 'SH-1', issueUrl: null, summary: 'Issue created SH-1.' },
+    ])('treats success without a link ($issueKey) as success without resubmission', async ({ issueKey, issueUrl, summary }) => {
+        const onSend = vi.fn((_request: UiFeedbackRequest) =>
+            Promise.resolve({ outcome: 'created' as const, issueKey, issueUrl, message: null }),
+        );
+        const host = mountFeedback(AVAILABLE, onSend);
+        act(() => {
+            button(host, 'Feedback').click();
+        });
+        typeText(host, 'No link');
+
+        await act(async () => {
+            button(host, 'Send').click();
+            await Promise.resolve();
+        });
+
+        const success = host.querySelector('.feedback-popover__success');
+        expect(success?.querySelector('p')?.textContent).toBe(summary);
+        expect(success?.querySelector('a')).toBeNull();
+        expect(host.querySelector('textarea')).toBeNull();
+        expect(host.querySelector('[role="alert"]')).toBeNull();
+        expect(onSend).toHaveBeenCalledTimes(1);
+
+        act(() => {
+            button(host, 'Close').click();
+        });
+        act(() => {
+            button(host, 'Feedback').click();
+        });
+        expect(host.querySelector('textarea')?.value).toBe('');
     });
 });

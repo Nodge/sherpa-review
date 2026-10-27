@@ -1,4 +1,4 @@
-import type { PrMeta } from '@sherpa/protocol';
+import type { PrMeta, UiFeedbackChannel } from '@sherpa/protocol';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
@@ -25,13 +25,15 @@ const PR: PrMeta = {
     viewer: { login: 'alice', displayName: null, bot: false, avatarUrl: null },
 };
 
-function topBar(pr: typeof PR | null): string {
+const ISSUES: UiFeedbackChannel = { kind: 'issues', available: true, reason: null, discussionUrl: null };
+
+function topBar(pr: typeof PR | null, feedback: UiFeedbackChannel | null = ISSUES): string {
     return renderToStaticMarkup(
         <TopBar
             version="0.0.0"
-            breadcrumb={breadcrumbFor('github-quillmart--quillmart--4821', pr)}
+            breadcrumb={breadcrumbFor('fixture-4821', pr)}
             agent={agentPillView({ kind: 'never' }, [], t)}
-            reconnectCommand="/sherpa github-quillmart--quillmart--4821"
+            reconnectCommand="/sherpa fixture-4821"
             chatOpen={false}
             onToggleChat={() => undefined}
             view="overview"
@@ -39,10 +41,10 @@ function topBar(pr: typeof PR | null): string {
             onOpenSearch={() => undefined}
             agentConnected
             onReplayTour={() => undefined}
-            feedback={{ available: true, reason: null }}
+            feedback={feedback}
             feedbackContext={{
                 uiVersion: '0.0.0',
-                prKey: 'github-quillmart--quillmart--4821',
+                prKey: 'fixture-4821',
                 view: 'overview',
                 routePhase: 'ready',
                 worker: { kind: 'never' },
@@ -51,7 +53,7 @@ function topBar(pr: typeof PR | null): string {
                 Promise.resolve({
                     outcome: 'created',
                     issueKey: '#1',
-                    issueUrl: 'https://github.com/quillmart/quillmart/issues/1',
+                    issueUrl: 'https://github.com/example/sherpa/issues/1',
                     message: null,
                 })
             }
@@ -66,6 +68,18 @@ describe('top bar', () => {
         expect(html).toContain('class="ctl ctl--ghost ctl--topbar search-button"');
         expect(html).toContain('class="ctl ctl--ghost ctl--topbar feedback-button"');
         expect(html.indexOf('search-button')).toBeLessThan(html.indexOf('feedback-button'));
+    });
+
+    it('link-based Feedback channel renders a link with the same button appearance', () => {
+        const html = topBar(PR, { kind: 'link', url: 'https://github.com/example/sherpa/issues' });
+
+        expect(html).toContain(
+            '<a class="ctl ctl--ghost ctl--topbar feedback-button" href="https://github.com/example/sherpa/issues" target="_blank" rel="noreferrer">Feedback</a>',
+        );
+    });
+
+    it('has no Feedback button without a feedback channel', () => {
+        expect(topBar(PR, null)).not.toContain('feedback-button');
     });
 });
 

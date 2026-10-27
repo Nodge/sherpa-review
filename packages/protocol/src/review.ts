@@ -1,16 +1,17 @@
 import { z } from 'zod';
 
+import { localizedTextSchema } from './locale.js';
+
 /**
  * Review domain types (`docs/architecture.md §5`, `docs/product.md §4a`): what crosses the host adapter boundary
- * and reaches the UI. Host details (sticky ship mechanics, signed host ids,
- * status fields, etc.) stay as verdicts and opaque strings, without leaking into the model.
- * Shapes follow the review host API research.
+ * and reaches the UI. Host-specific details (verdict mechanics, id formats, internal statuses)
+ * remain verdicts and opaque strings, without leaking into the model.
  */
 
 /**
  * Opaque host identifier (PR, comment, diff file, iteration).
- * Do not parse or construct these: hosts can use signed numbers or base64 protobufs,
- * another host will use its own formats. The contract likewise promises nothing beyond equality.
+ * Do not parse or construct it: each host has its own format (numbers, base64 protobufs, etc.),
+ * and the contract promises only equality.
  */
 export const hostIdSchema = z.string().min(1);
 export type HostId = z.infer<typeof hostIdSchema>;
@@ -31,8 +32,11 @@ export type ReviewUser = z.infer<typeof reviewUserSchema>;
 
 /**
  * Draft batch publication mode. `comment` publishes drafts without applying anything.
- * `ship`, `sticky_ship`, `request_changes` publish and apply a verdict. `HostCapabilities.publishVerdicts`
- * specifies which modes the host accepts for this PR.
+ * `ship`, `sticky_ship`, `request_changes` publish and apply a verdict.
+ * `ship` approves the current PR state. A new push clears it.
+ * `sticky_ship` approval survives subsequent pushes. The host decides when to clear it.
+ * Only hosts with this approval type declare it.
+ * `HostCapabilities.publishVerdicts` says which modes the host accepts for this PR.
  */
 export const verdictSchema = z.enum(['comment', 'ship', 'sticky_ship', 'request_changes']);
 export type Verdict = z.infer<typeof verdictSchema>;
@@ -42,7 +46,7 @@ export const hostCapabilitiesSchema = z.object({
     /**
      * Publication modes the host accepts for this PR: the UI shows exactly this list, the host
      * rejects any verdict outside it. Computed on every header read because it depends on the PR as well
-     * as the host (the PR author on GitHub).
+     * as the host (for example, PR settings or its author).
      */
     publishVerdicts: z.array(verdictSchema).superRefine((verdicts, ctx) => {
         if (new Set(verdicts).size !== verdicts.length) {
@@ -84,15 +88,14 @@ export const prStateSchema = z.enum(['open', 'merged', 'closed']);
 export type PrState = z.infer<typeof prStateSchema>;
 
 /**
- * Aggregate CI check status for the PR. null means the host does not provide it (the review host exposes checks through
- * a separate, unexplored API. The adapter returns null, and the UI hides it).
+ * Aggregate CI check status for the PR. null means the host does not supply it, so the UI hides it.
  */
 export const prChecksSchema = z.enum(['passed', 'failed', 'pending']);
 export type PrChecks = z.infer<typeof prChecksSchema>;
 
 /**
- * The reviewer's current PR verdict (`docs/design/SPEC-elements.md §4.5`, "someone else ships first"): on the review host,
- * the reviewer's action (`ship` / `sticky_ship` / `request_changes`).
+ * Reviewer's current PR verdict (`docs/design/SPEC-elements.md §4.5`, "someone else ships first").
+ * The adapter maps the host's reviewer status to one of three verdicts, for example "changes requested" → `request_changes`.
  * Hosts do not supply verdict timestamps. The UI records when the verdict appeared in a snapshot.
  * Publishing without a verdict (`comment`) does not count as a reviewer verdict and is excluded here.
  */
@@ -163,7 +166,7 @@ export function imageMimeOf(path: string): ImageMime | null {
 
 /**
  * One side of an image. `blobId` addresses content rather than a file: equal ids mean equal bytes
- * (the review host supplies its own blob hash), so the server caches bytes by id without expiry.
+ * (for example, a VCS blob hash), so the server caches bytes by it without expiration.
  * `size` is the side's byte count. The UI refuses to load a side larger than `IMAGE_BLOB_MAX_BYTES`.
  */
 export const imageSideSchema = z.object({
@@ -241,7 +244,7 @@ export const prDiffSchema = z.object({
     /** Opaque iteration id for snapshot provenance and new comment anchors. */
     diffId: hostIdSchema,
     baseCommit: z.string().min(1),
-    /** Reviewed side (some hosts use a synthetic merge commit instead of the branch HEAD). */
+    /** Reviewed side, not necessarily the branch HEAD. It may be a synthetic merge commit, for example. */
     headCommit: z.string().min(1),
     files: z.array(fileDiffSchema),
 });
@@ -257,7 +260,7 @@ export const iterationStatusSchema = z.enum(['active', 'previous', 'gone']);
 export type IterationStatus = z.infer<typeof iterationStatusSchema>;
 
 /**
- * A PR iteration is the unit of review time: one push by the author is one
+ * A PR iteration is a unit of review time. One PR author push produces one
  * iteration. Route snapshots, reading progress and note anchors are tied to `diffId`.
  */
 export const iterationSchema = z.object({
@@ -287,8 +290,8 @@ export const fileAnchorSchema = z.object({
 export type FileAnchor = z.infer<typeof fileAnchorSchema>;
 
 /**
- * A comment with a reply subtree. Threads are trees, not lists. Review host API research
- * found depths up to 14, with ~7% of nodes branching. The UI flattens them for rendering (indentation capped at 4).
+ * A comment with a subtree of replies. Threads are trees, not lists. Hosts can have
+ * branching threads more than ten levels deep. The UI flattens them for rendering (indentation up to 4).
  * `draft` is my unpublished draft (visible only to me, with a "publishes on ship" chip).
  */
 export interface Comment {
@@ -330,7 +333,7 @@ export const commentSchema: z.ZodType<Comment> = z.object({
 
 /**
  * Pins a thread to the commit where it was written (`docs/design/SPEC-elements.md §4.5`, "pinned to 9f3c1ab"). The host
- * of the original anchor reported by the host. The UI neither stores
+ * provides the iteration of the original anchor. The UI neither stores
  * nor computes its own pin. A `pinnedTo.diffId` different from the active iteration gives "view at the
  * old commit". The rest is handled by `outdated` and the rebound `anchor`.
  */
@@ -389,8 +392,8 @@ export const publishResultSchema = z.object({
 export type PublishResult = z.infer<typeof publishResultSchema>;
 
 /**
- * Ownership zone for the ownership lens: the boundary from the ownership file (CODEOWNERS or the host's equivalent),
- * the owning configuration directory, or a subpath within it for subpath rules.
+ * Ownership zone for the ownership lens. A boundary from the host's ownership rules (such as CODEOWNERS),
+ * a directory or subpath to which a rule applies.
  * A diff file belongs to at most one zone, the deepest boundary.
  * Zones describe the entire PR (not just the reviewer's zones) and remain meaningful even when
  * the lens has `available: false`. The reviewer has no zone, but other ownership zones exist in the PR.
@@ -411,6 +414,20 @@ export const lensZoneSchema = z.object({
 export type LensZone = z.infer<typeof lensZoneSchema>;
 
 /**
+ * Audit scope. Changes to files in the lens require auditor sign-off. The UI recognizes this lens
+ * by this description, not its id: a chip in the PR header, a banner under the active filter and a tag in the tree row.
+ */
+export const lensAuditSchema = z.object({
+    /** Scope name for the chip, banner and filter label ("PCI DSS"). The UI adds counts and plurals. */
+    name: localizedTextSchema,
+    /** Short filter chip label in the left panel ("PCI"). */
+    short: localizedTextSchema,
+    /** File tag in the tree row ("pci"), monospaced and not translated. */
+    tag: z.string().min(1),
+});
+export type LensAudit = z.infer<typeof lensAuditSchema>;
+
+/**
  * A lens is a named set of paths for filtering files (filter model in `docs/design/README.md`).
  * `available: false` means the lens mechanism is unavailable (the reviewer has no zone, an
  * undocumented endpoint broke). The UI disables the filter and explains why using `note`.
@@ -424,11 +441,13 @@ export const lensSchema = z.object({
     note: z.string().nullable(),
     /**
      * PR ownership zones, only for the ownership lens. null means the implementation does not
-     * distinguish zones (directory fallback in the review host, extra lenses), so the UI groups
+     * distinguish zones (the host knows only lens membership, extra lenses). The UI groups
      * files by path prefix. The UI also groups files outside all zones
      * (generated files, files not covered by ownership rules).
      */
     zones: z.array(lensZoneSchema).nullable(),
+    /** The lens is an audit scope. null means a regular lens. If there are several audit lenses, the UI uses the first available one. */
+    audit: lensAuditSchema.nullable(),
 });
 export type Lens = z.infer<typeof lensSchema>;
 

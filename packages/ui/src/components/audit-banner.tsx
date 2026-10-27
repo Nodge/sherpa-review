@@ -1,4 +1,3 @@
-import { PCI_FILTER_ID } from '../filters/lens-filters.js';
 import type { FileFilter, FilterStats } from '../filters/lens-filters.js';
 import { useT } from '../i18n/index.js';
 import { Icon } from '../icons/icon.tsx';
@@ -7,7 +6,7 @@ import './audit-banner.css';
 
 /**
  * Audit scope banner (docs/design/README.md §Filters, docs/design/SPEC-elements.md §2.21):
- * while the `pci` filter is active, the reviewer must know they are not seeing the entire PR. The banner describes the filter, so it can be dismissed,
+ * while the audit filter (`FileFilter.audit`) is active, the reviewer must know they are not seeing the whole PR. The banner describes the filter, so it can be dismissed,
  * and has exactly one action: clear the filter.
  *
  * The component renders in the shared App-level banner slot. The slot source registry
@@ -19,15 +18,17 @@ const LISTED_PATHS = 3;
 
 /**
  * Audit scope matters where the filter actually hides files: Full diff and
- * in the route view. The PCI chip in the route header and its banner appear together in both views.
+ * the route. The audit chip in the route header and its banner appear together in both views.
+ * `auditFilterId` is the active audit filter id. null means the active filter is not an audit filter.
  */
 export function auditScopeBannerVisible(
     view: ViewId,
     filterId: string,
+    auditFilterId: string | null,
     dismissed: boolean,
     files: number,
 ): boolean {
-    return (view === 'diff' || view === 'route') && filterId === PCI_FILTER_ID && !dismissed && files > 0;
+    return (view === 'diff' || view === 'route') && filterId === auditFilterId && !dismissed && files > 0;
 }
 
 export interface AuditScopeBannerProps {
@@ -48,7 +49,7 @@ export function AuditScopeBanner({ filter, stats, paths, onShowAll, onDismiss }:
 
     return (
         <div className="audit-banner" role="status">
-            <span className="audit-banner__tag">PCI DSS</span>
+            {filter.audit === null ? null : <span className="audit-banner__tag">{filter.audit.name}</span>}
             <div className="audit-banner__body">
                 <div className="audit-banner__line">
                     {t('audit.line', stats.files, stats.changedLines, stats.totalChangedLines)}

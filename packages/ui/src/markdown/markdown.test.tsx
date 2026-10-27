@@ -191,10 +191,10 @@ describe('markdown, comment profile', () => {
     });
 
     it('opens a link in a new tab without a referrer and uses a class to wrap long URLs', () => {
-        const html = comment('[issue](https://github.com/quillmart/quillmart/issues/1)');
+        const html = comment('[issue](https://github.com/example/sherpa/issues/1)');
 
         expect(html).toBe(
-            '<p class="md-p"><a class="md-link" href="https://github.com/quillmart/quillmart/issues/1" target="_blank" rel="noreferrer">issue</a></p>',
+            '<p class="md-p"><a class="md-link" href="https://github.com/example/sherpa/issues/1" target="_blank" rel="noreferrer">issue</a></p>',
         );
     });
 

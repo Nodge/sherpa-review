@@ -1,6 +1,6 @@
 import type { PrDiff } from '@sherpa/protocol';
 
-import { human, lens, singleIteration } from '../builders.js';
+import { human, lens, PCI_AUDIT, singleIteration } from '../builders.js';
 import type { FixtureDataInput } from './types.js';
 
 /**
@@ -50,6 +50,7 @@ export function makeEmptyFixture(): FixtureDataInput {
             lens({
                 id: 'pci',
                 label: 'PCI DSS',
+                audit: PCI_AUDIT,
                 available: false,
                 note: 'The PCI DSS scope is not published for this commit yet.',
             }),

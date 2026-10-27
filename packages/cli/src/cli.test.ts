@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { readResultFile } from './cli.js';
 import { CliError } from './errors.js';
 
-const TARGET = { cliPath: '/opt/sherpa/sherpa.mjs', prKey: 'github-quillmart--quillmart--1' };
+const TARGET = { cliPath: '/opt/sherpa/sherpa.mjs', prKey: 'pr-1' };
 
 describe('result size precheck', () => {
     let workDir: string;
@@ -46,7 +46,7 @@ describe('result size precheck', () => {
         const missing = path.join(workDir, 'missing.md');
         await expect(readResultFile(missing, 42, TARGET)).rejects.toThrow(
             `Write the result to ${missing} and call ` +
-                `\`node /opt/sherpa/sherpa.mjs task complete 42 --file '${missing}' --pr github-quillmart--quillmart--1\` again.`,
+                `\`node /opt/sherpa/sherpa.mjs task complete 42 --file ${missing} --pr pr-1\` again.`,
         );
         await expect(readResultFile(workDir, 42, TARGET)).rejects.toThrow('is not a file');
     });

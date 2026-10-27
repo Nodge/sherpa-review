@@ -30,12 +30,10 @@ import {
 import { RegenerateBanner } from '../views/route/other-card.tsx';
 import type { ViewId } from '../session/views.js';
 
-import { isLocalHost } from './review-state.js';
-
 export interface BannerSourcesOptions {
     readonly view: ViewId;
-    /** Adapter name (`uiState.reviewHost`). Local review has its own stale-state wording. */
-    readonly reviewHost: string | null;
+    /** Iterations are working-tree snapshots (`UiReviewHost.iterations`), with specific stale wording. */
+    readonly localHost: boolean;
     readonly session: SessionStore;
     readonly now: number;
     readonly readOnly: boolean;
@@ -77,9 +75,10 @@ export interface BannerSourcesOptions {
 
     readonly auditVisible: boolean;
     readonly auditKey: string;
-    readonly pci: FileFilter | null;
-    readonly pciStats: FilterStats | null;
-    readonly pciPaths: readonly string[];
+    /** The active audit filter (`activeAuditFilter`), its counts and paths for the banner. */
+    readonly audit: FileFilter | null;
+    readonly auditStats: FilterStats | null;
+    readonly auditPaths: readonly string[];
     readonly showAllAuditFiles: () => void;
     readonly onDismissAudit: (key: string) => void;
 }
@@ -88,7 +87,7 @@ export interface BannerSourcesOptions {
 export function buildBannerSources(options: BannerSourcesOptions): readonly BannerSource[] {
     const {
         view,
-        reviewHost,
+        localHost,
         session,
         now,
         readOnly,
@@ -122,9 +121,9 @@ export function buildBannerSources(options: BannerSourcesOptions): readonly Bann
         onKeepRouteLocale,
         auditVisible,
         auditKey,
-        pci,
-        pciStats,
-        pciPaths,
+        audit,
+        auditStats,
+        auditPaths,
         showAllAuditFiles,
         onDismissAudit,
     } = options;
@@ -167,7 +166,7 @@ export function buildBannerSources(options: BannerSourcesOptions): readonly Bann
                     <RouteStaleBanner
                         stale={route.stale}
                         stops={route.snapshot.stops}
-                        localHost={isLocalHost(reviewHost)}
+                        localHost={localHost}
                         onRegenerate={startGeneration}
                         onOpenDiffWithoutRoute={openIterationWithoutRoute}
                     />
@@ -184,7 +183,7 @@ export function buildBannerSources(options: BannerSourcesOptions): readonly Bann
                         createdAt={resolved.createdAt}
                         now={now}
                         gone={resolved.gone}
-                        localHost={isLocalHost(reviewHost)}
+                        localHost={localHost}
                         onCurrent={() => {
                             session.setViewing(VIEWING_CURRENT);
                         }}
@@ -285,13 +284,13 @@ export function buildBannerSources(options: BannerSourcesOptions): readonly Bann
         {
             id: 'audit-scope',
             priority: BANNER_PRIORITY.auditScope,
-            active: () => auditVisible && pci !== null && pciStats !== null,
+            active: () => auditVisible && audit !== null && auditStats !== null,
             render: () =>
-                pci === null || pciStats === null ? null : (
+                audit === null || auditStats === null ? null : (
                     <AuditScopeBanner
-                        filter={pci}
-                        stats={pciStats}
-                        paths={pciPaths}
+                        filter={audit}
+                        stats={auditStats}
+                        paths={auditPaths}
                         onShowAll={showAllAuditFiles}
                         onDismiss={() => {
                             onDismissAudit(auditKey);

@@ -1,11 +1,13 @@
 import type { UiSettings } from '@sherpa/protocol';
 import { useLayoutEffect, useSyncExternalStore } from 'react';
 
+import { EXTRA_STYLES } from '../styles/extra-styles.js';
 import { useUiSettings } from './context.tsx';
 
 /** Actual theme, resolved from the `auto` settings mode. */
 type ColorScheme = Exclude<UiSettings['theme'], 'auto'>;
-export type ResolvedTheme = ColorScheme;
+/** Onscreen palette, either the base style theme or `<id>-<theme>` for an extra style. */
+export type ResolvedTheme = ColorScheme | `${string}-${ColorScheme}`;
 
 /** The server's inline script reads the same query (`packages/server/src/ui-document.ts`). */
 const DARK_SCHEME_QUERY = '(prefers-color-scheme: dark)';
@@ -15,17 +17,32 @@ export function readDocumentAppearance(root: HTMLElement): Partial<UiSettings> {
     const initial: Partial<UiSettings> = {};
     const theme = root.getAttribute('data-theme');
     const textSize = root.getAttribute('data-textsize');
-    
-        
-        
-    } else if (theme === 'dark' || theme === 'light') {
-        initial.theme = theme;
-        
+    const parsed = theme === null ? null : parseTheme(theme);
+    if (parsed !== null) {
+        initial.theme = parsed.scheme;
+        initial.style = parsed.style;
     }
     if (textSize === 'm' || textSize === 'l') {
         initial.textSize = textSize;
     }
     return initial;
+}
+
+/**
+ * `data-theme` → theme and style. For a style absent from this build, the theme still comes from
+ * the suffix, while the style falls back to the base style.
+ */
+function parseTheme(value: string): { scheme: ColorScheme; style: string | null } | null {
+    if (value === 'dark' || value === 'light') {
+        return { scheme: value, style: null };
+    }
+    const match = /^(.+)-(dark|light)$/.exec(value);
+    const id = match?.[1];
+    const scheme = match?.[2];
+    if (id === undefined || (scheme !== 'dark' && scheme !== 'light')) {
+        return null;
+    }
+    return { scheme, style: EXTRA_STYLES.some((style) => style.id === id) ? id : null };
 }
 
 /**
@@ -49,12 +66,16 @@ export function DocumentSettingsSync() {
     return null;
 }
 
-/** The theme the reviewer sees on screen: an explicit choice or the system theme in `auto` mode. */
+/**
+ * The theme the reviewer sees is an explicit choice or the system theme in `auto`, prefixed with
+ * the selected style. A saved style absent from this build falls back to the base theme.
+ */
 export function useResolvedTheme(): ResolvedTheme {
-    const { theme } = useUiSettings();
+    const { theme, style } = useUiSettings();
     const system = useSyncExternalStore(subscribeToSystemTheme, systemTheme, serverSystemTheme);
     const scheme = theme === 'auto' ? system : theme;
-    return scheme;
+    const active = EXTRA_STYLES.find((extra) => extra.id === style);
+    return active === undefined ? scheme : `${active.id}-${scheme}`;
 }
 
 /** Sets an attribute on `<html>` and returns a function to restore its previous value. */

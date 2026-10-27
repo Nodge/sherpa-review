@@ -398,7 +398,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                         </button>
                     ) : null}
 
-                    {/* The blame link moved into the menu ("Open on GitHub"). Only "⋯" remains in the header. */}
+                    {/* The blame link moved to the menu (label from `UiReviewHost.webAction`), leaving "⋯" in the header. */}
                     <span className="file-card__actions">
                         <button
                             type="button"

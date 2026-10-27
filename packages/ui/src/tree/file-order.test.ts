@@ -45,7 +45,7 @@ describe('file order', () => {
         }
         const tree = buildFileTree({
             files: diff.files,
-            pciFileIds: new Set(),
+            audit: null,
             mineFileIds: null,
             readState: new Map(),
             routeFiles: null,

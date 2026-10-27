@@ -1,20 +1,22 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import type { DistributionVersion, UiUpdate } from '@sherpa/protocol';
+import type { DistributionVersion, UiUpdate, UiUpdateInstall } from '@sherpa/protocol';
 import { rpcErrorSchema, UI_DEV_ENDPOINTS, UI_ENDPOINTS, uiUpdateCheckResponseSchema } from '@sherpa/protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { fixtureHostPlugin } from './hosts/fixture/plugin.js';
 import type { SherpaServer } from './server.js';
 import { startServer } from './server.js';
 import { SettingsStore } from './settings-store.js';
-import { makeTempSherpaDir, postJson, removeTempSherpaDir } from './test-support.js';
+import { makeTempSherpaDir, plainHostPlugin, postJson, removeTempSherpaDir } from './test-support.js';
+import type { UpdateChannel, UpdateChannelRequest } from './update-channel.js';
 import type { UpdateCheckOptions, UpdateCheckerOptions } from './update-check.js';
-import { classifyInstall, UpdateChecker } from './update-check.js';
+import { UpdateChecker } from './update-check.js';
 
 /**
- * Check for a newer version in main. Network access is forbidden in tests (docs/testing.md):
- * transport, clock, token and cache file are injected.
+ * New version check through an update channel. Network access is forbidden in tests (docs/testing.md):
+ * channel, transport, clock and cache file are injected.
  */
 
 const CURRENT = '0.4.0';
@@ -27,7 +29,32 @@ const LATEST: DistributionVersion = {
     whatsNew: 'Update toast and shortcuts sheet.',
 };
 
-describe('version check in main', () => {
+const INSTALL: UiUpdateInstall = { dir: '/opt/sherpa/skill', command: 'update-sherpa', readmeUrl: null };
+
+const CHANNEL_ID = 'fake:sherpa';
+
+type Latest = (request: UpdateChannelRequest) => Promise<DistributionVersion | null>;
+
+/** Stub channel: `latest` returns the test value, `install` echoes the installation directory. */
+function fakeChannel(latest: Latest) {
+    const spy = vi.fn(latest);
+    const channel: UpdateChannel = {
+        id: CHANNEL_ID,
+        latest: spy,
+        install: (installDir) => ({ ...INSTALL, dir: installDir ?? INSTALL.dir }),
+    };
+    return { channel, latest: spy };
+}
+
+function resolving(version: DistributionVersion | null) {
+    return fakeChannel(() => Promise.resolve(version));
+}
+
+function rejecting(error: unknown) {
+    return fakeChannel(() => Promise.reject(error instanceof Error ? error : new Error(String(error))));
+}
+
+describe('version check through a channel', () => {
     let sherpaDir: string;
     let cacheFile: string;
     /** Lines the check wrote to stderr: a failure must produce exactly one. */
@@ -52,11 +79,6 @@ describe('version check in main', () => {
         await removeTempSherpaDir(sherpaDir);
     });
 
-    /** `tree/blob` endpoint response: raw file JSON without a `{data}` envelope. */
-    function respondWith(payload: unknown, status = 200) {
-        return vi.fn(() => Promise.resolve(new Response(JSON.stringify(payload), { status })));
-    }
-
     function makeChecker(overrides: Partial<UpdateCheckerOptions> = {}): UpdateChecker {
         return new UpdateChecker({
             sherpaDir,
@@ -64,15 +86,14 @@ describe('version check in main', () => {
             currentVersion: CURRENT,
             cacheFile,
             now: () => NOW,
-            token: () => Promise.resolve('token'),
-            fetch: respondWith(LATEST),
+            channel: resolving(LATEST).channel,
             ...overrides,
         });
     }
 
     describe('version comparison', () => {
-        it('a version newer than the current one reaches state in full', async () => {
-            const checker = makeChecker({ installDir: '/opt/sherpa/skill' });
+        it('puts a newer version in state in full, with the hint from the channel', async () => {
+            const checker = makeChecker({ installDir: '/srv/sherpa/skill' });
 
             await checker.force();
 
@@ -81,18 +102,31 @@ describe('version check in main', () => {
                 latest: '0.5.0',
                 releasedAt: LATEST.releasedAt,
                 whatsNew: LATEST.whatsNew,
-                install: { kind: 'copy', dir: '/opt/sherpa/skill', command: null },
+                install: { ...INSTALL, dir: '/srv/sherpa/skill' },
             });
         });
 
+        it('passes the transport and timeout signal to the channel', async () => {
+            const transport = vi.fn() as unknown as typeof fetch;
+            const { channel, latest } = resolving(LATEST);
+            const checker = makeChecker({ channel, fetch: transport });
+
+            await checker.force();
+
+            expect(latest).toHaveBeenCalledTimes(1);
+            const request = latest.mock.calls[0]?.[0];
+            expect(request?.fetch).toBe(transport);
+            expect(request?.signal).toBeInstanceOf(AbortSignal);
+        });
+
         it('does not treat an older version as an update', async () => {
-            const checker = makeChecker({ fetch: respondWith({ ...LATEST, version: '0.3.9' }) });
+            const checker = makeChecker({ channel: resolving({ ...LATEST, version: '0.3.9' }).channel });
 
             expect(await forced(checker)).toBeNull();
         });
 
         it('does not treat the same version as an update', async () => {
-            const checker = makeChecker({ fetch: respondWith({ ...LATEST, version: CURRENT }) });
+            const checker = makeChecker({ channel: resolving({ ...LATEST, version: CURRENT }).channel });
 
             expect(await forced(checker)).toBeNull();
         });
@@ -100,55 +134,48 @@ describe('version check in main', () => {
         it('compares the minor version as a number, not a string', async () => {
             const checker = makeChecker({
                 currentVersion: '0.9.0',
-                fetch: respondWith({ ...LATEST, version: '0.10.0' }),
+                channel: resolving({ ...LATEST, version: '0.10.0' }).channel,
             });
 
             expect((await forced(checker))?.latest).toBe('0.10.0');
         });
+
+        it('unknown channel version means no update, without a failure', async () => {
+            const checker = makeChecker({ channel: resolving(null).channel });
+
+            const result = await checker.force();
+
+            expect(result).toEqual({ update: null, failure: null });
+            expect(stderrLines()).toHaveLength(0);
+            expect(readCache()).toEqual({ channel: CHANNEL_ID, checkedAt: NOW.toISOString(), latest: null });
+        });
     });
 
     describe('check failures', () => {
-        it('a 401 is handled with a line in stderr', async () => {
-            const checker = makeChecker({ fetch: respondWith({ error: 'no' }, 401) });
+        it('handles a channel error with a line in stderr', async () => {
+            const checker = makeChecker({ channel: rejecting(new Error('401 response')).channel });
 
-            expect(await forced(checker)).toBeNull();
+            const result = await checker.force();
+
+            expect(result.update).toBeNull();
+            expect(result.failure).toContain('401');
             expect(stderrLines()).toHaveLength(1);
             expect(stderrLines()[0]).toContain('401');
         });
 
         it('handles a request timeout the same way', async () => {
-            const timedOut = vi.fn(() =>
-                Promise.reject(new DOMException('The operation was aborted.', 'TimeoutError')),
-            ) as unknown as typeof fetch;
-            const checker = makeChecker({ fetch: timedOut });
-
-            expect(await forced(checker)).toBeNull();
-            expect(stderrLines()).toHaveLength(1);
-        });
-
-        it('invalid JSON is handled the same way', async () => {
-            const broken = vi.fn(() =>
-                Promise.resolve(new Response('{ not json', { status: 200 })),
-            ) as unknown as typeof fetch;
-            const checker = makeChecker({ fetch: broken });
-
-            expect(await forced(checker)).toBeNull();
-            expect(stderrLines()).toHaveLength(1);
-        });
-
-        it('a response outside the schema is handled the same way', async () => {
-            const checker = makeChecker({ fetch: respondWith({ version: 'the-day-before-yesterday' }) });
+            const checker = makeChecker({
+                channel: rejecting(new DOMException('The operation was aborted.', 'TimeoutError')).channel,
+            });
 
             expect(await forced(checker)).toBeNull();
             expect(stderrLines()).toHaveLength(1);
         });
 
         it('a failed recheck preserves an already known version', async () => {
-            const transport = vi
-                .fn()
-                .mockResolvedValueOnce(new Response(JSON.stringify(LATEST)))
-                .mockResolvedValueOnce(new Response('{}', { status: 401 })) as unknown as typeof fetch;
-            const checker = makeChecker({ fetch: transport });
+            const { channel, latest } = resolving(LATEST);
+            latest.mockResolvedValueOnce(LATEST).mockRejectedValueOnce(new Error('401 response'));
+            const checker = makeChecker({ channel });
             await checker.force();
 
             const second = await checker.force();
@@ -156,39 +183,27 @@ describe('version check in main', () => {
             expect(second.failure).toContain('401');
             expect(second.update?.latest).toBe('0.5.0');
             // The failure must also stay out of the cache, or restarts would stay silent for half an hour too.
-            expect(readCache()).toEqual({ checkedAt: NOW.toISOString(), latest: LATEST });
-        });
-
-        it('makes no network calls without a token', async () => {
-            const transport = respondWith(LATEST);
-            const checker = makeChecker({
-                token: () => Promise.reject(new Error('no access token')),
-                fetch: transport,
-            });
-
-            expect(await forced(checker)).toBeNull();
-            expect(transport).not.toHaveBeenCalled();
-            expect(stderrLines()).toHaveLength(1);
+            expect(readCache()).toEqual({ channel: CHANNEL_ID, checkedAt: NOW.toISOString(), latest: LATEST });
         });
     });
 
     describe('cache', () => {
-        it('reads a fresh cache from disk without network calls', async () => {
-            writeCache({ checkedAt: '2026-09-03T11:45:00.000Z', latest: LATEST });
-            const transport = respondWith(LATEST);
-            const checker = makeChecker({ fetch: transport });
+        it('reads a fresh cache from disk without asking the channel', async () => {
+            writeCache({ channel: CHANNEL_ID, checkedAt: '2026-09-03T11:45:00.000Z', latest: LATEST });
+            const { channel, latest } = resolving(LATEST);
+            const checker = makeChecker({ channel });
 
             checker.start();
             await Promise.resolve();
 
             expect(checker.get()?.latest).toBe('0.5.0');
-            expect(transport).not.toHaveBeenCalled();
+            expect(latest).not.toHaveBeenCalled();
         });
 
-        it('an expired cache triggers a request to main', async () => {
-            writeCache({ checkedAt: '2026-09-03T11:00:00.000Z', latest: null });
-            const transport = respondWith(LATEST);
-            const checker = makeChecker({ fetch: transport });
+        it('asks the channel when the cache is stale', async () => {
+            writeCache({ channel: CHANNEL_ID, checkedAt: '2026-09-03T11:00:00.000Z', latest: null });
+            const { channel, latest } = resolving(LATEST);
+            const checker = makeChecker({ channel });
 
             // Use `start()`, not `force()`: force always ignores TTL, so it does not test expiration.
             checker.start();
@@ -196,63 +211,108 @@ describe('version check in main', () => {
                 expect(checker.get()?.latest).toBe('0.5.0');
             });
 
-            expect(transport).toHaveBeenCalledTimes(1);
-            expect(readCache()).toEqual({ checkedAt: NOW.toISOString(), latest: LATEST });
+            expect(latest).toHaveBeenCalledTimes(1);
+            expect(readCache()).toEqual({ channel: CHANNEL_ID, checkedAt: NOW.toISOString(), latest: LATEST });
+        });
+
+        it('treats a cache from the future as stale', async () => {
+            writeCache({ channel: CHANNEL_ID, checkedAt: '2026-09-03T12:10:00.000Z', latest: null });
+            const { channel, latest } = resolving(LATEST);
+            const checker = makeChecker({ channel });
+
+            checker.start();
+            await vi.waitFor(() => {
+                expect(latest).toHaveBeenCalledTimes(1);
+            });
         });
 
         it('treats a corrupt cache as missing', async () => {
             fs.writeFileSync(cacheFile, '{ fragment');
-            const transport = respondWith(LATEST);
-            const checker = makeChecker({ fetch: transport });
+            const { channel, latest } = resolving(LATEST);
+            const checker = makeChecker({ channel });
 
             checker.start();
-            await Promise.resolve();
-            await Promise.resolve();
+            await vi.waitFor(() => {
+                expect(latest).toHaveBeenCalledTimes(1);
+            });
+        });
 
-            expect(transport).toHaveBeenCalledTimes(1);
+        it('ignores a fresh cache from another channel: all builds on the machine share the file', async () => {
+            writeCache({ channel: 'other:sherpa', checkedAt: '2026-09-03T11:45:00.000Z', latest: { ...LATEST, version: '9.0.0' } });
+            const { channel, latest } = resolving(LATEST);
+            const checker = makeChecker({ channel });
+
+            checker.start();
+            await vi.waitFor(() => {
+                expect(checker.get()?.latest).toBe('0.5.0');
+            });
+
+            expect(latest).toHaveBeenCalledTimes(1);
+            expect(readCache()).toEqual({ channel: CHANNEL_ID, checkedAt: NOW.toISOString(), latest: LATEST });
+        });
+
+        it('asks the channel for a cache without a channel (written before the field existed)', async () => {
+            writeCache({ checkedAt: '2026-09-03T11:45:00.000Z', latest: LATEST });
+            const { channel, latest } = resolving(LATEST);
+            const checker = makeChecker({ channel });
+
+            checker.start();
+            await vi.waitFor(() => {
+                expect(latest).toHaveBeenCalledTimes(1);
+            });
         });
 
         it('force ignores a fresh cache', async () => {
-            writeCache({ checkedAt: NOW.toISOString(), latest: null });
-            const transport = respondWith(LATEST);
-            const checker = makeChecker({ fetch: transport });
+            writeCache({ channel: CHANNEL_ID, checkedAt: NOW.toISOString(), latest: null });
+            const { channel, latest } = resolving(LATEST);
+            const checker = makeChecker({ channel });
 
             expect((await forced(checker))?.latest).toBe('0.5.0');
-            expect(transport).toHaveBeenCalledTimes(1);
+            expect(latest).toHaveBeenCalledTimes(1);
         });
 
         it('never checks the 0.0.0 dev build', async () => {
-            const transport = respondWith(LATEST);
-            const checker = makeChecker({ currentVersion: '0.0.0', fetch: transport });
+            const { channel, latest } = resolving(LATEST);
+            const checker = makeChecker({ currentVersion: '0.0.0', channel });
 
             checker.start();
             expect(await forced(checker)).toBeNull();
-            expect(transport).not.toHaveBeenCalled();
+            expect(latest).not.toHaveBeenCalled();
         });
 
-        it('disabled checks on a fixture host make no network calls', async () => {
-            const transport = respondWith(LATEST);
-            const checker = makeChecker({ enabled: false, fetch: transport });
+        it('disabled check (host with disablesUpdateCheck) skips the channel check but takes its hint', async () => {
+            const { channel, latest } = resolving(LATEST);
+            const checker = makeChecker({ enabled: false, channel, installDir: '/srv/sherpa/skill' });
 
             checker.start();
             await checker.force();
+            const update = checker.setLatest(LATEST);
 
-            expect(transport).not.toHaveBeenCalled();
+            expect(latest).not.toHaveBeenCalled();
+            expect(update?.install).toEqual({ ...INSTALL, dir: '/srv/sherpa/skill' });
+        });
+
+        it('without a channel there is no check and never an update', async () => {
+            const checker = makeChecker({ channel: null });
+            writeCache({ channel: CHANNEL_ID, checkedAt: NOW.toISOString(), latest: LATEST });
+
+            checker.start();
+            expect(await checker.force()).toEqual({ update: null, failure: null });
+            expect(checker.setLatest(LATEST)).toBeNull();
+            expect(checker.get()).toBeNull();
         });
     });
 
     describe('concurrent checks', () => {
         it('a late response does not overwrite the result of a newer check', async () => {
-            const pending: ((payload: unknown) => void)[] = [];
-            const transport = vi.fn(
+            const pending: ((version: DistributionVersion) => void)[] = [];
+            const { channel } = fakeChannel(
                 () =>
                     new Promise((resolve) => {
-                        pending.push((payload) => {
-                            resolve({ ok: true, status: 200, json: () => Promise.resolve(payload) });
-                        });
+                        pending.push(resolve);
                     }),
-            ) as unknown as typeof fetch;
-            const checker = makeChecker({ fetch: transport });
+            );
+            const checker = makeChecker({ channel });
 
             checker.start();
             await vi.waitFor(() => {
@@ -264,12 +324,12 @@ describe('version check in main', () => {
             });
             pending[1]?.(LATEST);
             expect((await forcing).update?.latest).toBe('0.5.0');
-            // The request from `start()` responds last with an older version.
+            // The check from `start()` responds last, with an older version.
             pending[0]?.({ ...LATEST, version: '0.4.5' });
             await flush();
 
             expect(checker.get()?.latest).toBe('0.5.0');
-            expect(readCache()).toEqual({ checkedAt: NOW.toISOString(), latest: LATEST });
+            expect(readCache()).toEqual({ channel: CHANNEL_ID, checkedAt: NOW.toISOString(), latest: LATEST });
         });
     });
 
@@ -290,30 +350,6 @@ describe('version check in main', () => {
             const checker = makeChecker({ settings });
 
             expect((await forced(checker))?.latest).toBe('0.5.0');
-        });
-    });
-
-    describe('install classification', () => {
-        it('a directory in a repository checkout gives git pull at the repository root', () => {
-            expect(classifyInstall('/Users/x/quillmart/tools/sherpa/skill')).toEqual({
-                
-                dir: '/Users/x/quillmart',
-                command: "cd '/Users/x/quillmart' && git pull",
-            });
-        });
-
-        it('a space in the path does not break the terminal command', () => {
-            expect(classifyInstall('/Users/x/My Work/tools/sherpa/skill').command).toBe(
-                "cd '/Users/x/My Work' && git pull",
-            );
-        });
-
-        it('a directory anywhere else is a copy without a command', () => {
-            expect(classifyInstall('/opt/sherpa')).toEqual({ kind: 'copy', dir: '/opt/sherpa', command: null });
-        });
-
-        it('an unspecified directory is a copy in the server cwd', () => {
-            expect(classifyInstall()).toEqual({ kind: 'copy', dir: process.cwd(), command: null });
         });
     });
 
@@ -343,6 +379,9 @@ describe('version check in main', () => {
 });
 
 describe('version check endpoints', () => {
+    /** Fixture host with a dev version endpoint and a "production" host without one. */
+    const HOSTS = [fixtureHostPlugin, plainHostPlugin];
+
     let sherpaDir: string;
     let servers: SherpaServer[];
 
@@ -358,33 +397,41 @@ describe('version check endpoints', () => {
         await removeTempSherpaDir(sherpaDir);
     });
 
-    async function start(prKey: string, updateCheck?: UpdateCheckOptions): Promise<SherpaServer> {
+    async function start(
+        prKey: string,
+        updateCheck?: UpdateCheckOptions,
+        updateChannel: UpdateChannel = resolving(LATEST).channel,
+    ): Promise<SherpaServer> {
         const server = await startServer({
+            feedbackChannel: null,
             prKey,
             sherpaDir,
             longPollSeconds: 0.3,
+            hosts: HOSTS,
+            updateChannel,
             ...(updateCheck === undefined ? {} : { updateCheck }),
         });
         servers.push(server);
         return server;
     }
 
-    it('a forced check on a fixture host returns the contract without network calls', async () => {
-        const server = await start('fixture-medium');
+    it('force on a fixture host returns the contract without asking the channel', async () => {
+        const { channel, latest } = resolving(LATEST);
+        const server = await start('fixture-medium', { currentVersion: CURRENT }, channel);
 
         const response = await postJson(server.port, UI_ENDPOINTS.updateCheck, {}, server.token);
 
         expect(response.status).toBe(200);
         expect(uiUpdateCheckResponseSchema.parse(await response.json())).toEqual({ update: null });
+        expect(latest).not.toHaveBeenCalled();
     });
 
     it('a failed check returns an error instead of "no updates"', async () => {
-        const server = await start('github-quillmart--quillmart--4821', {
-            currentVersion: CURRENT,
-            cacheFile: path.join(sherpaDir, 'update-check.json'),
-            token: () => Promise.resolve('token'),
-            fetch: (() => Promise.resolve(new Response('{}', { status: 401 }))) as unknown as typeof fetch,
-        });
+        const server = await start(
+            'plain-4821',
+            { currentVersion: CURRENT, cacheFile: path.join(sherpaDir, 'update-check.json') },
+            rejecting(new Error('401 response')).channel,
+        );
 
         const response = await postJson(server.port, UI_ENDPOINTS.updateCheck, {}, server.token);
 
@@ -392,8 +439,8 @@ describe('version check endpoints', () => {
         expect(rpcErrorSchema.parse(await response.json()).error.code).toBe('host_unavailable');
     });
 
-    it('the dev endpoint supplies a version to the fixture server', async () => {
-        const server = await start('fixture-medium');
+    it('dev endpoint injects a version into the fixture server, with the hint from the channel', async () => {
+        const server = await start('fixture-medium', { installDir: '/srv/sherpa/skill' });
 
         const response = await postJson(
             server.port,
@@ -406,10 +453,25 @@ describe('version check endpoints', () => {
         const { update } = uiUpdateCheckResponseSchema.parse(await response.json());
         expect(update?.latest).toBe('9.9.9');
         expect(update?.whatsNew).toBe(LATEST.whatsNew);
+        expect(update?.install).toEqual({ ...INSTALL, dir: '/srv/sherpa/skill' });
     });
 
-    it('the dev endpoint is absent for a hosted prKey', async () => {
-        const server = await start('github-quillmart--quillmart--4821');
+    it('dev endpoint shows no version on a server without an update channel', async () => {
+        const server = await startServer({ updateChannel: null, feedbackChannel: null, prKey: 'fixture-medium', sherpaDir, longPollSeconds: 0.3, hosts: HOSTS });
+        servers.push(server);
+
+        const response = await postJson(
+            server.port,
+            UI_DEV_ENDPOINTS.updateAvailable,
+            { version: '9.9.9', releasedAt: null, whatsNew: null },
+            server.token,
+        );
+
+        expect(uiUpdateCheckResponseSchema.parse(await response.json())).toEqual({ update: null });
+    });
+
+    it('has no dev endpoint for a non-fixture host prKey', async () => {
+        const server = await start('plain-4821');
 
         const response = await postJson(
             server.port,

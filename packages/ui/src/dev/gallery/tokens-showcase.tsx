@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 
 import { type ResolvedTheme, useResolvedTheme } from '../../settings/document-settings.tsx';
 import tokensCss from '../../styles/tokens.css?raw';
+import { EXTRA_STYLE_CSS } from './extra-style-sources.js';
 
 /**
- * Token display: swatches and the typography scale come from `tokens.css` itself, instead of
- * a second list that would eventually drift from the system.
+ * Token display: swatches and the typography scale come from `tokens.css` itself and the CSS
+ * of extra styles in the build, rather than a second list. Otherwise the display would eventually
+ * diverge from the system.
  */
 
 interface TokenGroup {
@@ -38,19 +40,19 @@ function parseGroups(css: string): readonly TokenGroup[] {
 const BASE_RULE = /:root(?:\s*,\s*\[data-theme\])?\s*\{([^}]*)\}/.exec(tokensCss)?.[1] ?? '';
 const GROUPS = parseGroups(BASE_RULE);
 const BASE_VALUES = new Map(GROUPS.flatMap((group) => group.tokens.map((token) => [token.name, token.value])));
-const THEME_VALUES: Readonly<Record<ResolvedTheme, ReadonlyMap<string, string>>> = {
-    dark: themeValues('dark'),
-    light: themeValues('light'),
-    
-    
-};
+/** Cascade in inclusion order: base colour palettes, then extra build styles. */
+const CASCADE_CSS = [tokensCss, ...EXTRA_STYLE_CSS].join('\n').replace(/\/\*[\s\S]*?\*\//g, '');
+const THEME_VALUES = new Map<ResolvedTheme, ReadonlyMap<string, string>>();
 
 /** Applies all rules for the selected theme in order, including blocks shared by both colour palettes. */
 function themeValues(theme: ResolvedTheme): ReadonlyMap<string, string> {
+    const cached = THEME_VALUES.get(theme);
+    if (cached !== undefined) {
+        return cached;
+    }
     const values = new Map<string, string>();
     const selector = new RegExp(`^(?::root)?\\[data-theme=['"]${theme}['"]\\]$`);
-    const css = tokensCss.replace(/\/\*[\s\S]*?\*\//g, '');
-    for (const [, selectors, body] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    for (const [, selectors, body] of CASCADE_CSS.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
         if (!selectors?.split(',').some((candidate) => selector.test(candidate.trim()))) {
             continue;
         }
@@ -60,11 +62,12 @@ function themeValues(theme: ResolvedTheme): ReadonlyMap<string, string> {
             }
         }
     }
+    THEME_VALUES.set(theme, values);
     return values;
 }
 
 function tokenValue(theme: ResolvedTheme, name: string): string {
-    return THEME_VALUES[theme].get(name) ?? BASE_VALUES.get(name) ?? '';
+    return themeValues(theme).get(name) ?? BASE_VALUES.get(name) ?? '';
 }
 
 function isPaint(value: string): boolean {

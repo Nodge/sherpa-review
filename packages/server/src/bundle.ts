@@ -1,10 +1,10 @@
 import path from 'node:path';
 
-import { localVcsOfPrKey, verdictsInstructionSchema } from '@sherpa/protocol';
+import { verdictsInstructionSchema } from '@sherpa/protocol';
 
 import { ServerAlreadyRunningError } from './errors.js';
-import { feedbackOptionsFor } from './feedback-launch.js';
-import { readLocalHostState } from './hosts/local/index.js';
+import { ALL_HOSTS, FEEDBACK_CHANNEL, UPDATE_CHANNEL } from './hosts/all.js';
+import { unconfiguredHostReason } from './hosts/select.js';
 import { formatIdlePeriod, readIdleSeconds } from './idle.js';
 import { readOption } from './launch.js';
 import { readListenHost } from './listen-host.js';
@@ -46,7 +46,7 @@ export async function runServer(argv: readonly string[]): Promise<number> {
     // The process inherits its launcher's cwd, so resolve the state path to an absolute path.
     const sherpaDir = path.resolve(readOption(argv, '--sherpa-dir') ?? DEFAULT_SHERPA_DIR);
 
-    // Only the CLI knows where the distribution is installed. The server compares this version with main.
+    // Only the CLI knows where the distribution was installed. The update channel uses the directory to build its hint.
     const installDir = readOption(argv, '--install-dir');
 
     // Local review: project directory, comparison base, key branch and review outcome instructions. These
@@ -60,11 +60,9 @@ export async function runServer(argv: readonly string[]): Promise<number> {
         writeLog('startup error: --verdicts instructions are empty or exceed the allowed length');
         return 1;
     }
-    if (repo === null && localReviewUnconfigured(prKey, sherpaDir)) {
-        writeLog(
-            `no review host: key ${prKey} is local, but neither --repo nor a saved local-host.json is available. ` +
-                'Run `sherpa up --local <path>` from the project directory',
-        );
+    const unconfigured = unconfiguredHostReason(prKey, { sherpaDir, repo: repo ?? null }, ALL_HOSTS);
+    if (unconfigured !== null) {
+        writeLog(`no review host: ${unconfigured}`);
     }
 
     const idleSeconds = readIdleSeconds(process.env);
@@ -75,6 +73,7 @@ export async function runServer(argv: readonly string[]): Promise<number> {
         server = await startServer({
             prKey,
             sherpaDir,
+            hosts: ALL_HOSTS,
             assets: bundledAssets(UI_ASSETS),
             idleSeconds,
             host,
@@ -82,8 +81,9 @@ export async function runServer(argv: readonly string[]): Promise<number> {
             ...(base === null ? {} : { base }),
             ...(branch === null ? {} : { branch }),
             ...(verdicts === null ? {} : { verdicts }),
+            updateChannel: UPDATE_CHANNEL,
             updateCheck: installDir === null ? {} : { installDir },
-            feedback: feedbackOptionsFor(installDir),
+            feedbackChannel: FEEDBACK_CHANNEL({ installDir }),
             onIdleStop: (seconds) => {
                 writeLog(`idle shutdown: ${formatIdlePeriod(seconds)} without requests or open connections`);
             },
@@ -116,11 +116,6 @@ export async function runServer(argv: readonly string[]): Promise<number> {
     process.once('SIGTERM', stop);
 
     return 0;
-}
-
-/** A local key without a project directory has no host. Explain why to the user. */
-function localReviewUnconfigured(prKey: string, sherpaDir: string): boolean {
-    return localVcsOfPrKey(prKey) !== null && readLocalHostState(sherpaDir, prKey) === null;
 }
 
 function writeLog(text: string): void {

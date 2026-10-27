@@ -31,8 +31,7 @@ import type { ViewingLabel } from '../../iterations/viewing.js';
 import {
     ALL_FILTER_ID,
     buildFileFilters,
-    findFilter,
-    PCI_FILTER_ID,
+    findAuditFilter,
     selectFilter,
     zeroResultText,
 } from '../../filters/lens-filters.js';
@@ -324,7 +323,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         [diff.files, lenses, t],
     );
     const filter = selectFilter(filters, filterId);
-    const pci = findFilter(filters, PCI_FILTER_ID);
+    const audit = findAuditFilter(filters);
 
     const { parseErrors, failedFiles, requestParse, retryParse, retryFailed, expand } = useRouteParse({
         files: diff.files,
@@ -793,10 +792,12 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             <PrHeader
                 pr={pr}
                 counts={prHeaderCounts(diff)}
-                pci={pci?.available === true ? pci : null}
-                pciActive={filter.id === PCI_FILTER_ID}
-                onTogglePci={() => {
-                    changeFilter(filter.id === PCI_FILTER_ID ? ALL_FILTER_ID : PCI_FILTER_ID);
+                audit={audit?.available === true ? audit : null}
+                auditActive={audit !== null && filter.id === audit.id}
+                onToggleAudit={() => {
+                    if (audit !== null) {
+                        changeFilter(filter.id === audit.id ? ALL_FILTER_ID : audit.id);
+                    }
                 }}
                 aside={props.headerAside ?? <SnapshotPill label={pillLabelOf(snapshot)} />}
             />

@@ -8,7 +8,7 @@
  * that is no longer there.
  */
 
-/** The document API the pointer monitor needs. jsdom lacks `elementFromPoint`, so the test supplies it. */
+/** Document subset needed by `PointerTarget`: jsdom has no `elementFromPoint`, so the test supplies its own. */
 export interface PointerDocument {
     readonly elementFromPoint: (x: number, y: number) => Element | null;
     readonly activeElement: Element | null;
@@ -16,13 +16,13 @@ export interface PointerDocument {
     readonly removeEventListener: ListenerBinding;
 }
 
-/** The window API the pointer monitor needs. It only needs to know when the page loses focus. */
+/** Window subset needed by `PointerTarget`: only the page losing focus matters. */
 export interface PointerWindow {
     readonly addEventListener: ListenerBinding;
     readonly removeEventListener: ListenerBinding;
 }
 
-/** The subscription API the pointer monitor needs. Same shape as `EventTarget`, without the event type map. */
+/** Subscription subset needed by `PointerTarget`: the same shape as `EventTarget`, without an event type map. */
 type ListenerBinding = (type: string, listener: EventListener, options?: boolean | AddEventListenerOptions) => void;
 
 export interface PointerTarget {
@@ -76,7 +76,7 @@ export function createPointerTarget(win: PointerWindow, doc: PointerDocument): P
 }
 
 /**
- * Without a pointer monitor (gallery, component tests), the target always comes from focus, matching the behaviour before the
+ * Without cursor tracking (gallery, component tests), the target always follows focus, exactly as it did before the
  * "under the cursor" rule.
  */
 export const FOCUS_ONLY_TARGET: PointerTarget = {

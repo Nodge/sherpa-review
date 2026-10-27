@@ -33,6 +33,7 @@ export function gitVcs(run: CommandRunner): LocalVcs {
 
     return {
         kind: 'git',
+        checkoutLabel: 'a git checkout',
 
         root: async () => (await text(['rev-parse', '--show-toplevel'])).trim(),
 

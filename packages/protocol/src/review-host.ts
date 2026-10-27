@@ -14,9 +14,10 @@ import type {
 
 /**
  * Host adapter interface (`docs/architecture.md §5`, `docs/product.md §4a`). One
- * abstraction with implementations for GitHub, local checkout (git backend)
- * and fixtures for the UI and tests. All host-specific behaviour stays behind this boundary. The core (route, queue, progress,
- * snapshots) knows nothing about the host. Contract tests (`docs/testing.md §3`) run the same suite against every implementation.
+ * abstraction for all hosts: a review service (for example GitHub), a local checkout, a fixture host
+ * for the UI and tests. The server composition root connects implementations.
+ * Host-specific details stay behind this boundary. The core (route, queue, progress, snapshots) knows no host.
+ * The same contract test suite (`docs/testing.md §3`) runs against every implementation.
  */
 export interface ReviewHost {
     getPr(): Promise<PrMeta>;
@@ -139,6 +140,6 @@ export interface ReviewHost {
      */
     ownershipLens(): Promise<Lens | null>;
 
-    /** Additional host lenses (PCI DSS is host-specific). */
+    /** Extra host lenses, such as audit scopes (`Lens.audit`). An empty list if none exist. */
     extraLenses(): Promise<Lens[]>;
 }

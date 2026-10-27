@@ -3,6 +3,8 @@ import { IMAGE_BLOB_MAX_BYTES } from '@sherpa/protocol';
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode, RefObject, SyntheticEvent } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { useReviewHost } from '../app/review-host-context.tsx';
+import { fileWebActionLabel } from '../app/review-state.js';
 import type { Translate } from '../i18n/index.js';
 import { activeT, useT } from '../i18n/index.js';
 import type { BlobLoader } from './blob-loader.tsx';
@@ -357,13 +359,14 @@ function SideColumn({
 /** States without a visible image: loading, 404, endpoint error and size refusal. */
 function SideStatus({ file, model, view }: { file: FileDiff; model: ImageSide; view: SideView }) {
     const t = useT();
+    const reviewHost = useReviewHost();
     if (view.state === 'tooLarge') {
         return (
             <p className="image-card__status">
                 {t('image.tooLarge', formatBytes(model.size, t))}
                 {file.hostFileUrl === null ? null : (
                     <a className="image-card__download" href={file.hostFileUrl} target="_blank" rel="noopener">
-                        {t('image.openAtHost')}
+                        {fileWebActionLabel(reviewHost, t)}
                     </a>
                 )}
             </p>

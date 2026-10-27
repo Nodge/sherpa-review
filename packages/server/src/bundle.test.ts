@@ -14,8 +14,8 @@ import { manifestPathFor } from './paths.js';
 import { get, makeTempSherpaDir, removeTempSherpaDir } from './test-support.js';
 
 /**
- * Fixture host key: this suite tests the process, not the adapter. Live review hosts
- * is forbidden in tests (docs/testing.md). A live-host key would make route warm-up fetch the diff over the network.
+ * Fixture host key: this suite tests the process, not the adapter, and live hosts
+ * are forbidden in tests (docs/testing.md). With a real host key, route warmup would fetch the diff over the network.
  */
 const PR_KEY = 'fixture-medium';
 const TEST_TIMEOUT_MS = 40_000;

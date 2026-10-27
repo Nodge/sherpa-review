@@ -1,32 +1,24 @@
 /**
- * PR key formats (`docs/protocol.md §8`). The key is part of a path under `~/.sherpa`, so it uses
- * the `prKeySchema` alphabet. Its prefix selects the host adapter. The CLI builds keys and the server
- * selects hosts from them. These functions are pure. The protocol has no side effects.
+ * Shared PR key formats (`docs/protocol.md §8`). The key is part of a path in `~/.sherpa`, so it uses
+ * the `prKeySchema` alphabet. The host plugin chooses the key prefix. The CLI builds keys, the server
+ * uses them to select a host. Only what the CLI and server share lives here: the local key structure and the
+ * GitHub key format. Other prefixes are known only to their host plugins.
  */
 
-
-
+/** Shared prefix for local review keys and adapter names. */
+const LOCAL_PREFIX = 'local-';
 
 /**
- * Version control systems for local review. The kind is part of the key (`local-git-…`),
- * allowing the server to select a backend and the CLI and UI to recognize local review without asking the server.
+ * `local-<vcs>-<directory>-<hash>`: working tree of a local checkout. The host plugin names the VCS kind,
+ * which goes in the key. The server uses it to select a backend, the CLI recognizes local review without asking the server.
  */
-export const LOCAL_VCS_KINDS = ['git'] as const;
-export type LocalVcsKind = (typeof LOCAL_VCS_KINDS)[number];
-
-/** `local-<vcs>-<directory>-<hash>`: the working tree of a local checkout. */
-export function localPrKeyPrefix(kind: LocalVcsKind): string {
-    return `local-${kind}-`;
+export function localPrKeyPrefix(vcs: string): string {
+    return `${LOCAL_PREFIX}${vcs}-`;
 }
 
-/** Local adapter name (`SelectedHost.name`, also `uiState.reviewHost`): `local-git`. */
-export function localHostName(kind: LocalVcsKind): string {
-    return `local-${kind}`;
-}
-
-/** VCS kind of a local key. Returns null for keys outside local review. */
-export function localVcsOfPrKey(prKey: string): LocalVcsKind | null {
-    return LOCAL_VCS_KINDS.find((kind) => prKey.startsWith(localPrKeyPrefix(kind))) ?? null;
+/** Local adapter name (`SelectedHost.name`, also `uiState.reviewHost.id`): `local-<vcs>`. */
+export function localHostName(vcs: string): string {
+    return `${LOCAL_PREFIX}${vcs}`;
 }
 
 /**
@@ -52,9 +44,6 @@ const REPO_PATTERN = /^[A-Za-z0-9._-]+$/;
 
 const NUMBER_PATTERN = /^[1-9][0-9]*$/;
 
-/** `https://github.com/<owner>/<repo>/pull/<number>` with any suffix. Scheme and `www.` are optional. */
-const URL_PATTERN = /^(?:https?:\/\/)?(?:www\.)?github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)(?:[/?#].*)?$/;
-
 export function githubPrKey(ref: GithubPrRef): string {
     return `${GITHUB_PR_KEY_PREFIX}${ref.owner}${SEPARATOR}${ref.repo}${SEPARATOR}${String(ref.number)}`;
 }
@@ -75,19 +64,15 @@ export function parseGithubPrKey(key: string): GithubPrRef | null {
         return null;
     }
 
-    return refOf(rest.slice(0, first), rest.slice(first + SEPARATOR.length, last), rest.slice(last + SEPARATOR.length));
+    return githubPrRefOf(
+        rest.slice(0, first),
+        rest.slice(first + SEPARATOR.length, last),
+        rest.slice(last + SEPARATOR.length),
+    );
 }
 
-/** PR address from a github.com URL. Returns null if the URL is not a github.com PR. */
-export function parseGithubPrUrl(url: string): GithubPrRef | null {
-    const found = URL_PATTERN.exec(url.trim());
-    if (found === null) {
-        return null;
-    }
-    return refOf(found[1] ?? '', found[2] ?? '', found[3] ?? '');
-}
-
-function refOf(owner: string, repo: string, number: string): GithubPrRef | null {
+/** PR address from its parts. null means a part does not look like a GitHub name or PR number. */
+export function githubPrRefOf(owner: string, repo: string, number: string): GithubPrRef | null {
     if (!OWNER_PATTERN.test(owner) || !REPO_PATTERN.test(repo) || !NUMBER_PATTERN.test(number)) {
         return null;
     }

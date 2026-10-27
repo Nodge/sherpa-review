@@ -126,7 +126,7 @@ export function createStore(options: StoreOptions): Store {
                 connection?.close();
                 return;
             }
-            update({ ...snapshot, connection: 'online', state, error: null });
+            update({ ...snapshot, connection: 'online', state: keepReviewHost(snapshot.state, state), error: null });
         },
         onProgress: (data) => {
             if (closed || snapshot.connection === 'fatal') {
@@ -214,6 +214,17 @@ export function createStore(options: StoreOptions): Store {
 }
 
 /** `null` means the data failed the protocol schema (fail-closed). */
+/**
+ * The host description arrives as a new object with every snapshot. When unchanged, reuse the previous
+ * object: it holds the `ReviewHostProvider` value, so context consumers do not rerender.
+ */
+function keepReviewHost(previous: UiState | null, next: UiState): UiState {
+    const host = previous?.reviewHost ?? null;
+    return host !== null && JSON.stringify(host) === JSON.stringify(next.reviewHost)
+        ? { ...next, reviewHost: host }
+        : next;
+}
+
 function parseState(data: string): UiState | null {
     let payload: unknown;
     try {

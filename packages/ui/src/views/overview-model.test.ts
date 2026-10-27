@@ -37,6 +37,7 @@ const OWNERSHIP: Lens = {
     paths: ['services/orders/a.ts'],
     available: true,
     note: null,
+    audit: null,
     zones: [
         {
             path: 'services/orders',

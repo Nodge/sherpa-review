@@ -216,7 +216,7 @@ function isProcessAlive(pid: number): boolean {
  * when startup fails. The log has no token: the CLI builds the token link after reading the manifest.
  *
  * `--install-dir` is the distribution directory (parent of `bin/`). Only the
- * CLI, and the server needs it to check for a newer version in main.
+ * CLI knows where the skill is installed, and the server needs it for update instructions.
  */
 async function spawnDaemon(
     entry: string,
