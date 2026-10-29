@@ -256,7 +256,8 @@ describe('medium fixture route', () => {
         }
     });
 
-    it('stop text is filled using the formula', () => {
+    it('fills stop texts according to the formula', () => {
+        // Text language is not checked here: model texts and server strings in the fixture use different languages.
         for (const stop of snapshot.stops) {
             expect(stop.title).toMatch(/\p{L}/u);
             if (stop.id === 'other') {

@@ -1092,7 +1092,8 @@ describe('regeneration after a push: what changed context', () => {
             ],
         });
         servers.push(server);
-        server.workerRegistry.register(WORKER, 'claude-code', 'opus-5');
+        // The agent selects English: reviewer annotations are checked against the English server strings.
+        server.workerRegistry.register(WORKER, 'claude-code', 'opus-5', 'en');
         await server.route.warmup();
         return server;
     }

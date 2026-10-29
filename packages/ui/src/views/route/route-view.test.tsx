@@ -283,7 +283,7 @@ describe('route view', () => {
     it('a high stop gets a badge and a numbered region role', () => {
         const html = render();
 
-        expect(html).toContain('aria-label="Stop 01 of 7 — The edit window became a domain concept"');
+        expect(html).toContain(`aria-label="${t('route.stop.aria', '01', 7, titleOf('s01'))}"`);
         expect(html).toContain('>high<');
     });
 
@@ -295,7 +295,8 @@ describe('route view', () => {
         expect(head).toContain('<code class="md-code">EditWindow</code>');
         expect(head).not.toContain('`');
         // The same title in the region announcement has no markup at all.
-        expect(html).toContain('aria-label="Stop 02 of 7 — Policy decides by EditWindow, not by the clock"');
+        expect(titleOf('s02')).toContain('`EditWindow`');
+        expect(html).toContain(`aria-label="${t('route.stop.aria', '02', 7, titleOf('s02').replaceAll('`', ''))}"`);
         // Digest assertions use the same rendering rules.
         expect(section(html, 's04')).toContain('<code class="md-code">dispatch</code>');
     });
@@ -551,7 +552,7 @@ describe('route view', () => {
         expect(count(footer, 'digest__chip--uncovered')).toBe(2);
         expect(stop).toContain('2 assertions dropped — the anchor found no test');
         // The footer count is the only mention. A filled stop does not render the validator note.
-        expect(stop).not.toContain('Two assertions dropped: the anchor led to');
+        expect(stop).not.toContain('2 claims dropped: the anchor pointed at');
     });
 
     it('an anchor without a route target explains why it cannot be clicked', () => {
@@ -676,6 +677,15 @@ describe('route view', () => {
         expect(stop).not.toContain('handlers.ts');
     });
 });
+
+/** Fixture stop title. Model text is checked against the data, without a copy in the test. */
+function titleOf(stopId: string): string {
+    const stop = SNAPSHOT.stops.find((candidate) => candidate.id === stopId);
+    if (stop === undefined) {
+        throw new Error(`fixture has no stop ${stopId}`);
+    }
+    return stop.title;
+}
 
 /** Markup for one stop, from its `data-stop` to the next one. */
 function section(html: string, stopId: string): string {

@@ -268,6 +268,8 @@ describe('"Other" outside the route view', () => {
 
         // The model left uncovered lines in the medium fixture. "Other" is the seventh stop.
         expect(title()).toBe('Route ready · 7 stops');
-        expect(mounted.host.querySelector('.gen-plan')?.textContent).toContain('Other');
+        expect(mounted.host.querySelector('.gen-plan')?.textContent).toContain(
+            'Other — lines the model did not place',
+        );
     });
 });

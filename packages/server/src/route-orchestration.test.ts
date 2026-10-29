@@ -82,10 +82,14 @@ describe('route orchestration', () => {
         return server;
     }
 
-    /** Connect the agent and warm up deterministically: tests need not wait for the warmup timer. */
+    /**
+     * Connected agent plus deterministic warmup: tests have no reason to wait for the warmup timer.
+     * The agent specifies English: these tests do not care about the generation language, and the server strings
+     * in the fixture are English. The locale fallback test checks Russian as the default.
+     */
     async function startWithWorker(prKey: string = MEDIUM_PR): Promise<SherpaServer> {
         const server = await start(prKey);
-        server.workerRegistry.register(WORKER, 'claude-code', 'opus-5');
+        server.workerRegistry.register(WORKER, 'claude-code', 'opus-5', 'en');
         await server.route.warmup();
         return server;
     }
@@ -101,7 +105,7 @@ describe('route orchestration', () => {
             hosts: [hostPluginOf({ name: 'fixture', ui: fixtureHostPlugin.ui, host })],
         });
         servers.push(server);
-        server.workerRegistry.register(WORKER, 'claude-code', 'opus-5');
+        server.workerRegistry.register(WORKER, 'claude-code', 'opus-5', 'en');
         await server.route.warmup();
         return server;
     }
@@ -272,7 +276,7 @@ describe('route orchestration', () => {
     it('re-registering the agent and repeating warmup creates no duplicates', async () => {
         const server = await startWithWorker();
 
-        server.workerRegistry.register(WORKER, 'claude-code', 'opus-5');
+        server.workerRegistry.register(WORKER, 'claude-code', 'opus-5', 'en');
         server.workerRegistry.register('another-session', 'codex');
         await server.route.warmup();
         await server.route.warmup();
@@ -315,7 +319,7 @@ describe('route orchestration', () => {
         expect(ready.snapshot?.summary).toBe(mediumReadySnapshot().summary);
         expect(ready.snapshot?.tourOrder).toEqual(mediumReadySnapshot().tourOrder);
         expect(ready.snapshot?.contentHash).toMatch(/^[0-9a-f]{12}$/);
-        expect(ready.snapshot?.provenance).toEqual({ harness: 'claude-code', model: 'opus-5', locale: 'ru' });
+        expect(ready.snapshot?.provenance).toEqual({ harness: 'claude-code', model: 'opus-5', locale: 'en' });
         expect(ready.snapshot?.commit).toBe(mediumReadySnapshot().commit);
     });
 
@@ -380,7 +384,7 @@ describe('route orchestration', () => {
 
         const route = (await readRoute(server)).route;
         expect(route.phase).toBe('failed');
-        expect(route.failure?.message).toContain('Агент не построил план маршрута');
+        expect(route.failure?.message).toContain('The agent did not plan the route');
         expect(route.failure?.rawOutput).toBe(broken);
         expect(route.snapshot).toBeNull();
     });
@@ -443,7 +447,7 @@ describe('route orchestration', () => {
             hosts: [fixtureHostPlugin],
         });
         servers.push(server);
-        server.workerRegistry.register(WORKER, 'claude-code', 'opus-5');
+        server.workerRegistry.register(WORKER, 'claude-code', 'opus-5', 'en');
         await server.route.warmup();
         completeTask(server, routeTasks(server, 'route.skeleton')[0] ?? 0, mediumRawResults().skeleton);
 
@@ -1093,7 +1097,7 @@ describe('route orchestration', () => {
         expect(routeTasks(server, 'route.skeleton')).toHaveLength(MAX_SKELETON_TASKS);
         const route = (await readRoute(server)).route;
         expect(route.phase).toBe('failed');
-        expect(route.failure?.message).toContain('не смог применить');
+        expect(route.failure?.message).toContain('never managed to apply the result');
         expect(route.failure?.rawOutput).toBe(raw);
     });
 
@@ -1117,7 +1121,7 @@ describe('route orchestration', () => {
             hosts: [hostPluginOf({ name: 'fixture', ui: fixtureHostPlugin.ui, host: broken })],
         });
         servers.push(second);
-        second.workerRegistry.register(WORKER, 'claude-code', 'opus-5');
+        second.workerRegistry.register(WORKER, 'claude-code', 'opus-5', 'en');
         await second.route.warmup();
 
         const raw = asRawText(mediumRawResults().skeleton);
@@ -1336,7 +1340,7 @@ describe('route orchestration', () => {
 
         const first = uiRouteEventSchema.parse(JSON.parse((await nextRoute(stream)).data));
 
-        server.workerRegistry.register(WORKER, 'claude-code', 'opus-5');
+        server.workerRegistry.register(WORKER, 'claude-code', 'opus-5', 'en');
         await server.route.warmup();
 
         const afterStart = uiRouteEventSchema.parse(JSON.parse((await nextRoute(stream)).data));

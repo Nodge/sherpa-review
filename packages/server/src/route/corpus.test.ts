@@ -458,6 +458,10 @@ describe('route validator: negative corpus', () => {
     }
 });
 
+/**
+ * Reviewer notes here deliberately use the Russian generation locale (this file's `validateSection` default)
+ * to check the wording and number forms in the Russian table in `route/strings.ts`.
+ */
 describe('route validator: reduced functionality', () => {
     it('accepts JSON in a markdown fence', () => {
         for (const opening of ['```json', '```']) {

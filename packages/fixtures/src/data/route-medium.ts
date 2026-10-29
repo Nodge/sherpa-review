@@ -33,6 +33,10 @@ import { MEDIUM_BASE_COMMIT, MEDIUM_DIFF_ID, MEDIUM_HEAD_COMMIT } from './medium
  *
  * An anchor covers only changed lines on one side. Its range contains no context,
  * so a file with small edits has many anchors (one per contiguous edit).
+ *
+ * Server strings (the "Other" title and validator notes) are English, as in generation with `en`:
+ * tests compare the fixture with the live pipeline in the English locale, so the fixture
+ * does not depend on Russian server strings.
  */
 
 export const SNAPSHOT_ID = 'route-medium-9f3c1ab';
@@ -406,7 +410,7 @@ export function otherStop(): RouteStop {
         id: 'other',
         planIndex: MODEL_STOPS.length + 1,
         tier: 'other',
-        title: 'Other: the model did not place these lines',
+        title: 'Other — lines the model did not place',
         status: 'ready',
         paragraph: null,
         bridge: null,

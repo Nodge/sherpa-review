@@ -25,10 +25,13 @@ import { bannedPhrases } from './voice.js';
  * End-to-end golden test: raw fixture model outputs → validator → completed snapshot stops.
  * The fixture and the live pipeline must agree verbatim. Otherwise the gallery, e2e and UI see
  * one set of data while the server builds another.
+ *
+ * Generation uses `en` here. The language does not matter to the golden test, and fixture server strings are English.
+ * Tests that explicitly name the `ru` locale check Russian server strings.
  */
 
 function planStops(): RouteStop[] {
-    const skeleton = validateSkeleton(asRawText(mediumRawResults().skeleton));
+    const skeleton = validateSkeleton(asRawText(mediumRawResults().skeleton), 'en');
     if (!skeleton.ok) {
         throw new Error(`fixture skeleton rejected: ${skeleton.errors.join(' | ')}`);
     }
@@ -45,7 +48,7 @@ function merge(stops: readonly RouteStop[], fillings: readonly RouteStopFilling[
 }
 
 function fill(stops: RouteStop[], section: RouteSectionResult, allowed: readonly number[]): RouteStop[] {
-    const result = validateSection(asRawText(section), stops, allowed, mediumDiff());
+    const result = validateSection(asRawText(section), stops, allowed, mediumDiff(), { locale: 'en' });
     if (!result.ok) {
         throw new Error(`section rejected: ${result.errors.join(' | ')}`);
     }
@@ -57,7 +60,7 @@ describe('route validator: end-to-end golden test on the medium fixture', () => 
     const snapshot = mediumReadySnapshot();
 
     it('expands the skeleton into a snapshot plan with ids, tiers, "Other" and tour order', () => {
-        const skeleton = validateSkeleton(asRawText(raw.skeleton));
+        const skeleton = validateSkeleton(asRawText(raw.skeleton), 'en');
         expect(skeleton.ok).toBe(true);
         if (!skeleton.ok) {
             return;
@@ -106,7 +109,7 @@ describe('route validator: end-to-end golden test on the medium fixture', () => 
 
     it('stop 04 digest: 12 accepted assertions, 2 dropped and a Russian reviewer note', () => {
         const section = raw.sections.find((candidate) => candidate.stops[0]?.planIndex === 4);
-        const result = validateSection(asRawText(section), planStops(), [4], mediumDiff());
+        const result = validateSection(asRawText(section), planStops(), [4], mediumDiff(), { locale: 'ru' });
         expect(result.ok).toBe(true);
         if (!result.ok) {
             return;
@@ -157,7 +160,7 @@ describe('route validator: second pass after a push', () => {
     }
 
     function planV2(): RouteStop[] {
-        const skeleton = validateSkeleton(asRawText(mediumRawResultsV2().skeleton));
+        const skeleton = validateSkeleton(asRawText(mediumRawResultsV2().skeleton), 'en');
         if (!skeleton.ok) {
             throw new Error(`second-pass skeleton rejected: ${skeleton.errors.join(' | ')}`);
         }
@@ -170,7 +173,10 @@ describe('route validator: second pass after a push', () => {
         allowed: readonly number[],
         context: SectionContext,
     ): RouteStop[] {
-        const result = validateSection(asRawText(section), stops, allowed, mediumDiffV2(), context);
+        const result = validateSection(asRawText(section), stops, allowed, mediumDiffV2(), {
+            ...context,
+            locale: 'en',
+        });
         if (!result.ok) {
             throw new Error(`second-pass section rejected: ${result.errors.join(' | ')}`);
         }
@@ -301,7 +307,10 @@ describe('route validator: second pass after a push', () => {
         allowed: readonly number[],
         context: SectionContext,
     ): RouteStopFilling[] {
-        const result = validateSection(asRawText(section), planV2(), allowed, mediumDiffV2(), context);
+        const result = validateSection(asRawText(section), planV2(), allowed, mediumDiffV2(), {
+            ...context,
+            locale: 'en',
+        });
         if (!result.ok) {
             throw new Error(`section rejected: ${result.errors.join(' | ')}`);
         }
