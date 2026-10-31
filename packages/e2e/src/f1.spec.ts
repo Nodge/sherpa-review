@@ -241,7 +241,7 @@ async function expectHalfFilled(page: Page): Promise<void> {
     // 3 stops submitted, the fourth is leased and filling. 05 and 06 are still queued.
     await expect(page.locator('.route-skeleton-card')).toHaveCount(3);
     // The Markdown renderer consumes model backticks. `EditWindow` appears as monospace code without backticks.
-    await expect(stop(page, 's01')).toContainText('The EditWindow class and an injectable time source have been added');
+    await expect(stop(page, 's01')).toContainText('The new EditWindow class uses an injectable time source');
     await expect(stop(page, 's01').locator('.route-stop__paragraph code.md-code').first()).toHaveText('EditWindow');
     await expect(stop(page, 's04')).toContainText('The agent has not filled this stop yet');
     await expect(page.locator('.coverage__legend-text')).toHaveText('coverage known after the plan');
@@ -260,7 +260,7 @@ async function expectHalfFilled(page: Page): Promise<void> {
  */
 async function expectSummary(page: Page): Promise<void> {
     await expect(page.locator('.overview-card__text').first()).toContainText(
-        'The PR introduces a 30-minute editing window',
+        'The PR introduces a 30-minute edit window',
     );
     await expect(page.locator('.summary-card__provenance')).toBeVisible();
 }

@@ -34,6 +34,6 @@ test('route: a failed stop is filled without regenerating the whole route', asyn
 
     await expect(fill).toHaveCount(0);
     await expect(firstStop.locator('.route-stop__badge--queued')).toHaveCount(0);
-    await expect(firstStop).toContainText('The EditWindow class was added');
+    await expect(firstStop).toContainText('The new EditWindow class uses an injectable time source');
     await expect(page.locator('.route-skeleton-card')).toHaveCount(0);
 });
