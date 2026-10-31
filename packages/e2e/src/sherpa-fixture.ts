@@ -13,7 +13,7 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
 const SERVER_DIR = path.join(REPO_ROOT, 'packages/server');
 const UI_DIST = path.join(REPO_ROOT, 'packages/ui/dist');
 /** `global-setup` builds the CLI bundle. The fake worker uses the same artifact as production. */
-const CLI_BUNDLE = path.join(REPO_ROOT, 'packages/cli/dist/sherpa.mjs');
+const CLI_BUNDLE = path.join(REPO_ROOT, 'packages/cli/dist/sherpa-review.mjs');
 const START_TIMEOUT_MS = 20_000;
 const STOP_TIMEOUT_MS = 10_000;
 
@@ -67,7 +67,7 @@ export const test = base.extend<SherpaFixtures>({
 
 export { expect };
 
-/** Server bearer token, stored in the fragment of the URL printed by `sherpa up`. */
+/** Server bearer token, stored in the fragment of the URL printed by `sherpa-review up`. */
 export function sherpaToken(server: SherpaServerHandle): string {
     const token = new URLSearchParams(new URL(server.url).hash.slice(1)).get('t');
     if (token === null || token === '') {

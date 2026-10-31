@@ -2,9 +2,9 @@
 
 Sherpa skill package for harnesses (`docs/architecture.md §1`). The distribution is the `dist/` directory: a copy of `SKILL.md` with session instructions, plus the CLI and server module in `dist/bin/`. Nothing at runtime reads the repository checkout or calls pnpm.
 
-- `SKILL.md` describes what the harness does: determine the PR key, run `sherpa up` (which starts the server and registers the session as a worker), give the reviewer the UI link and run the `sherpa worker next` loop (`docs/protocol.md §3, §7`).
-- `dist/bin/sherpa.mjs` is the only command, a thin CLI without the server or UI. The worker loop calls it on every request, so startup must stay fast.
-- `dist/bin/sherpa-server.mjs` is the PR server module with embedded UI assets, not an executable. Only `sherpa server` loads it with `import()`. This is the process `sherpa up` daemonizes as `node <bin directory>/sherpa.mjs server …`. Override the module path with `SHERPA_SERVER_BIN`.
+- `SKILL.md` describes what the harness does: determine the PR key, run `sherpa-review up` (which starts the server and registers the session as a worker), give the reviewer the UI link and run the `sherpa-review worker next` loop (`docs/protocol.md §3, §7`).
+- `dist/bin/sherpa-review.mjs` is the only command, a thin CLI without the server or UI. The worker loop calls it on every request, so startup must stay fast.
+- `dist/bin/sherpa-review-server.mjs` is the PR server module with embedded UI assets, not an executable. Only `sherpa-review server` loads it with `import()`. This is the process `sherpa-review up` daemonizes as `node <bin directory>/sherpa-review.mjs server …`. Override the module path with `SHERPA_SERVER_BIN`.
 
 The entire `dist/` directory is a build artifact and is not stored in git.
 
@@ -15,7 +15,7 @@ pnpm --filter @sherpa/skill build
 
 Building the skill builds the server module and CLI and assembles the distribution in `dist/`. The chain does not build the UI: the server module embeds `packages/ui/dist` and fails with instructions if the UI has not been built.
 
-To install in a harness, symlink the distribution: `~/.claude/skills/sherpa` → `<repo>/packages/skill/dist`. You can also copy the directory anywhere. It is self-contained.
+To install in a harness, symlink the distribution: `~/.claude/skills/sherpa-review` → `<repo>/packages/skill/dist`. You can also copy the directory anywhere. It is self-contained.
 
 ## Release
 
@@ -23,6 +23,6 @@ To install in a harness, symlink the distribution: `~/.claude/skills/sherpa` →
 pnpm release --notes "<phrase>" [--target <directory>] [--skip-build]
 ```
 
-`scripts/release.mjs` builds the chain, checks `sherpa --version` and `dist/version.json` against the root `package.json` version (the single source) and recreates `skill/` in the target directory. The default target is the repository root: the distribution sits beside the source and is committed together with it. Use `--target` for runs in a separate directory.
+`scripts/release.mjs` builds the chain, checks `sherpa-review --version` and `dist/version.json` against the root `package.json` version (the single source) and recreates `skill/` in the target directory. The default target is the repository root: the distribution sits beside the source and is committed together with it. Use `--target` for runs in a separate directory.
 
 `--notes` is required: the update toast shows this one "what is new" sentence, which goes into the published `skill/version.json` with the release date. The distribution README is the repository's root `README.md`. The release does not copy it, only checks that it contains the version number. The script does not call `git`. It prints `git add skill` and `git commit` for you to run manually.

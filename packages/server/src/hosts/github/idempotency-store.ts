@@ -94,7 +94,7 @@ function write(filePath: string, entries: ReadonlyMap<string, string>): void {
     } catch (error) {
         fs.rmSync(temporary, { force: true });
         process.stderr.write(
-            `sherpa-server: could not write the GitHub draft retry map: ${messageOf(error)}\n`,
+            `sherpa-review-server: could not write the GitHub draft retry map: ${messageOf(error)}\n`,
         );
     }
 }

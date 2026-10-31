@@ -15,15 +15,15 @@ import { startServer } from './server.js';
 import { bundledAssets } from './static.js';
 import { UI_ASSETS } from './ui-assets.js';
 
-// The model may read the `sherpa` CLI subcommand output, so it is in English.
+// The model may read the `sherpa-review` CLI subcommand output, so it is in English.
 const USAGE =
-    'Usage: sherpa server --pr <PR key> [--sherpa-dir <path>] [--install-dir <path>] ' +
+    'Usage: sherpa-review server --pr <PR key> [--sherpa-dir <path>] [--install-dir <path>] ' +
     '[--repo <project dir>] [--base <ref>] [--branch <branch>] [--verdicts <instruction>] ' +
-    '(started by `sherpa up`, not meant to be run by hand)';
+    '(started by `sherpa-review up`, not meant to be run by hand)';
 
 /**
- * Foreground server process for one PR. Importing `sherpa-server.mjs` runs nothing:
- * the CLI calls `runServer` in `sherpa server`, the process daemonized by `sherpa up`. Logging and
+ * Foreground server process for one PR. Importing `sherpa-review-server.mjs` runs nothing:
+ * the CLI calls `runServer` in `sherpa-review server`, the process daemonized by `sherpa-review up`. Logging and
  * waiting for the manifest belong to `up`. This is just the server, which lives until SIGINT/SIGTERM or
  * the idle threshold (`idle.ts`). The UI is embedded in the bundle and served from memory (docs/protocol.md §2).
  *
@@ -50,7 +50,7 @@ export async function runServer(argv: readonly string[]): Promise<number> {
     const installDir = readOption(argv, '--install-dir');
 
     // Local review: project directory, comparison base, key branch and review outcome instructions. These
-    // come from `sherpa up --local`. Restarting the daemon uses the key's saved state.
+    // come from `sherpa-review up --local`. Restarting the daemon uses the key's saved state.
     const repo = readOption(argv, '--repo');
     const base = readOption(argv, '--base');
     const branch = readOption(argv, '--branch');
@@ -119,7 +119,7 @@ export async function runServer(argv: readonly string[]): Promise<number> {
 }
 
 function writeLog(text: string): void {
-    process.stdout.write(`${new Date().toISOString()} sherpa-server: ${text}\n`);
+    process.stdout.write(`${new Date().toISOString()} sherpa-review-server: ${text}\n`);
 }
 
 function messageOf(error: unknown): string {

@@ -181,7 +181,7 @@ export class IterationStore {
             return prDiffSchema.parse(JSON.parse(row.diff_json) as unknown);
         } catch (error) {
             process.stderr.write(
-                `sherpa-server: slice cache ${base}→${head} is corrupt (${messageOf(error)}), recomputing\n`,
+                `sherpa-review-server: slice cache ${base}→${head} is corrupt (${messageOf(error)}), recomputing\n`,
             );
             return null;
         }
@@ -211,7 +211,7 @@ export class IterationStore {
             };
         } catch (error) {
             process.stderr.write(
-                `sherpa-server: stored iteration ${row.diff_id} is corrupt (${messageOf(error)}), skipped\n`,
+                `sherpa-review-server: stored iteration ${row.diff_id} is corrupt (${messageOf(error)}), skipped\n`,
             );
             return null;
         }
@@ -237,13 +237,13 @@ export async function rememberIterationDiff(
         if (iteration === undefined) {
             // The author pushed a new diff while this one was loading: the host no longer lists this iteration metadata.
             process.stderr.write(
-                `sherpa-server: iteration ${diff.diffId} is absent from the host list, patch not saved\n`,
+                `sherpa-review-server: iteration ${diff.diffId} is absent from the host list, patch not saved\n`,
             );
             return;
         }
         store.upsert(diff, iteration);
     } catch (error) {
-        process.stderr.write(`sherpa-server: iteration patch not saved: ${messageOf(error)}\n`);
+        process.stderr.write(`sherpa-review-server: iteration patch not saved: ${messageOf(error)}\n`);
     }
 }
 

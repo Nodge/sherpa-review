@@ -35,7 +35,7 @@ export function checkNodeVersion(version: string | undefined): string | null {
     const required = `${String(MIN_NODE_MAJOR)}.${String(MIN_NODE_MINOR)}`;
 
     return [
-        `sherpa: Node ${required} or newer is required (in the 23 line — from 23.4 on), ` +
+        `sherpa-review: Node ${required} or newer is required (in the 23 line — from 23.4 on), ` +
             `but Node ${version ?? 'of an unknown version'} is running.`,
         `Update Node (for example, nvm install ${required}) and run the command again.`,
     ].join('\n');

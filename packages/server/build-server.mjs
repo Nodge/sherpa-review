@@ -10,7 +10,7 @@ const root = dirname(fileURLToPath(import.meta.url));
 const version = JSON.parse(readFileSync(resolve(root, '../../package.json'), 'utf8')).version;
 const uiDist = resolve(root, '../ui/dist');
 const assetsModule = resolve(root, 'src/ui-assets.ts');
-const outfile = resolve(root, 'dist/sherpa-server.mjs');
+const outfile = resolve(root, 'dist/sherpa-review-server.mjs');
 
 let assets;
 try {
@@ -24,7 +24,7 @@ try {
 /**
  * Server module: one self-contained ESM file with embedded UI assets. No native dependencies:
  * storage uses the built-in `node:sqlite`, so the entire server bundles into one file (docs/protocol.md §2).
- * The file is not executable: the CLI loads it with `import()` in `sherpa server` and calls the `runServer` export.
+ * The file is not executable: the CLI loads it with `import()` in `sherpa-review server` and calls the `runServer` export.
  */
 await build({
     entryPoints: [resolve(root, 'src/bundle.ts')],

@@ -210,7 +210,7 @@ export class RouteOrchestrator {
     private warmupInBackground(): void {
         void this.warmup().catch((error: unknown) => {
             const message = error instanceof Error ? error.message : String(error);
-            process.stderr.write(`sherpa-server: route warmup failed: ${message}\n`);
+            process.stderr.write(`sherpa-review-server: route warmup failed: ${message}\n`);
         });
     }
 
@@ -229,7 +229,7 @@ export class RouteOrchestrator {
             diff = await this.loadDiff();
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            process.stderr.write(`sherpa-server: route not warmed up, diff unavailable: ${message}\n`);
+            process.stderr.write(`sherpa-review-server: route not warmed up, diff unavailable: ${message}\n`);
             return;
         }
         if (this.isClosed()) {
@@ -462,7 +462,7 @@ export class RouteOrchestrator {
         } catch (error) {
             // Reconciliation runs in a queue subscriber. An exception would break another operation.
             const message = error instanceof Error ? error.message : String(error);
-            process.stderr.write(`sherpa-server: route reconciliation failed: ${message}\n`);
+            process.stderr.write(`sherpa-review-server: route reconciliation failed: ${message}\n`);
         } finally {
             this.reconciling = false;
         }
@@ -592,7 +592,7 @@ export class RouteOrchestrator {
         const diff = this.diffOf(snapshot.diffId);
         if (map === null || diff === null) {
             process.stderr.write(
-                `sherpa-server: cannot carry over marks: no interdiff ${previous.diffId}→${snapshot.diffId}\n`,
+                `sherpa-review-server: cannot carry over marks: no interdiff ${previous.diffId}→${snapshot.diffId}\n`,
             );
             const keptBefore = snapshot.carried?.kept ?? 0;
             // A missing slice matters only where there were marks to carry over.
@@ -614,7 +614,7 @@ export class RouteOrchestrator {
             afterCommit: () => {
                 carried.afterCommit();
                 process.stderr.write(
-                    `sherpa-server: snapshot ${snapshot.snapshotId}: carried over ${String(kept)} of ` +
+                    `sherpa-review-server: snapshot ${snapshot.snapshotId}: carried over ${String(kept)} of ` +
                         `${String(total)} stops from ${previous.snapshotId}` +
                         `${zeroCarryNote(zeroReason)}\n`,
                 );
@@ -723,7 +723,7 @@ export class RouteOrchestrator {
             };
         } catch (error) {
             process.stderr.write(
-                `sherpa-server: could not fetch slice ${previous.diffId}→${diff.diffId}: ${messageOf(error)}\n`,
+                `sherpa-review-server: could not fetch slice ${previous.diffId}→${diff.diffId}: ${messageOf(error)}\n`,
             );
             return { ...(await base()), map: null, interdiff: null };
         }
@@ -739,7 +739,7 @@ export class RouteOrchestrator {
             return await host.getThreads();
         } catch (error) {
             process.stderr.write(
-                `sherpa-server: could not fetch threads for regeneration context: ${messageOf(error)}\n`,
+                `sherpa-review-server: could not fetch threads for regeneration context: ${messageOf(error)}\n`,
             );
             return null;
         }
@@ -1054,7 +1054,7 @@ export class RouteOrchestrator {
                         (value) => value,
                         (error: unknown): Iteration[] => {
                             process.stderr.write(
-                                `sherpa-server: could not fetch iteration list: ${messageOf(error)}\n`,
+                                `sherpa-review-server: could not fetch iteration list: ${messageOf(error)}\n`,
                             );
                             return [];
                         },
@@ -1092,7 +1092,7 @@ export class RouteOrchestrator {
         const listed = iterations.find((candidate) => candidate.diffId === diff.diffId);
         if (listed === undefined) {
             process.stderr.write(
-                `sherpa-server: host did not list iteration ${diff.diffId}, reconstructed its metadata from the diff\n`,
+                `sherpa-review-server: host did not list iteration ${diff.diffId}, reconstructed its metadata from the diff\n`,
             );
         }
         const iteration: Iteration = listed ?? {
@@ -1106,7 +1106,7 @@ export class RouteOrchestrator {
             store.upsert(diff, iteration);
         } catch (error) {
             process.stderr.write(
-                `sherpa-server: iteration patch ${diff.diffId} not saved: ${messageOf(error)}\n`,
+                `sherpa-review-server: iteration patch ${diff.diffId} not saved: ${messageOf(error)}\n`,
             );
         }
     }

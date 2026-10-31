@@ -14,10 +14,10 @@ import { ensureServer, hasExited, loadServerModule, resolveServerBin, terminateC
 const PR_KEY = 'pr-777';
 
 /**
- * Bundled CLI (`src/bundle.global-setup.ts`): the daemon is the same CLI running `sherpa server`, so
+ * Bundled CLI (`src/bundle.global-setup.ts`): the daemon is the same CLI running `sherpa-review server`, so
  * the test spawns the real bundle and replaces only the server module.
  */
-const CLI_BUNDLE = path.resolve(import.meta.dirname, '..', 'dist', 'sherpa.mjs');
+const CLI_BUNDLE = path.resolve(import.meta.dirname, '..', 'dist', 'sherpa-review.mjs');
 
 /** Short manifest wait: failure cases should not cost ten seconds per test. */
 const STARTUP_TIMEOUT_MS = 1_500;
@@ -31,8 +31,8 @@ describe('server module discovery', () => {
         workDir = await fs.mkdtemp(path.join(os.tmpdir(), 'sherpa-bin-'));
         binDir = path.join(workDir, 'skill', 'bin');
         await fs.mkdir(binDir, { recursive: true });
-        await fs.writeFile(path.join(binDir, 'sherpa.mjs'), '// CLI\n');
-        await fs.writeFile(path.join(binDir, 'sherpa-server.mjs'), '// server\n');
+        await fs.writeFile(path.join(binDir, 'sherpa-review.mjs'), '// CLI\n');
+        await fs.writeFile(path.join(binDir, 'sherpa-review-server.mjs'), '// server\n');
     });
 
     afterEach(async () => {
@@ -40,23 +40,23 @@ describe('server module discovery', () => {
     });
 
     it('uses the adjacent file next to the CLI itself', async () => {
-        await expect(resolveServerBin(path.join(binDir, 'sherpa.mjs'), undefined)).resolves.toBe(
-            path.join(await fs.realpath(binDir), 'sherpa-server.mjs'),
+        await expect(resolveServerBin(path.join(binDir, 'sherpa-review.mjs'), undefined)).resolves.toBe(
+            path.join(await fs.realpath(binDir), 'sherpa-review-server.mjs'),
         );
     });
 
     it('finds the module through a symlink to the skill directory', async () => {
-        // This is how the skill is installed: `~/.claude/skills/sherpa -> <distribution>`.
+        // This is how the skill is installed: `~/.claude/skills/sherpa-review -> <distribution>`.
         const link = path.join(workDir, 'skills-sherpa');
         await fs.symlink(path.join(workDir, 'skill'), link, 'dir');
 
-        await expect(resolveServerBin(path.join(link, 'bin', 'sherpa.mjs'), undefined)).resolves.toBe(
-            path.join(await fs.realpath(binDir), 'sherpa-server.mjs'),
+        await expect(resolveServerBin(path.join(link, 'bin', 'sherpa-review.mjs'), undefined)).resolves.toBe(
+            path.join(await fs.realpath(binDir), 'sherpa-review-server.mjs'),
         );
     });
 
     it('reports an incomplete distribution when the adjacent server is missing', async () => {
-        const lonely = path.join(workDir, 'sherpa.mjs');
+        const lonely = path.join(workDir, 'sherpa-review.mjs');
         await fs.writeFile(lonely, '// CLI\n');
 
         await expect(resolveServerBin(lonely, undefined)).rejects.toThrow('skill distribution is incomplete');
@@ -74,9 +74,9 @@ describe('server module discovery', () => {
         const custom = path.join(workDir, 'custom-server.mjs');
         await fs.writeFile(custom, '// server\n');
 
-        await expect(resolveServerBin(path.join(binDir, 'sherpa.mjs'), custom)).resolves.toBe(custom);
+        await expect(resolveServerBin(path.join(binDir, 'sherpa-review.mjs'), custom)).resolves.toBe(custom);
         await expect(
-            resolveServerBin(path.join(binDir, 'sherpa.mjs'), path.join(workDir, 'nonexistent.mjs')),
+            resolveServerBin(path.join(binDir, 'sherpa-review.mjs'), path.join(workDir, 'nonexistent.mjs')),
         ).rejects.toThrow('SHERPA_SERVER_BIN');
     });
 
@@ -137,7 +137,7 @@ describe('server startup in `up`', () => {
     async function fakeServer(body: string): Promise<string> {
         const binDir = path.join(workDir, 'skill', 'bin');
         await fs.mkdir(binDir, { recursive: true });
-        const file = path.join(binDir, 'sherpa-server.mjs');
+        const file = path.join(binDir, 'sherpa-review-server.mjs');
         await fs.writeFile(file, `export async function runServer(argv) {\n${body}\nreturn 0;\n}\n`);
         return file;
     }
@@ -238,7 +238,7 @@ describe('server startup in `up`', () => {
         expect(result.started).toBe(true);
     });
 
-    it('runs the same CLI as `sherpa server` and passes the server module in SHERPA_SERVER_BIN', async () => {
+    it('runs the same CLI as `sherpa-review server` and passes the server module in SHERPA_SERVER_BIN', async () => {
         const recording = `
             const fsSync = await import('node:fs');
             const sherpaDirArg = argv[argv.indexOf('--sherpa-dir') + 1];

@@ -22,11 +22,11 @@ These must pass before every commit. E2E is outside the required checks. `packag
 
 `packages/protocol` contains zod schemas and types for everything that crosses a process boundary: worker tasks and messages, the UI snapshot, route, chat, server manifest, `ReviewHost` interface and protocol version. Its only dependency is `zod`. Every other package depends on it.
 
-`packages/server` runs the server for one PR: HTTP and SSE, a `node:sqlite` database, task queue, worker registry, route and chat orchestrators, host adapters (`src/hosts/`) and update checks. esbuild bundles it into one `sherpa-server.mjs` module with the UI assets embedded. The `runServer` export starts the server. The CLI calls it through `sherpa server`.
+`packages/server` runs the server for one PR: HTTP and SSE, a `node:sqlite` database, task queue, worker registry, route and chat orchestrators, host adapters (`src/hosts/`) and update checks. esbuild bundles it into one `sherpa-review-server.mjs` module with the UI assets embedded. The `runServer` export starts the server. The CLI calls it through `sherpa-review server`.
 
 `packages/ui` is the reviewer's React application: diff, route, discussions, chat, settings, design tokens in `src/styles/` and development pages in `src/dev/`. vite builds it.
 
-`packages/cli` is the thin `sherpa` CLI (`up`, `worker next` and other commands). The worker loop calls it on every invocation, so startup is fast and there are no runtime dependencies. It builds into one `sherpa.mjs` bundle. Host adapters live in `src/hosts/` in the server and CLI.
+`packages/cli` is the thin `sherpa-review` CLI (`up`, `worker next` and other commands). The worker loop calls it on every invocation, so startup is fast and there are no runtime dependencies. It builds into one `sherpa-review.mjs` bundle. Host adapters live in `src/hosts/` in the server and CLI.
 
 `packages/skill` is the harness distribution: `SKILL.md` plus the CLI and server module in `dist/bin/`. `dist/` itself is a build artifact and is not versioned (`.gitignore` excludes `packages/*/dist/`). Its copy in the root `skill/` directory is versioned. The release script puts it there, and committing this directory delivers the update to users.
 
@@ -52,7 +52,7 @@ pnpm --filter @sherpa/ui dev
 
 The development proxy in `packages/ui/vite.config.ts` forwards `/api` to a running server. It takes the address from `SHERPA_SERVER`, or from the first manifest in `~/.sherpa/servers/*.json`. The port is ephemeral and cannot be hardcoded. Starting a server after `vite dev` requires restarting vite. Open `http://localhost:5173/#t=<token>` with the token from the link the server printed.
 
-To use the skill from a checkout, build it (`pnpm --filter @sherpa/ui build && pnpm --filter @sherpa/skill build`) and symlink the distribution into the harness: `~/.claude/skills/sherpa` (Claude Code) or `~/.agents/skills/sherpa` (Codex) → `<repo>/packages/skill/dist`. `SHERPA_SERVER_BIN` overrides the server module lookup beside the CLI if you need a different module.
+To use the skill from a checkout, build it (`pnpm --filter @sherpa/ui build && pnpm --filter @sherpa/skill build`) and symlink the distribution into the harness: `~/.claude/skills/sherpa-review` (Claude Code) or `~/.agents/skills/sherpa-review` (Codex) → `<repo>/packages/skill/dist`. `SHERPA_SERVER_BIN` overrides the server module lookup beside the CLI if you need a different module.
 
 ## State gallery
 
@@ -103,7 +103,7 @@ The test in `packages/ui/src/styles/tokens.test.ts` compares the design tokens i
 pnpm release --notes "<one sentence>"
 ```
 
-`--notes` is required. The update toast shows this sentence (up to 140 characters). The script (`scripts/release.mjs`) builds `@sherpa/ui` and `@sherpa/skill`, checks `sherpa --version` and `version.json` against the root `package.json` version, and requires the same version in the root `README.md`. It recreates `<target>/skill/` from `packages/skill/dist` and sets `releasedAt` and `whatsNew`. The target defaults to the repository root. Use `--target` to write to a separate directory, or `--skip-build` to use an existing `dist`. Finally, it prints the list of published files and ready-to-run `git add skill` / `git commit` commands. The script does not call `git`. A person commits manually.
+`--notes` is required. The update toast shows this sentence (up to 140 characters). The script (`scripts/release.mjs`) builds `@sherpa/ui` and `@sherpa/skill`, checks `sherpa-review --version` and `version.json` against the root `package.json` version, and requires the same version in the root `README.md`. It recreates `<target>/skill/` from `packages/skill/dist` and sets `releasedAt` and `whatsNew`. The target defaults to the repository root. Use `--target` to write to a separate directory, or `--skip-build` to use an existing `dist`. Finally, it prints the list of published files and ready-to-run `git add skill` / `git commit` commands. The script does not call `git`. A person commits manually.
 
 The update toast compares the embedded version with `skill/version.json` from main, so this commit is what delivers the version to users.
 

@@ -5,7 +5,7 @@ import { resolvePrKey } from '../discovery.js';
 
 import { CLI_HOSTS } from './all.js';
 
-/** Built-in CLI plugins together, using the same path as the real `sherpa`. */
+/** Built-in CLI plugins together, using the same path as the real `sherpa-review`. */
 
 const run: CommandRunner = () => Promise.reject(new Error('commands are not run here'));
 

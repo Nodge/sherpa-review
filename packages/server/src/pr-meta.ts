@@ -79,7 +79,7 @@ export class PrMetaCache {
             meta = prMetaSchema.parse(await this.host.getPr());
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            process.stderr.write(`sherpa-server: PR metadata update failed: ${message}\n`);
+            process.stderr.write(`sherpa-review-server: PR metadata update failed: ${message}\n`);
             return;
         }
         // Concurrent calls can finish out of order: the host has its own retries and timeouts,

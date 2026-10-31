@@ -28,7 +28,7 @@ describe('next transport: failure before reaching the network', () => {
             workerId: 'w-1',
         };
 
-        const target = { cliPath: '/opt/sherpa/sherpa.mjs', prKey: connection.prKey };
+        const target = { cliPath: '/opt/sherpa/sherpa-review.mjs', prKey: connection.prKey };
 
         const failure = await requestNext(connection, target).catch((error: unknown) => error);
 

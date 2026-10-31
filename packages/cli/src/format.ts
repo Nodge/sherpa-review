@@ -9,14 +9,14 @@ import { PROTOCOL_VERSION, RESULT_MAX_BYTES } from '@sherpa/protocol';
 
 import { CLI_VERSION } from './version.js';
 
-/** How printed commands run the CLI: the `sherpa.mjs` file and the PR key the CLI connected to. */
+/** How printed commands run the CLI: the `sherpa-review.mjs` file and the PR key the CLI connected to. */
 export interface CommandTarget {
     readonly cliPath: string;
     readonly prKey: string;
 }
 
 /**
- * Command the CLI prints for the model: `node <sherpa.mjs> <words> --pr <key> [<placeholder>]`.
+ * Command the CLI prints for the model: `node <sherpa-review.mjs> <words> --pr <key> [<placeholder>]`.
  * The full path and key let a command copied as is work from any cwd, without the checkout
  * where the CLI discovers the PR, or substituting the skill path. The caller quotes values in `words`
  * through `shellQuote`.
@@ -102,7 +102,7 @@ export interface LocalReviewSummary {
 }
 
 /**
- * `sherpa up` output: a link for the reviewer and the session's next step.
+ * `sherpa-review up` output: a link for the reviewer and the session's next step.
  * The output hides the server and registration. The model doesn't need to know about them.
  */
 export function formatUpReady(uiUrl: string, target: CommandTarget, local: LocalReviewSummary | null = null): string {
@@ -190,7 +190,7 @@ export type CallRole = 'register' | 'worker';
  * and adds the next step only where the message doesn't imply it.
  */
 export function formatRpcError(error: RpcError['error'], role: CallRole, target: CommandTarget): string {
-    const lines = [`sherpa: ${error.message}`];
+    const lines = [`sherpa-review: ${error.message}`];
     for (const detail of error.details ?? []) {
         lines.push(`  - ${detail}`);
     }
@@ -208,7 +208,7 @@ export function formatRpcError(error: RpcError['error'], role: CallRole, target:
  */
 export function formatOversizedResult(taskId: number, file: string, bytes: number, target: CommandTarget): string {
     return (
-        `sherpa: the result is ${kilobytes(bytes)} while the limit is ${kilobytes(RESULT_MAX_BYTES)} — ` +
+        `sherpa-review: the result is ${kilobytes(bytes)} while the limit is ${kilobytes(RESULT_MAX_BYTES)} — ` +
         `too large to submit.\nShorten ${file} and call ` +
         `\`${taskCompleteCommand(target, taskId, file)}\` again. ` +
         'The task stays yours, nothing is lost.'
@@ -218,18 +218,18 @@ export function formatOversizedResult(taskId: number, file: string, bytes: numbe
 export function helpText(): string {
     const commands: readonly (readonly [string, string])[] = [
         [
-            'sherpa up [--local <path> [--verdicts <instruction>]] [--harness <name>] [--model <name>] ' +
+            'sherpa-review up [--local <path> [--verdicts <instruction>]] [--harness <name>] [--model <name>] ' +
                 '[--lang <ru|en>] [--no-open]',
             'start the review server and become its worker',
         ],
         [
-            'sherpa worker register [--harness <name>] [--model <name>] [--lang <ru|en>]',
+            'sherpa-review worker register [--harness <name>] [--model <name>] [--lang <ru|en>]',
             'register this session as the PR worker',
         ],
-        ['sherpa worker next', 'take the next task; waits for one as long as it takes'],
-        ['sherpa task complete <id> --file <path>', 'submit the result of a task'],
-        ['sherpa task progress <id> --text "<text>"', 'interim status for the reviewer'],
-        ['sherpa task fail <id> --reason "<text>"', 'refuse a task with a reason'],
+        ['sherpa-review worker next', 'take the next task; waits for one as long as it takes'],
+        ['sherpa-review task complete <id> --file <path>', 'submit the result of a task'],
+        ['sherpa-review task progress <id> --text "<text>"', 'interim status for the reviewer'],
+        ['sherpa-review task fail <id> --reason "<text>"', 'refuse a task with a reason'],
     ];
     const flags: readonly (readonly [string, string])[] = [
         ['--pr <key>', 'the PR to connect to; defaults to SHERPA_PR, then to the PR of the current branch here'],
@@ -254,7 +254,7 @@ export function helpText(): string {
     ];
 
     return [
-        `sherpa ${CLI_VERSION} (protocol ${PROTOCOL_VERSION}) — the Sherpa worker CLI.`,
+        `sherpa-review ${CLI_VERSION} (protocol ${PROTOCOL_VERSION}) — the Sherpa worker CLI.`,
         '',
         'Commands:',
         ...twoColumns(commands),
@@ -284,7 +284,7 @@ function nextStepFor(code: RpcErrorCode, role: CallRole, target: CommandTarget):
  * The phrase "stop the loop" is a marker from SKILL.md. Don't change it independently of that file.
  */
 const WORKER_CONFLICT_STOP =
-    'This session is no longer the worker of this PR: stop the loop and do not call `sherpa` again — ' +
+    'This session is no longer the worker of this PR: stop the loop and do not call `sherpa-review` again — ' +
     'another session has taken over.';
 
 /**

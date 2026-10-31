@@ -586,7 +586,7 @@ export class RouteStore {
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             process.stderr.write(
-                `sherpa-server: stored route snapshot ${row.snapshot_id} is corrupt (${message}), skipped\n`,
+                `sherpa-review-server: stored route snapshot ${row.snapshot_id} is corrupt (${message}), skipped\n`,
             );
             return null;
         }
@@ -635,7 +635,7 @@ export class RouteStore {
             return { state, intents: parseIntents(row.intents) };
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            process.stderr.write(`sherpa-server: stored route state is corrupt (${message}), reset\n`);
+            process.stderr.write(`sherpa-review-server: stored route state is corrupt (${message}), reset\n`);
             return { state: EMPTY_STATE, intents: new Map() };
         }
     }

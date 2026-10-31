@@ -8,11 +8,11 @@ import { githubHostPlugin } from './github/plugin.js';
 import { localGitHostPlugin } from './local/git-plugin.js';
 import type { HostPlugin } from './plugin.js';
 
-/** npm package name, a placeholder until the name is chosen. */
+/** npm package name. */
 const NPM_PACKAGE = 'sherpa-review';
 
-/** Sherpa GitHub repository owner, a placeholder until publication. */
-const GITHUB_OWNER = '<owner>';
+/** Sherpa repository on GitHub. */
+const GITHUB_REPO = 'nodge/sherpa-review';
 
 /**
  * Server build composition root: the only place that names host plugins, the update channel
@@ -25,4 +25,4 @@ export const UPDATE_CHANNEL: UpdateChannel = new NpmUpdateChannel(NPM_PACKAGE);
 
 /** Feedback channel: the button opens GitHub repository issues. */
 export const FEEDBACK_CHANNEL: FeedbackChannelFactory = () =>
-    linkFeedbackChannel(`https://github.com/${GITHUB_OWNER}/sherpa/issues`);
+    linkFeedbackChannel(`https://github.com/${GITHUB_REPO}/issues`);

@@ -964,7 +964,7 @@ function createViewedMirror(host: ReviewHost | null): (fileId: string, viewed: b
             })
             .catch((error: unknown) => {
                 process.stderr.write(
-                    `sherpa-server: the host did not accept the viewed mark for ${fileId}: ${messageOf(error)}\n`,
+                    `sherpa-review-server: the host did not accept the viewed mark for ${fileId}: ${messageOf(error)}\n`,
                 );
             });
         queues.set(fileId, queued);

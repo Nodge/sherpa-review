@@ -187,7 +187,7 @@ function streamState(options: UiRoutesOptions, ctx: StreamContext): void {
             // (`uiTaskSchema`, context file parsing). Nobody can catch this exception from a timer
             // or microtask, so close the channel: the UI will show "reconnecting".
             const message = error instanceof Error ? error.message : String(error);
-            process.stderr.write(`sherpa-server: failed to assemble UI snapshot: ${message}\n`);
+            process.stderr.write(`sherpa-review-server: failed to assemble UI snapshot: ${message}\n`);
             stop();
             return;
         }

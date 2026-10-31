@@ -7,7 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const bundlePath = join(packageRoot, 'dist', 'sherpa.mjs');
+const bundlePath = join(packageRoot, 'dist', 'sherpa-review.mjs');
 /** Distribution version from the root package.json, the single source for all three bundles. */
 const releaseVersion = (
     JSON.parse(readFileSync(join(packageRoot, '../../package.json'), 'utf8')) as { version: string }
@@ -26,7 +26,7 @@ describe('CLI build', () => {
 
     // Run from a temporary directory with no node_modules alongside it to check the bundle is self-contained.
     it('runs with plain node and prints the version', () => {
-        const isolated = join(mkdtempSync(join(tmpdir(), 'sherpa-cli-')), 'sherpa.mjs');
+        const isolated = join(mkdtempSync(join(tmpdir(), 'sherpa-cli-')), 'sherpa-review.mjs');
         copyFileSync(bundlePath, isolated);
 
         const stdout = execFileSync(process.execPath, [isolated, '--version'], {
@@ -39,7 +39,7 @@ describe('CLI build', () => {
 
     // No old Node is available, so a wrapper around the bundle overrides process.versions.node.
     it('prints a clear error on outdated Node and exits with a nonzero code', () => {
-        const isolated = join(mkdtempSync(join(tmpdir(), 'sherpa-cli-')), 'sherpa.mjs');
+        const isolated = join(mkdtempSync(join(tmpdir(), 'sherpa-cli-')), 'sherpa-review.mjs');
         copyFileSync(bundlePath, isolated);
 
         const driver = join(dirname(isolated), 'old-node.mjs');

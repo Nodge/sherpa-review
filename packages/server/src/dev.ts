@@ -62,7 +62,7 @@ async function main(argv: readonly string[]): Promise<number> {
 
     process.stdout.write(
         [
-            `sherpa-server: PR ${server.prKey}`,
+            `sherpa-review-server: PR ${server.prKey}`,
             `port:    ${String(server.port)}`,
             `manifest: ${manifestPathFor(sherpaDir, server.prKey)}`,
             uiDir === null
@@ -81,7 +81,7 @@ async function main(argv: readonly string[]): Promise<number> {
                 process.exitCode = 0;
             })
             .catch((error: unknown) => {
-                process.stderr.write(`sherpa-server: error during shutdown: ${String(error)}\n`);
+                process.stderr.write(`sherpa-review-server: error during shutdown: ${String(error)}\n`);
                 process.exitCode = 1;
             });
     };

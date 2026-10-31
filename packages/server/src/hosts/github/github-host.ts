@@ -784,7 +784,7 @@ export class GithubHost implements ReviewHost {
             rules = await this.codeownersRules(meta.baseRefOid);
         } catch (error) {
             // The reviewer gets a message about the file. The cause (query name, response code) goes to server.log.
-            process.stderr.write(`sherpa-server: GitHub did not return CODEOWNERS: ${messageOf(error)}\n`);
+            process.stderr.write(`sherpa-review-server: GitHub did not return CODEOWNERS: ${messageOf(error)}\n`);
             return degraded(mineLens([], 'GitHub could not read the CODEOWNERS file of this repository.', null));
         }
         // GitHub has ownership even without the file. The lens is disabled with an explanation instead of disappearing.
@@ -906,7 +906,7 @@ export class GithubHost implements ReviewHost {
                 );
             } catch (error) {
                 process.stderr.write(
-                    `sherpa-server: GitHub did not list the reviewer's teams: ${messageOf(error)}. Ownership is resolved by login\n`,
+                    `sherpa-review-server: GitHub did not list the reviewer's teams: ${messageOf(error)}. Ownership is resolved by login\n`,
                 );
                 return degraded(teams);
             }
@@ -1028,7 +1028,7 @@ export class GithubHost implements ReviewHost {
         return this.viewerUser().then(
             (user) => user.login,
             (error: unknown) => {
-                process.stderr.write(`sherpa-server: ${messageOf(error)}\n`);
+                process.stderr.write(`sherpa-review-server: ${messageOf(error)}\n`);
                 return null;
             },
         );
@@ -1290,7 +1290,7 @@ export class GithubHost implements ReviewHost {
                 (response) => response.repository,
                 (error: unknown) => {
                     process.stderr.write(
-                        `sherpa-server: GitHub did not say whether files without patches are binary: ${messageOf(error)}\n`,
+                        `sherpa-review-server: GitHub did not say whether files without patches are binary: ${messageOf(error)}\n`,
                     );
                     return null;
                 },
@@ -1646,7 +1646,7 @@ export class GithubHost implements ReviewHost {
                 this.rememberMeta(tick.meta);
             } catch (error) {
                 // The next tick retries. A network hiccup must not end subscriptions.
-                process.stderr.write(`sherpa-server: GitHub polling: ${messageOf(error)}\n`);
+                process.stderr.write(`sherpa-review-server: GitHub polling: ${messageOf(error)}\n`);
             }
 
             for (const subscription of [...this.pollSubscriptions]) {
@@ -1657,7 +1657,7 @@ export class GithubHost implements ReviewHost {
                 try {
                     await subscription.handler(tick, () => !subscription.stopped);
                 } catch (error) {
-                    process.stderr.write(`sherpa-server: GitHub polling: ${messageOf(error)}\n`);
+                    process.stderr.write(`sherpa-review-server: GitHub polling: ${messageOf(error)}\n`);
                 }
             }
         } finally {

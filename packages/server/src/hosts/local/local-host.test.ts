@@ -201,7 +201,7 @@ describe.skipIf(!gitAvailable)('local host on a working tree', { timeout: TIMEOU
 
         repo.git('checkout', '-b', 'another');
         await expect(host.refresh()).rejects.toThrow(
-            `checkout switched to branch another; run \`sherpa up --local ${projectDir}\` again`,
+            `checkout switched to branch another; run \`sherpa-review up --local ${projectDir}\` again`,
         );
         await expect(host.getDiff()).rejects.toThrow('checkout switched to branch another');
 

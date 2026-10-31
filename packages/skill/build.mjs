@@ -13,9 +13,9 @@ const DIRTY_SUFFIX = '-dirty';
 
 /**
  * `dist/` is the skill distribution: SKILL.md beside `bin/` with two files. It is `dist`
- * that gets linked into the harness (`~/.claude/skills/sherpa`), so package source files stay out.
- * There is one command, the executable `sherpa.mjs`. `sherpa-server.mjs` is the server module with embedded UI,
- * which the CLI loads with `import()` only in `sherpa server`. This keeps the worker loop, which calls the CLI
+ * that gets linked into the harness (`~/.claude/skills/sherpa-review`), so package source files stay out.
+ * There is one command, the executable `sherpa-review.mjs`. `sherpa-review-server.mjs` is the server module with embedded UI,
+ * which the CLI loads with `import()` only in `sherpa-review server`. This keeps the worker loop, which calls the CLI
  * on every request, from loading the server.
  *
  * Builds run directly, without nested pnpm (tests call them too). The packages are listed
@@ -26,11 +26,11 @@ const bundles = [
     {
         pkg: '../server',
         script: 'build-server.mjs',
-        file: 'dist/sherpa-server.mjs',
-        out: 'sherpa-server.mjs',
+        file: 'dist/sherpa-review-server.mjs',
+        out: 'sherpa-review-server.mjs',
         mode: 0o644,
     },
-    { pkg: '../cli', script: 'build.mjs', file: 'dist/sherpa.mjs', out: 'sherpa.mjs', mode: 0o755 },
+    { pkg: '../cli', script: 'build.mjs', file: 'dist/sherpa-review.mjs', out: 'sherpa-review.mjs', mode: 0o755 },
 ];
 
 rmSync(distDir, { recursive: true, force: true });

@@ -21,14 +21,14 @@ import { taskResultDirFor, taskResultFileFor, taskResultRootFor } from './paths.
 const PR_KEY = 'pr-777';
 
 /** Built CLI (`src/bundle.global-setup.ts`). Its own `up` spawns it as a daemon. */
-const CLI_BUNDLE = path.resolve(import.meta.dirname, '..', 'dist', 'sherpa.mjs');
+const CLI_BUNDLE = path.resolve(import.meta.dirname, '..', 'dist', 'sherpa-review.mjs');
 
 /** Default CLI entry path in these tests is the test file. The CLI prints it in commands too. */
 const TEST_ENTRY = fileURLToPath(import.meta.url);
 const TARGET: CommandTarget = { cliPath: TEST_ENTRY, prKey: PR_KEY };
 
 /** A command without a CLI path cannot run outside the skill directory. */
-const BARE_COMMAND = /(^|[^/\w.-])sherpa (up|worker|task)\b/mu;
+const BARE_COMMAND = /(^|[^/\w.-])sherpa-review (up|worker|task)\b/mu;
 
 interface Invocation {
     readonly code: number;
@@ -114,7 +114,7 @@ describe('CLI against server', () => {
 
     /** Substitute server module. These tests don't need a real server. */
     async function fakeServerBin(source: string): Promise<string> {
-        const file = path.join(workDir, 'sherpa-server.mjs');
+        const file = path.join(workDir, 'sherpa-review-server.mjs');
         await fs.writeFile(file, `${source}\n`);
         return file;
     }
@@ -857,7 +857,7 @@ describe('CLI against server', () => {
         const result = await sherpa('worker', 'next');
 
         expect(result.code).toBe(1);
-        expect(result.stderr).toContain('sherpa:');
+        expect(result.stderr).toContain('sherpa-review:');
         expect(result.stderr).not.toContain('unauthorized');
     });
 });

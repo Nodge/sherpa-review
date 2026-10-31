@@ -116,7 +116,7 @@ function unclearWhichPr(hints: readonly string[], suggestions: readonly string[]
         ...suggestions,
     ];
     return (
-        'sherpa: it is unclear which PR to connect to.\n' +
+        'sherpa-review: it is unclear which PR to connect to.\n' +
         tried +
         `${ways.slice(0, -1).join(', ')}, or ${ways.at(-1) ?? ''}.`
     );
@@ -202,7 +202,7 @@ export async function resolveWorkerId(
 function workerIdNotWritable(filePath: string, error: unknown): string {
     const detail = error instanceof Error ? error.message : String(error);
     return (
-        `sherpa: could not write ${filePath} — ${detail}.\n` +
+        `sherpa-review: could not write ${filePath} — ${detail}.\n` +
         'Check the permissions on the Sherpa state directory and run the command again.'
     );
 }
@@ -250,7 +250,7 @@ function isAlreadyExists(error: unknown): boolean {
 
 export function serverUnavailable(prKey: string): string {
     return (
-        `sherpa: the Sherpa server for PR ${prKey} is not found or not responding.\n` +
+        `sherpa-review: the Sherpa server for PR ${prKey} is not found or not responding.\n` +
         'Run the Sherpa skill again — it will start the server and write the manifest.'
     );
 }

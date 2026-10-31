@@ -11,8 +11,8 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 const packageRoot = dirname(fileURLToPath(import.meta.url));
 const distDir = join(packageRoot, 'dist');
 const binDir = join(distDir, 'bin');
-const cliPath = join(binDir, 'sherpa.mjs');
-const serverPath = join(binDir, 'sherpa-server.mjs');
+const cliPath = join(binDir, 'sherpa-review.mjs');
+const serverPath = join(binDir, 'sherpa-review-server.mjs');
 const uiRoot = resolve(packageRoot, '../ui');
 /** Distribution version from the root package.json, the single source for all three bundles. */
 const releaseVersion = JSON.parse(readFileSync(join(packageRoot, '../../package.json'), 'utf8')).version;
@@ -31,7 +31,7 @@ describe('skill package build', () => {
     // The harness links to `dist/`. An extra file there is junk in the installed skill.
     it('makes dist/ a self-contained distribution: SKILL.md, the command and the server module in bin/', () => {
         expect(readdirSync(distDir).sort()).toEqual(['SKILL.md', 'bin', 'version.json']);
-        expect(readdirSync(binDir).sort()).toEqual(['sherpa-server.mjs', 'sherpa.mjs']);
+        expect(readdirSync(binDir).sort()).toEqual(['sherpa-review-server.mjs', 'sherpa-review.mjs']);
         expect(statSync(cliPath).isFile()).toBe(true);
         expect(statSync(serverPath).isFile()).toBe(true);
         // There is only one command: the server module does not run directly, the CLI loads it.
@@ -74,11 +74,11 @@ describe('skill package build', () => {
     it('describes startup and the worker loop in SKILL.md', () => {
         const skill = readFileSync(join(packageRoot, 'SKILL.md'), 'utf8');
 
-        expect(skill).toMatch(/^---\nname: sherpa\n/u);
-        expect(skill).toContain('bin/sherpa.mjs up --pr');
+        expect(skill).toMatch(/^---\nname: sherpa-review\n/u);
+        expect(skill).toContain('bin/sherpa-review.mjs up --pr');
         // The loop uses exactly the command printed by `up`, including the full path and `--pr`.
         expect(skill).toContain('exactly the `worker next` command that `up` printed');
-        expect(skill).not.toContain('bin/sherpa.mjs worker next');
+        expect(skill).not.toContain('bin/sherpa-review.mjs worker next');
         expect(skill).toContain('--model');
         expect(skill).toContain('DONE');
         // Shared task context rule: a path under `shared/` is read once per session.
@@ -109,7 +109,7 @@ describe('skill package build', () => {
         }
     });
 
-    // Bootstrap is inside `sherpa up`. Mentioning the server or registration in SKILL.md again
+    // Bootstrap is inside `sherpa-review up`. Mentioning the server or registration in SKILL.md again
     // gives the model extra knowledge that will diverge from the CLI at the next startup change.
     it('keeps server and registration details out of SKILL.md', () => {
         const skill = readFileSync(join(packageRoot, 'SKILL.md'), 'utf8');
@@ -148,7 +148,7 @@ describe('running the built distribution', () => {
         // The test environment must not override server discovery or the PR key.
         const { SHERPA_SERVER_BIN: _bin, SHERPA_PR: _pr, SHERPA_WORKER_ID: _worker, ...inherited } = process.env;
         const env = { ...inherited, SHERPA_DIR: sherpaDir, ...extraEnv };
-        return spawnSync(process.execPath, [join(skillDir, 'bin', 'sherpa.mjs'), ...args], {
+        return spawnSync(process.execPath, [join(skillDir, 'bin', 'sherpa-review.mjs'), ...args], {
             cwd: workDir,
             encoding: 'utf8',
             env,
@@ -173,10 +173,10 @@ describe('running the built distribution', () => {
         expect(first).not.toBeNull();
         expect(cold.stdout).toContain(`http://127.0.0.1:${String(first.port)}/#t=`);
 
-        // The daemon is this same CLI running `sherpa server`, with Node flags from the CLI root (`src/index.ts`):
+        // The daemon is this same CLI running `sherpa-review server`, with Node flags from the CLI root (`src/index.ts`):
         // without `--use-system-ca`, the server does not trust the custom CA that signs the hosts.
         const daemon = execFileSync('ps', ['-o', 'args=', '-p', String(first.pid)], { encoding: 'utf8' });
-        expect(daemon).toContain(`bin/sherpa.mjs server --pr ${PR_KEY}`);
+        expect(daemon).toContain(`bin/sherpa-review.mjs server --pr ${PR_KEY}`);
         if (process.allowedNodeEnvironmentFlags.has('--use-system-ca')) {
             expect(daemon).toContain('--use-system-ca');
         }
@@ -193,7 +193,7 @@ describe('running the built distribution', () => {
         const ready = up();
         expect(ready.status, ready.stderr).toBe(0);
         const nextCommand = /Then run `([^`]+)`/u.exec(ready.stdout)?.[1];
-        expect(nextCommand).toMatch(new RegExp(`^node \\S+/bin/sherpa\\.mjs worker next --pr ${PR_KEY}$`, 'u'));
+        expect(nextCommand).toMatch(new RegExp(`^node \\S+/bin/sherpa-review\\.mjs worker next --pr ${PR_KEY}$`, 'u'));
 
         const issued = shell(nextCommand);
         expect(issued.status, issued.stderr).toBe(0);
@@ -236,7 +236,7 @@ describe('running the built distribution', () => {
         expect(next.stdout).toContain('TASK');
         expect(existsSync(marker)).toBe(false);
 
-        // The probe works: `sherpa server` loads it.
+        // The probe works: `sherpa-review server` loads it.
         const server = sherpa(['server', '--pr', PR_KEY], { SHERPA_SERVER_BIN: probe });
         expect(server.status, server.stderr).toBe(0);
         expect(existsSync(marker)).toBe(true);

@@ -10,7 +10,7 @@ import { CliError } from './errors.js';
 export function assertValidPrKey(prKey: string): string {
     if (!prKeySchema.safeParse(prKey).success) {
         throw new CliError(
-            `sherpa: invalid PR key ${JSON.stringify(prKey)}.\n` +
+            `sherpa-review: invalid PR key ${JSON.stringify(prKey)}.\n` +
                 'Expected the form `<host>-<pr>` made of letters, digits, dot, dash and underscore.',
         );
     }

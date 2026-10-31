@@ -150,7 +150,7 @@ export class LocalHost implements ReviewHost, FeedbackHost {
         this.log =
             options.log ??
             ((message: string): void => {
-                process.stderr.write(`sherpa-server: ${message}\n`);
+                process.stderr.write(`sherpa-review-server: ${message}\n`);
             });
         this.expectedBranch = options.branch;
         this.verdicts = options.verdicts ?? null;
@@ -963,7 +963,7 @@ export class LocalHost implements ReviewHost, FeedbackHost {
         }
         if (this.expectedBranch !== branch) {
             this.failure = new Error(
-                `checkout switched to branch ${branch}; run \`sherpa up --local ${this.options.projectDir}\` again`,
+                `checkout switched to branch ${branch}; run \`sherpa-review up --local ${this.options.projectDir}\` again`,
             );
             throw this.failure;
         }

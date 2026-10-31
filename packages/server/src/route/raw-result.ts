@@ -3,7 +3,7 @@ import type { z } from 'zod';
 import type { RouteValidation } from './types.js';
 
 /**
- * First acceptance step: raw result file text (`sherpa task complete --file`) → JSON → schema.
+ * First acceptance step: raw result file text (`sherpa-review task complete --file`) → JSON → schema.
  * Fails closed: anything that cannot be parsed returns a list of English errors for the model.
  */
 

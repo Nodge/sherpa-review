@@ -13,7 +13,7 @@ import { formatUiUrl } from './format.js';
 import { manifestPathFor, serverLogPathFor } from './paths.js';
 
 /** The server module is an adjacent file in the skill directory, next to the CLI itself. */
-const SERVER_BIN_NAME = 'sherpa-server.mjs';
+const SERVER_BIN_NAME = 'sherpa-review-server.mjs';
 
 /** How long to wait for the daemon to publish a live manifest. */
 const STARTUP_TIMEOUT_MS = 10_000;
@@ -42,7 +42,7 @@ export interface EnsureServerOptions {
     /** State root: the server does not read `SHERPA_DIR`. The CLI passes it the path. */
     readonly sherpaDir: string;
     /**
-     * Path to the running CLI file (`process.argv[1]`). `up` spawns it as the `sherpa server` daemon. The server module
+     * Path to the running CLI file (`process.argv[1]`). `up` spawns it as the `sherpa-review server` daemon. The server module
      * sits beside it, with the distribution root one directory above, passed to the server as `--install-dir`.
      */
     readonly entry: string | undefined;
@@ -80,7 +80,7 @@ interface Daemon {
 
 /**
  * Ensures the PR server is running and returns a UI link for the reviewer. Idempotent: a live server for this PR
- * is found by its manifest (`docs/protocol.md §8`) and reused. Otherwise starts a `sherpa server` daemon
+ * is found by its manifest (`docs/protocol.md §8`) and reused. Otherwise starts a `sherpa-review server` daemon
  * that outlives the CLI. Neither pnpm nor a repository checkout is required.
  */
 export async function ensureServer(options: EnsureServerOptions): Promise<EnsureServerResult> {
@@ -113,7 +113,7 @@ export async function ensureServer(options: EnsureServerOptions): Promise<Ensure
 
 /**
  * Path to the server module. Normally the adjacent file in the skill directory. Resolves the real path
- * through realpath because the skill directory is installed as a symlink (`~/.claude/skills/sherpa`).
+ * through realpath because the skill directory is installed as a symlink (`~/.claude/skills/sherpa-review`).
  * `SHERPA_SERVER_BIN` overrides discovery for development runs and tests.
  */
 export async function resolveServerBin(entry: string | undefined, override: string | undefined): Promise<string> {
@@ -121,7 +121,7 @@ export async function resolveServerBin(entry: string | undefined, override: stri
         const explicit = path.resolve(override.trim());
         if (!(await isFile(explicit))) {
             throw new CliError(
-                `sherpa: SHERPA_SERVER_BIN points at ${explicit}, but there is no file there.\n` +
+                `sherpa-review: SHERPA_SERVER_BIN points at ${explicit}, but there is no file there.\n` +
                     'Fix the path or unset the variable to take the server from the skill directory.',
             );
         }
@@ -153,7 +153,7 @@ async function realEntry(entry: string | undefined): Promise<string | null> {
 }
 
 /**
- * Loads the server module. Called only from `sherpa server`: the path is computed at runtime, so
+ * Loads the server module. Called only from `sherpa-review server`: the path is computed at runtime, so
  * esbuild does not pull the server into the CLI bundle, and other commands do not load it.
  */
 export async function loadServerModule(file: string): Promise<ServerModule> {
@@ -164,7 +164,7 @@ export async function loadServerModule(file: string): Promise<ServerModule> {
         // A broken file (for example, an incomplete release write) needs its path and cause in server.log, not a retry instruction.
         const detail = error instanceof Error ? error.message : String(error);
         throw new CliError(
-            `sherpa: the Sherpa server module ${file} failed to load — ${detail}.\n${REINSTALL_HINT}`,
+            `sherpa-review: the Sherpa server module ${file} failed to load — ${detail}.\n${REINSTALL_HINT}`,
         );
     }
     if (!isRecord(loaded) || typeof loaded.runServer !== 'function') {
@@ -210,7 +210,7 @@ function isProcessAlive(pid: number): boolean {
 }
 
 /**
- * The server daemon is the same CLI running `sherpa server`: detached + unref so it outlives the CLI.
+ * The server daemon is the same CLI running `sherpa-review server`: detached + unref so it outlives the CLI.
  * The discovered server module is passed to the child in `SHERPA_SERVER_BIN`, so it loads exactly what
  * the parent checked. stdio goes to a log file. Nothing reads it at runtime, but it remains for the user
  * when startup fails. The log has no token: the CLI builds the token link after reading the manifest.
@@ -296,7 +296,7 @@ async function startupFailed(
     reaped: boolean,
 ): Promise<string> {
     const lines = [
-        `sherpa: the server for PR ${prKey} did not start within ${String(Math.round(timeoutMs / 1000))} s.`,
+        `sherpa-review: the server for PR ${prKey} did not start within ${String(Math.round(timeoutMs / 1000))} s.`,
     ];
     if (daemon.spawnError !== null) {
         lines.push(`The process could not be started: ${daemon.spawnError.message}`);
@@ -319,7 +319,7 @@ async function prepareLogPath(sherpaDir: string, prKey: string): Promise<string>
     } catch (error) {
         const detail = error instanceof Error ? error.message : String(error);
         throw new CliError(
-            `sherpa: could not prepare the state directory for the log ${logPath} — ${detail}.\n` +
+            `sherpa-review: could not prepare the state directory for the log ${logPath} — ${detail}.\n` +
                 'Check the permissions on the Sherpa state directory and call the command again.',
         );
     }
@@ -376,7 +376,7 @@ const REINSTALL_HINT =
     'Show this text to the user and stop — do not start the worker loop.';
 
 const INCOMPLETE_DISTRIBUTION =
-    `sherpa: the skill distribution is incomplete — ${SERVER_BIN_NAME} must sit next to sherpa.mjs.\n${REINSTALL_HINT}`;
+    `sherpa-review: the skill distribution is incomplete — ${SERVER_BIN_NAME} must sit next to sherpa-review.mjs.\n${REINSTALL_HINT}`;
 
 async function isFile(filePath: string): Promise<boolean> {
     try {

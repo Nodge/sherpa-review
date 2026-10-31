@@ -32,5 +32,5 @@ export function userMessage(error: unknown): string {
     }
 
     const detail = error instanceof Error ? error.message : String(error);
-    return `sherpa: unexpected failure — ${detail}\nRepeat the command; if it keeps failing, restart the Sherpa skill.`;
+    return `sherpa-review: unexpected failure — ${detail}\nRepeat the command; if it keeps failing, restart the Sherpa skill.`;
 }

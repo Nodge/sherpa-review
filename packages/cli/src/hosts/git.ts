@@ -43,14 +43,14 @@ async function gitBranch(repo: string, run: CommandRunner): Promise<string> {
     const branch = succeeded(head) ? head.stdout.trim() : '';
     if (branch === '') {
         throw new CliError(
-            `sherpa: cannot read the current branch of ${repo}${failureDetail(GIT_BIN, head)}.\n` +
+            `sherpa-review: cannot read the current branch of ${repo}${failureDetail(GIT_BIN, head)}.\n` +
                 'Local review is keyed by the branch; check that `git rev-parse --abbrev-ref HEAD` works there.',
         );
     }
     if (branch === 'HEAD') {
         throw new CliError(
-            `sherpa: ${repo} is on a detached HEAD.\n` +
-                'Local review is keyed by the branch: check out a branch and run `sherpa up --local <path>` again.',
+            `sherpa-review: ${repo} is on a detached HEAD.\n` +
+                'Local review is keyed by the branch: check out a branch and run `sherpa-review up --local <path>` again.',
         );
     }
     return branch;

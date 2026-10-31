@@ -504,7 +504,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
         idleWatch.arm(() => {
             options.onIdleStop?.(idleSeconds);
             void handle.close().catch((error: unknown) => {
-                process.stderr.write(`sherpa-server: error during automatic shutdown: ${messageOf(error)}\n`);
+                process.stderr.write(`sherpa-review-server: error during automatic shutdown: ${messageOf(error)}\n`);
             });
         });
         return handle;

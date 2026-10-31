@@ -518,7 +518,7 @@ function untrackedFilesOf(repo: LocalRepo, status: VcsStatus): string[] {
             `the project directory has ${String(files.length)} untracked files, ` +
                 `more than the ${String(MAX_UNTRACKED_FILES)} Sherpa reviews at once; ` +
                 `add them to ${kind} or to .${kind}ignore, ` +
-                'or point `sherpa up --local <path>` at a narrower directory',
+                'or point `sherpa-review up --local <path>` at a narrower directory',
         );
     }
     return files.sort((left, right) => left.localeCompare(right));

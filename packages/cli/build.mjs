@@ -8,7 +8,7 @@ const root = dirname(fileURLToPath(import.meta.url));
 // The distribution has one version, taken from the root package.json `version` field.
 // Package versions aren't the source.
 const version = JSON.parse(readFileSync(resolve(root, '../../package.json'), 'utf8')).version;
-const outfile = resolve(root, 'dist/sherpa.mjs');
+const outfile = resolve(root, 'dist/sherpa-review.mjs');
 
 // The CLI produces a single self-contained ESM file with everything inlined.
 // Only Node built-in modules are available at runtime (docs/protocol.md §11 item 1).

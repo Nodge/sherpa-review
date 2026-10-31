@@ -1,5 +1,5 @@
 /**
- * Automatic server shutdown on idle. A PR server is a background daemon started by `sherpa up`. Without this,
+ * Automatic server shutdown on idle. A PR server is a background daemon started by `sherpa-review up`. Without this,
  * it would stay in memory until the machine reboots because there is no `down` command in the contract.
  * State lives in SQLite and survives shutdown. The next `up` starts the server again.
  */

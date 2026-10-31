@@ -239,7 +239,7 @@ export class ChatOrchestrator {
             } while (this.needsAnotherPass());
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            process.stderr.write(`sherpa-server: chat reconciliation failed: ${message}\n`);
+            process.stderr.write(`sherpa-review-server: chat reconciliation failed: ${message}\n`);
         } finally {
             this.reconciling = false;
         }

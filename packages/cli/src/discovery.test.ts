@@ -101,7 +101,7 @@ describe('discovery', () => {
 
             expect(error).toBeInstanceOf(CliError);
             expect((error as CliError).message).toBe(
-                'sherpa: it is unclear which PR to connect to.\n' +
+                'sherpa-review: it is unclear which PR to connect to.\n' +
                     'Tried to detect it from the current directory: one: no checkout; two: no checkout.\n' +
                     'Run the command through the Sherpa skill (it fills the PR in), pass `--pr <pr key>`, ' +
                     'run it from a one checkout, or run it from a two checkout.',

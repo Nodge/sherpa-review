@@ -43,7 +43,7 @@ export class BlobCache {
         } catch (error) {
             await fs.rm(temporary, { force: true }).catch(() => undefined);
             process.stderr.write(
-                `sherpa-server: could not cache image blob: ${error instanceof Error ? error.message : String(error)}\n`,
+                `sherpa-review-server: could not cache image blob: ${error instanceof Error ? error.message : String(error)}\n`,
             );
         }
     }

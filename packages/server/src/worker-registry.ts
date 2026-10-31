@@ -107,7 +107,7 @@ export class WorkerRegistry {
     }
 
     /**
-     * PR worker session registration: `sherpa worker register` when the skill starts.
+     * PR worker session registration: `sherpa-review worker register` when the skill starts.
      * A new registration always wins (docs/architecture.md §7.7). It claims a free slot,
      * takes over from another session (even a live one), or renews the same workerId.
      * This never returns `worker_conflict`. The displaced session learns it has lost the slot on

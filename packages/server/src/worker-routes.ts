@@ -259,7 +259,7 @@ async function pollForTask(
     }
 
     // The CLI consumes `idle` and retries itself. The model never sees this text.
-    return { kind: 'idle', message: 'No tasks yet. Call `sherpa worker next` again.' };
+    return { kind: 'idle', message: 'No tasks yet. Call `sherpa-review worker next` again.' };
 }
 
 /** The UI has left and no task is waiting to be claimed or completed. */

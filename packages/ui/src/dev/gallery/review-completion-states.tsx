@@ -46,7 +46,7 @@ const FAILURE: PublicationFailure = {
 };
 /** Your own PR on GitHub and local review: no verdicts, only Comment. */
 const COMMENT_ONLY: readonly Verdict[] = ['comment'];
-/** Local review with `sherpa up --local --verdicts`: Request changes and Ship, without Comment. */
+/** Local review with `sherpa-review up --local --verdicts`: Request changes and Ship, without Comment. */
 const LOCAL_VERDICTS: readonly Verdict[] = ['request_changes', 'ship'];
 const TRANSPORT = {
     save: () => Promise.reject(new Error('gallery does not write to the host')),

@@ -1,5 +1,5 @@
 ---
-name: sherpa
+name: sherpa-review
 description: "Runs Sherpa — local PR code review: gives the reviewer a link to the UI and executes their tasks in this session."
 ---
 
@@ -30,13 +30,13 @@ A GitHub PR needs no checkout — Sherpa reads it over the GitHub API — but it
 PR review:
 
 ```
-node <this skill's directory>/bin/sherpa.mjs up --pr <pr> --harness <your harness: claude-code, codex, or your own> --model <the exact identifier of the model you run on, if you know it, e.g. claude-opus-5> --lang <ru or en>
+node <this skill's directory>/bin/sherpa-review.mjs up --pr <pr> --harness <your harness: claude-code, codex, or your own> --model <the exact identifier of the model you run on, if you know it, e.g. claude-opus-5> --lang <ru or en>
 ```
 
 Local review — the same command with the project directory instead of the key:
 
 ```
-node <this skill's directory>/bin/sherpa.mjs up --local <path> --harness <your harness> --model <your model> --lang <ru or en>
+node <this skill's directory>/bin/sherpa-review.mjs up --local <path> --harness <your harness> --model <your model> --lang <ru or en>
 ```
 
 `--local` always needs a path: pass your current working directory when the skill was called without an argument. To compare against something other than the default base (the merge base with `origin/HEAD`, `main` or `master` in git), add `--base <ref>`.

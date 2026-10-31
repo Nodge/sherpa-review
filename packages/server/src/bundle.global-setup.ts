@@ -7,7 +7,7 @@ const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 const uiRoot = path.resolve(packageRoot, '../ui');
 
 /**
- * Builds `dist/sherpa-server.mjs` once for the entire run: test files run in parallel forks,
+ * Builds `dist/sherpa-review-server.mjs` once for the entire run: test files run in parallel forks,
  * and esbuild overwrites the bundle non-atomically. If each file built it separately, another fork
  * could read a truncated file.
  *

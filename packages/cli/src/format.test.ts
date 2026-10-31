@@ -28,13 +28,13 @@ const task: Task = {
 
 const RESULT_FILE = '/tmp/sherpa/pr-1/42-1.md';
 
-const TARGET: CommandTarget = { cliPath: '/Users/me/.claude/skills/sherpa/bin/sherpa.mjs', prKey: 'pr-1' };
+const TARGET: CommandTarget = { cliPath: '/Users/me/.claude/skills/sherpa-review/bin/sherpa-review.mjs', prKey: 'pr-1' };
 /** Path containing a space. The command must survive being copied into a shell as is. */
-const SPACED: CommandTarget = { cliPath: '/Users/Jo Doe/.claude/skills/sherpa/bin/sherpa.mjs', prKey: 'pr-1' };
+const SPACED: CommandTarget = { cliPath: '/Users/Jo Doe/.claude/skills/sherpa-review/bin/sherpa-review.mjs', prKey: 'pr-1' };
 const CLI = `node ${TARGET.cliPath}`;
 
 /** A command without a CLI path cannot run outside the skill directory. */
-const BARE_COMMAND = /(^|[^/\w.-])sherpa (up|worker|task)\b/mu;
+const BARE_COMMAND = /(^|[^/\w.-])sherpa-review (up|worker|task)\b/mu;
 
 describe('UI link', () => {
     it('uses the short fragment parameter name and loopback by default', () => {
@@ -107,7 +107,7 @@ describe('help', () => {
     it('lists --verdicts with an instruction for up and its relationship to --local', () => {
         const help = helpText();
 
-        expect(help).toContain('sherpa up [--local <path> [--verdicts <instruction>]]');
+        expect(help).toContain('sherpa-review up [--local <path> [--verdicts <instruction>]]');
         expect(help).toMatch(
             /--verdicts <instruction> +the user's instruction for the outcome of the review, in their words; the reviewer then finishes with Ship or Request changes instead of Comment; only with `--local`/u,
         );
@@ -232,7 +232,7 @@ describe('errors', () => {
     it('does not duplicate hints when the server already says what to do', () => {
         const message = 'The CLI protocol version 9.9.9 is incompatible. Update the skill together with the CLI.';
 
-        expect(formatRpcError({ code: 'version_incompatible', message }, 'worker', TARGET)).toBe(`sherpa: ${message}`);
+        expect(formatRpcError({ code: 'version_incompatible', message }, 'worker', TARGET)).toBe(`sherpa-review: ${message}`);
     });
 
     it('worker conflict in the loop gives a terminal instruction to stop', () => {
@@ -247,7 +247,7 @@ describe('errors', () => {
     it('conflict at registration leaves only the server message, as this session was never a worker', () => {
         const output = formatRpcError({ code: 'worker_conflict', message: CONFLICT_MESSAGE }, 'register', TARGET);
 
-        expect(output).toBe(`sherpa: ${CONFLICT_MESSAGE}`);
+        expect(output).toBe(`sherpa-review: ${CONFLICT_MESSAGE}`);
         expect(output).not.toContain('stop the loop');
     });
 
@@ -284,7 +284,7 @@ describe('printed commands', () => {
     });
 
     it('POSIX quoting: safe text stays as is, the rest gets single quotes', () => {
-        expect(shellQuote('/opt/sherpa/bin/sherpa.mjs')).toBe('/opt/sherpa/bin/sherpa.mjs');
+        expect(shellQuote('/opt/sherpa/bin/sherpa-review.mjs')).toBe('/opt/sherpa/bin/sherpa-review.mjs');
         expect(shellQuote('/Users/Jo Doe/a.md')).toBe("'/Users/Jo Doe/a.md'");
         expect(shellQuote("/tmp/it's/$HOME")).toBe(String.raw`'/tmp/it'\''s/$HOME'`);
         expect(shellQuote('/tmp/café.md')).toBe("'/tmp/café.md'");

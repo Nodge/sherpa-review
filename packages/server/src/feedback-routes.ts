@@ -100,7 +100,7 @@ export function createFeedbackRoutes(options: FeedbackRoutesOptions): Route[] {
                     description,
                 });
                 if (outcome.kind === 'unavailable') {
-                    process.stderr.write(`sherpa-server: feedback channel unavailable: ${outcome.reason}\n`);
+                    process.stderr.write(`sherpa-review-server: feedback channel unavailable: ${outcome.reason}\n`);
                     return unavailable(outcome.reason);
                 }
                 return respond({

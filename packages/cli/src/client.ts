@@ -309,7 +309,7 @@ function parseJson(text: string): unknown {
 /** Request failed local contract validation: a long `--text`, invalid `SHERPA_WORKER_ID` and similar cases. */
 function invalidRequest(details: readonly string[]): string {
     return [
-        'sherpa: the command does not pass the contract, the server would reject it:',
+        'sherpa-review: the command does not pass the contract, the server would reject it:',
         ...details.map((detail) => `  - ${detail}`),
         'Fix the command arguments (and `SHERPA_WORKER_ID`, if it is set) and call it again.',
     ].join('\n');
@@ -317,7 +317,7 @@ function invalidRequest(details: readonly string[]): string {
 
 function contractMismatch(): string {
     return (
-        'sherpa: the server replied off-contract — most likely the CLI and the server versions diverged.\n' +
+        'sherpa-review: the server replied off-contract — most likely the CLI and the server versions diverged.\n' +
         'Update the Sherpa skill together with the CLI and restart the server.'
     );
 }

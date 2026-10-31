@@ -31,7 +31,7 @@ const workerRequestBase = z.object({
 });
 
 /**
- * `sherpa worker register` registers the PR worker session when the skill starts (`docs/protocol.md §7`).
+ * `sherpa-review worker register` registers the PR worker session when the skill starts (`docs/protocol.md §7`).
  * A new session always wins: registration with a fresh workerId takes the slot even from a live
  * worker (`docs/architecture.md §7.7`). The displaced worker's leases return to the queue immediately.
  * The same workerId renews registration idempotently. Registration does not throw `worker_conflict`. The
@@ -49,7 +49,7 @@ export const workerRegisterRequestSchema = workerRequestBase.extend({
      */
     lang: localeSchema.optional(),
     /**
-     * Local review verdict mode from `sherpa up --local`: a string enables Ship and Request changes
+     * Local review verdict mode from `sherpa-review up --local`: a string enables Ship and Request changes
      * with the user's instruction for the review outcome (`--verdicts <instruction>`), null enables only Comment.
      * A running server switches to the mode from the latest `up`. An absent field leaves the mode unchanged, as in
      * `worker register` and PR review registration.
@@ -98,7 +98,7 @@ export const workerStatusSchema = z.discriminatedUnion('kind', [
 export type WorkerStatus = z.infer<typeof workerStatusSchema>;
 
 /**
- * `sherpa worker next` long-polls for the next task. The server sets the window
+ * `sherpa-review worker next` long-polls for the next task. The server sets the window
  * (`LONG_POLL_DEFAULT_SECONDS`). The CLI can wait longer by repeating the request.
  */
 export const workerNextRequestSchema = workerRequestBase;
@@ -118,7 +118,7 @@ export const workerNextResponseSchema = z.discriminatedUnion('kind', [
 ]);
 export type WorkerNextResponse = z.infer<typeof workerNextResponseSchema>;
 
-/** `sherpa task complete <id> --file <path>`: the CLI sends the result file contents. */
+/** `sherpa-review task complete <id> --file <path>`: the CLI sends the result file contents. */
 export const taskCompleteRequestSchema = workerRequestBase.extend({
     taskId: taskIdSchema,
     result: z.string().refine(
@@ -137,14 +137,14 @@ export const taskCompleteResponseSchema = z.discriminatedUnion('kind', [
 ]);
 export type TaskCompleteResponse = z.infer<typeof taskCompleteResponseSchema>;
 
-/** `sherpa task progress <id> --text`: a cheap status signal, shown as "agent working: …" in the UI. */
+/** `sherpa-review task progress <id> --text`: a cheap status signal, shown as "agent working: …" in the UI. */
 export const taskProgressRequestSchema = workerRequestBase.extend({
     taskId: taskIdSchema,
     text: z.string().min(1).max(PROGRESS_TEXT_MAX_CHARS),
 });
 export type TaskProgressRequest = z.infer<typeof taskProgressRequestSchema>;
 
-/** `sherpa task fail <id> --reason`: explicit failure. The task fails with a reason visible in the UI. */
+/** `sherpa-review task fail <id> --reason`: explicit failure. The task fails with a reason visible in the UI. */
 export const taskFailRequestSchema = workerRequestBase.extend({
     taskId: taskIdSchema,
     reason: z.string().min(1),

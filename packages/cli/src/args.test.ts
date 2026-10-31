@@ -49,7 +49,7 @@ describe('argument parsing', () => {
         });
         expect(parseArgs(['up', '--no-open'])).toMatchObject({ kind: 'up', noOpen: true });
         expect(() => parseArgs(['up', '--no-open=true'])).toThrow('does not take a value');
-        expect(() => parseArgs(['up', 'server'])).toThrow('sherpa up [--pr <pr key> | --local <path>');
+        expect(() => parseArgs(['up', 'server'])).toThrow('sherpa-review up [--pr <pr key> | --local <path>');
     });
 
     it('up --local: accepts a project directory instead of a PR, with a base', () => {
@@ -78,7 +78,7 @@ describe('argument parsing', () => {
             '`--verdicts` only makes sense with `--local`',
         );
         expect(() => parseArgs(['worker', 'next', '--verdicts', 'on ship, merge'])).toThrow(
-            '--local, --base and --verdicts are only available for `sherpa up`',
+            '--local, --base and --verdicts are only available for `sherpa-review up`',
         );
     });
 
@@ -112,10 +112,10 @@ describe('argument parsing', () => {
         expect(() => parseArgs(['up', '--local', '.', '--pr', 'pr-1'])).toThrow('pass one of them');
         expect(() => parseArgs(['up', '--base', 'main'])).toThrow('only makes sense with `--local`');
         expect(() => parseArgs(['worker', 'next', '--local', '.'])).toThrow(
-            'only available for `sherpa up`',
+            'only available for `sherpa-review up`',
         );
         expect(() => parseArgs(['worker', 'next', '--base', 'main'])).toThrow(
-            'only available for `sherpa up`',
+            'only available for `sherpa-review up`',
         );
     });
 
@@ -237,9 +237,9 @@ describe('argument parsing', () => {
         }
     });
 
-    it('loop command parse errors never suggest bare `sherpa …` without a path and --pr', () => {
+    it('loop command parse errors never suggest bare `sherpa-review …` without a path and --pr', () => {
         expect(() => parseArgs(['worker'])).toThrow('Run the full `worker next` command printed by `up`');
-        expect(() => parseArgs(['worker'])).not.toThrow(/`sherpa (worker|task)\b/u);
+        expect(() => parseArgs(['worker'])).not.toThrow(/`sherpa-review (worker|task)\b/u);
 
         const loopCalls = [
             ['task'],
@@ -251,7 +251,7 @@ describe('argument parsing', () => {
 
         for (const argv of loopCalls) {
             expect(() => parseArgs(argv), argv.join(' ')).toThrow('Copy the full command printed');
-            expect(() => parseArgs(argv), argv.join(' ')).not.toThrow(/`sherpa (worker|task)\b/u);
+            expect(() => parseArgs(argv), argv.join(' ')).not.toThrow(/`sherpa-review (worker|task)\b/u);
         }
     });
 });

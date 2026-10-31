@@ -215,7 +215,7 @@ type HostComment = HostThread['root'];
 /**
  * Reviewer comments straight from the review contract (`GET review/threads`): the UI does not show the issue flag
  * or "draft/published" state, but the host stores them. The server token is in the fragment of the
- * URL printed by `sherpa up`. The UI uses the same token.
+ * URL printed by `sherpa-review up`. The UI uses the same token.
  */
 async function myComments(page: Page, server: SherpaServerHandle): Promise<readonly HostComment[]> {
     const url = new URL(server.url);

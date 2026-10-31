@@ -95,7 +95,7 @@ export class FeedbackOrchestrator {
             } while (this.needsAnotherPass());
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            process.stderr.write(`sherpa-server: review round reconciliation failed: ${message}\n`);
+            process.stderr.write(`sherpa-review-server: review round reconciliation failed: ${message}\n`);
         } finally {
             this.reconciling = false;
         }
@@ -272,7 +272,7 @@ export class FeedbackOrchestrator {
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             process.stderr.write(
-                `sherpa-server: could not write agent replies to round ${bound.roundId}: ${message}\n`,
+                `sherpa-review-server: could not write agent replies to round ${bound.roundId}: ${message}\n`,
             );
             await this.reconcile();
         } finally {

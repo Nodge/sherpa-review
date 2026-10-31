@@ -22,8 +22,8 @@ All 5 harnesses can therefore reach zero idle turns with one `SKILL.md` containi
 - Foreground Bash defaults to 120 s, and the model can request up to 600 s (`BASH_DEFAULT_TIMEOUT_MS`, `BASH_MAX_TIMEOUT_MS`). A timeout moves the command to the background instead of killing it, which costs one extra turn. Start it in the background from the outset.
 - A background process causes no periodic wakeups. Cache TTL is an hour with a subscription, 5 minutes with an API key (`CLAUDE_CODE_PROMPT_CACHE_TTL=1h` since 2.1.242).
 - External push into a session: cross-session messages through a Unix socket (2.1.224+, undocumented format), Monitor with a deadline of up to 30 minutes, and the `asyncRewake` hook. None is needed here. Background execution with a wakeup covers the task.
-- Skills: `~/.claude/skills/<name>/SKILL.md`, with symlink support. `/sherpa 12345` substitutes `$ARGUMENTS`.
-- Traps: a background task that "looks like it is waiting for input" notifies the model after about 45 s, so `worker next` must stay silent while waiting. A skill's `allowed-tools` grant resets after the next user message, so the loop needs a permanent `Bash(node */sherpa.mjs *)` rule. Under memory pressure, background tasks are killed after 30 minutes of inactivity (before 2.1.274, even under mild pressure).
+- Skills: `~/.claude/skills/<name>/SKILL.md`, with symlink support. `/sherpa-review 12345` substitutes `$ARGUMENTS`.
+- Traps: a background task that "looks like it is waiting for input" notifies the model after about 45 s, so `worker next` must stay silent while waiting. A skill's `allowed-tools` grant resets after the next user message, so the loop needs a permanent `Bash(node */sherpa-review.mjs *)` rule. Under memory pressure, background tasks are killed after 30 minutes of inactivity (before 2.1.274, even under mild pressure).
 
 ## Codex
 
@@ -31,7 +31,7 @@ All 5 harnesses can therefore reach zero idle turns with one `SKILL.md` containi
 - The model runs in code mode (the model catalog sets `tool_mode: code_mode_only` for gpt-5.6 and gpt-6), so it sees only `exec` (a JS cell) and `wait`. JS calls `exec_command` and `write_stdin`. Limits: 30 s for `exec_command`, `background_terminal_max_timeout` = 300 s for an empty `write_stdin`, and no limit for the cell or `wait`.
 - The system prompt for every model except gpt-5.5 says "Avoid performing blocking sleep or wait calls longer than 60 seconds" and "don't go longer than 60 s without commentary". This causes polling about every 25 s.
 - A unified exec process survives the end of a turn. Closing the session or eviction from the 64 slots kills it. An empty poll doesn't return before its deadline when output appears, so heartbeat lines in `worker next` are useless.
-- Skills: `~/.agents/skills`, `.agents/skills` from cwd to the repository root, and `$CODEX_HOME/skills`, with symlink support. Invocation: `$sherpa 12345`.
+- Skills: `~/.agents/skills`, `.agents/skills` from cwd to the repository root, and `$CODEX_HOME/skills`, with symlink support. Invocation: `$sherpa-review 12345`.
 - Two alternatives guarantee zero turns and both require user configuration. A Stop hook with `{"decision":"block","reason":"<task>"}` holds the turn without a model call, with no hook timeout limit or retry limit, but needs one-time approval in `/hooks`. A shared app-server daemon (`codex app-server daemon start`, `thread/queue/add`) supports external push, but `daemon_auto_start` in 0.156.1 is experimental and disabled.
 
 ### Live measurement
@@ -93,7 +93,7 @@ Measurement limits: one run per variant, 10 minutes, headless mode. In the TUI, 
 - All of this is known from a leaked system prompt and forum replies by the maintainers (thread 172103, 2026-09-18), with nothing in the documentation. The contract changed several times in 2026, and some models don't see the parameter. Known bugs include extra wakeups when foreground commands move to the background, and zombie shells.
 - CLI: the 2026-08-11 changelog restores follow-up on background task completion in interactive and headless modes. Whether the CLI has `block_until_ms` is unverified.
 - External push: a deep link only fills in the prompt. `agent acp` provides JSON-RPC `session/prompt`, but this needs a driver, which means code. A Stop hook can return `followup_message`, with `loop_limit` defaulting to 5.
-- Skills: `.cursor/skills`, `~/.cursor/skills`, `.agents/skills`, `~/.agents/skills`, plus `.claude/skills` and `.codex/skills`, with symlink support. `/sherpa` in chat attaches the skill to the message.
+- Skills: `.cursor/skills`, `~/.cursor/skills`, `.agents/skills`, `~/.agents/skills`, plus `.claude/skills` and `.codex/skills`, with symlink support. `/sherpa-review` in chat attaches the skill to the message.
 - The sandbox restricts network access by default. Loopback availability is unverified. The workaround is to allowlist the `node` command.
 
 ## pi
@@ -101,7 +101,7 @@ Measurement limits: one run per variant, 10 minutes, headless mode. In the TUI, 
 - The repository moved to `earendil-works/pi`, package `@earendil-works/pi-coding-agent`, version 0.87.1 from 2026-09-22.
 - There is no background mode, and process exit doesn't wake the model. Foreground bash has no timeout by default. The model can optionally set `timeout` in seconds, with a 2³¹−1 ms limit. A timeout kills the process tree. One blocking call can wait for hours without turns.
 - External push is available only through an extension (`pi.sendUserMessage`). RPC mode controls only its own pi process. A skill cannot install an extension.
-- Skills: `~/.pi/agent/skills`, `.pi/skills`, `~/.agents/skills`, `.agents/skills`, with symlink support. `/skill:sherpa 12345` adds arguments to the instruction.
+- Skills: `~/.pi/agent/skills`, `.pi/skills`, `~/.agents/skills`, `.agents/skills`, with symlink support. `/skill:sherpa-review 12345` adds arguments to the instruction.
 - Cache warming is enabled by default (`cacheWarming: "streaming"`). During a pending call, pi repeats the last request with `maxTokens: 1` at 90 % of the cache lifetime, about 13 times per hour with a 5-minute cache, once with `PI_CACHE_RETENTION=long`, and stops after an hour. These are provider requests without reasoning, and only a user setting can disable them.
 - User messages during a pending call queue until it returns. Esc kills `worker next`.
 

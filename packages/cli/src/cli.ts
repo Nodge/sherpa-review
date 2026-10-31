@@ -243,7 +243,7 @@ async function prepareResultDir(
     } catch (error) {
         const detail = error instanceof Error ? error.message : String(error);
         throw new CliError(
-            `sherpa: cannot prepare the directory for task results ${dir} — ${detail}.\n` +
+            `sherpa-review: cannot prepare the directory for task results ${dir} — ${detail}.\n` +
                 `Fix it or point TMPDIR to a private directory, then call \`${workerNextCommand(target)}\` again.`,
         );
     }
@@ -330,7 +330,7 @@ function entryOf(io: CliIo): string | undefined {
  * The path is absolute because the model runs commands from any cwd.
  */
 function targetOf(io: CliIo, prKey: string): CommandTarget {
-    return { cliPath: path.resolve(entryOf(io) ?? 'sherpa.mjs'), prKey };
+    return { cliPath: path.resolve(entryOf(io) ?? 'sherpa-review.mjs'), prKey };
 }
 
 /**
@@ -341,12 +341,12 @@ export async function readResultFile(file: string, taskId: number, target: Comma
     const stats = await fs.stat(file).catch(() => null);
     if (stats === null) {
         throw new CliError(
-            `sherpa: there is no file ${file}.\nWrite the result to ${file} and call ` +
+            `sherpa-review: there is no file ${file}.\nWrite the result to ${file} and call ` +
                 `\`${taskCompleteCommand(target, taskId, file)}\` again.`,
         );
     }
     if (!stats.isFile()) {
-        throw new CliError(`sherpa: ${file} is not a file.\nPass the path of the file with the task result.`);
+        throw new CliError(`sherpa-review: ${file} is not a file.\nPass the path of the file with the task result.`);
     }
     if (stats.size > RESULT_MAX_BYTES) {
         throw new CliError(formatOversizedResult(taskId, file, stats.size, target));
@@ -357,7 +357,7 @@ export async function readResultFile(file: string, taskId: number, target: Comma
         result = await fs.readFile(file, 'utf8');
     } catch (error) {
         const detail = error instanceof Error ? error.message : String(error);
-        throw new CliError(`sherpa: cannot read ${file} — ${detail}.\nCheck the path and the file permissions.`);
+        throw new CliError(`sherpa-review: cannot read ${file} — ${detail}.\nCheck the path and the file permissions.`);
     }
 
     // File size and string length differ with invalid encoding. Count again using what will go into the body.

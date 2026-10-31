@@ -45,7 +45,7 @@ export function localHostPlugin(kind: string, vcs: (repo: string) => LocalVcs): 
             (options.repo ?? null) === null &&
             readLocalHostState(options.sherpaDir ?? DEFAULT_SHERPA_DIR, prKey) === null
                 ? `key ${prKey} is local, but neither --repo nor saved local-host.json is available. ` +
-                  'Run `sherpa up --local <path>` from the project directory'
+                  'Run `sherpa-review up --local <path>` from the project directory'
                 : null,
     };
 }

@@ -23,7 +23,7 @@ const STARTUP_TIMEOUT_MS = 15_000;
 
 const packageRoot = path.resolve(import.meta.dirname, '..');
 /** Built once in globalSetup (`src/bundle.global-setup.ts`). Only runs here. */
-const bundlePath = path.join(packageRoot, 'dist', 'sherpa-server.mjs');
+const bundlePath = path.join(packageRoot, 'dist', 'sherpa-review-server.mjs');
 /**
  * Distribution version from the root package.json: the build embeds it in the bundle, while `SERVER_VERSION`
  * in this process is zero (the development default), so it cannot be used for comparison.
@@ -35,7 +35,7 @@ const releaseVersion = (
 /**
  * The server module as the skill distribution sees it: a separate process running plain node, state in tmp,
  * UI embedded. Neither a checkout nor `ui/dist` exists beside the process. In the distribution the module is loaded by
- * `sherpa server` from the CLI. Here a two-line wrapper keeps the server package independent of the CLI.
+ * `sherpa-review server` from the CLI. Here a two-line wrapper keeps the server package independent of the CLI.
  */
 describe('server module', () => {
     let sherpaDir: string;
@@ -170,7 +170,7 @@ describe('server module', () => {
             const { code, stderr } = await collectExit(server);
 
             expect(code).toBe(1);
-            expect(stderr).toContain('sherpa server --pr');
+            expect(stderr).toContain('sherpa-review server --pr');
         },
         TEST_TIMEOUT_MS,
     );

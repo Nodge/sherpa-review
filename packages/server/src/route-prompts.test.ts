@@ -88,7 +88,7 @@ describe('route guides', () => {
                 expect(guide).toContain('the printed `task fail` command');
                 // Commands come from the task output, which has the full CLI path and `--pr`.
                 expect(guide).toContain('the `task complete` command printed by the task, copied as is');
-                expect(guide).not.toContain('sherpa task');
+                expect(guide).not.toContain('sherpa-review task');
                 expect(guide).toContain('do\nnot install validators or packages');
             }
         }

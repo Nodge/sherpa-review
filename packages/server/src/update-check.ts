@@ -232,7 +232,7 @@ export class UpdateChecker {
             return { ok: true, latest };
         } catch (error) {
             const reason = describeFetchError(error);
-            process.stderr.write(`sherpa-server: update check failed: ${reason}\n`);
+            process.stderr.write(`sherpa-review-server: update check failed: ${reason}\n`);
             return { ok: false, reason };
         }
     }
@@ -271,7 +271,7 @@ export class UpdateChecker {
             fs.renameSync(temp, this.cacheFile);
         } catch (error) {
             fs.rmSync(temp, { force: true });
-            process.stderr.write(`sherpa-server: failed to write update check cache: ${describeFetchError(error)}\n`);
+            process.stderr.write(`sherpa-review-server: failed to write update check cache: ${describeFetchError(error)}\n`);
         }
     }
 

@@ -105,7 +105,7 @@ function DisconnectedBanner({ prKey }: { prKey: string }) {
             <strong>Agent disconnected</strong>
             <p>The session stopped responding. Tasks stay queued until the agent returns.</p>
             <p>Run the Sherpa skill again in an agent session. It will register the new session as a worker:</p>
-            <CopyCommand command={`sherpa worker register --pr ${prKey}`} />
+            <CopyCommand command={`sherpa-review worker register --pr ${prKey}`} />
         </div>
     );
 }

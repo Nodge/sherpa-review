@@ -16,7 +16,7 @@ import { taskResultDirFor, taskResultFileFor, workerIdPathFor } from './paths.js
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 /** Built once in globalSetup (`src/bundle.global-setup.ts`). Only runs here. */
-const bundlePath = path.join(packageRoot, 'dist', 'sherpa.mjs');
+const bundlePath = path.join(packageRoot, 'dist', 'sherpa-review.mjs');
 
 const PR_KEY = 'pr-909';
 /** How the CLI names itself in printed commands. Worker processes run the bundle at this path. */

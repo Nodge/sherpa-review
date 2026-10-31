@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 /**
- * Build `dist/sherpa.mjs` once per run. Test files run in parallel forks,
+ * Build `dist/sherpa-review.mjs` once per run. Test files run in parallel forks,
  * and `build.mjs` overwrites the bundle non-atomically. If each file built it separately, another fork
  * could read a truncated file.
  */

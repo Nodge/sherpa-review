@@ -10,7 +10,7 @@ import { CliError } from './errors.js';
 import type { CliHostPlugin, LocalDetection, LocalDetector } from './hosts/plugin.js';
 
 /**
- * Local review from a project directory (`sherpa up --local <path>`): which VCS, which directory,
+ * Local review from a project directory (`sherpa-review up --local <path>`): which VCS, which directory,
  * which branch and which key identifies it. All of this is resolved here, not on the server. Only
  * the command's caller knows the directory, and the VCS kind reaches the server as the key prefix.
  * Host plugins (`LocalDetector`) know which VCS kinds exist. This module doesn't.
@@ -53,7 +53,7 @@ export async function resolveLocalTarget(
     const detectors = hosts.flatMap((host) => (host.detectLocal === undefined ? [] : [host.detectLocal]));
     if (detectors.length === 0) {
         throw new CliError(
-            'sherpa: this Sherpa build knows no version control system for local review.\n' +
+            'sherpa-review: this Sherpa build knows no version control system for local review.\n' +
                 'Pass `--pr <pr key>` to review a PR instead.',
         );
     }
@@ -113,16 +113,16 @@ async function realDirectory(rawPath: string): Promise<string> {
         real = await fs.realpath(candidate);
     } catch {
         throw new CliError(
-            `sherpa: there is no directory ${candidate}.\n` +
-                'Pass the path of the project directory to review: `sherpa up --local <path>`.',
+            `sherpa-review: there is no directory ${candidate}.\n` +
+                'Pass the path of the project directory to review: `sherpa-review up --local <path>`.',
         );
     }
 
     const stats = await fs.stat(real).catch(() => null);
     if (stats?.isDirectory() !== true) {
         throw new CliError(
-            `sherpa: ${candidate} is not a directory.\n` +
-                'Pass the path of the project directory to review: `sherpa up --local <path>`.',
+            `sherpa-review: ${candidate} is not a directory.\n` +
+                'Pass the path of the project directory to review: `sherpa-review up --local <path>`.',
         );
     }
     return real;
@@ -141,7 +141,7 @@ function notACheckout(
     });
     const named = kinds.join(' or ');
     return (
-        `sherpa: ${repo} is not inside ${articleOf(named)} ${named} checkout` +
+        `sherpa-review: ${repo} is not inside ${articleOf(named)} ${named} checkout` +
         (reasons.length === 0 ? '' : ` (${reasons.join('; ')})`) +
         '.\n' +
         `Local review reads the working tree with ${kinds.map((kind) => `\`${kind}\``).join(' or ')}; ` +

@@ -714,7 +714,7 @@ export class TaskQueue {
                 effect();
             } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
-                process.stderr.write(`sherpa-server: failed to apply accepted result: ${message}\n`);
+                process.stderr.write(`sherpa-review-server: failed to apply accepted result: ${message}\n`);
             }
         }
     }

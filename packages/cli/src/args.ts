@@ -108,10 +108,10 @@ export function parseArgs(argv: readonly string[]): Command {
     const group = positionals[0];
 
     if (group !== 'up' && flags.size > 0) {
-        throw new CliError('sherpa: --no-open is only available for `sherpa up`.');
+        throw new CliError('sherpa-review: --no-open is only available for `sherpa-review up`.');
     }
     if (group !== 'up' && (options.has('--local') || options.has('--base') || options.has('--verdicts'))) {
-        throw new CliError('sherpa: --local, --base and --verdicts are only available for `sherpa up`.');
+        throw new CliError('sherpa-review: --local, --base and --verdicts are only available for `sherpa-review up`.');
     }
     if (group === 'up') {
         return parseUpCommand(positionals, options, flags, prKey);
@@ -124,9 +124,9 @@ export function parseArgs(argv: readonly string[]): Command {
     }
 
     throw new CliError(
-        `sherpa: unknown command ${JSON.stringify(positionals.join(' '))}.\n` +
-            'Available: `sherpa up`, `sherpa worker next`, `sherpa task complete|progress|fail <id>`; ' +
-            '`sherpa --help` lists them all.',
+        `sherpa-review: unknown command ${JSON.stringify(positionals.join(' '))}.\n` +
+            'Available: `sherpa-review up`, `sherpa-review worker next`, `sherpa-review task complete|progress|fail <id>`; ' +
+            '`sherpa-review --help` lists them all.',
     );
 }
 
@@ -156,8 +156,8 @@ function parseUpCommand(
 ): Command {
     if (positionals.length > 1) {
         throw new CliError(
-            `sherpa: unexpected arguments after \`up\`: ${positionals.slice(1).join(' ')}.\n` +
-                'Expected `sherpa up [--pr <pr key> | --local <path> [--base <ref>] [--verdicts <instruction>]] ' +
+            `sherpa-review: unexpected arguments after \`up\`: ${positionals.slice(1).join(' ')}.\n` +
+                'Expected `sherpa-review up [--pr <pr key> | --local <path> [--base <ref>] [--verdicts <instruction>]] ' +
                 '[--harness <harness name>] [--model <model name>] [--lang <ru|en>] [--no-open]`; ' +
                 'without `--pr` and `--local` the PR is taken from the current branch of the current directory.',
         );
@@ -167,21 +167,21 @@ function parseUpCommand(
     const base = options.get('--base')?.trim();
     if (local !== undefined && prKey !== undefined) {
         throw new CliError(
-            'sherpa: `--local` and `--pr` mean different reviews — pass one of them.\n' +
+            'sherpa-review: `--local` and `--pr` mean different reviews — pass one of them.\n' +
                 'Use `--local <path>` to review the working tree of a checkout, `--pr <pr key>` to review a PR.',
         );
     }
     if (base !== undefined && local === undefined) {
         throw new CliError(
-            'sherpa: `--base` only makes sense with `--local`.\n' +
-                'Call `sherpa up --local <path> --base <ref>`; for a PR the base comes from the host.',
+            'sherpa-review: `--base` only makes sense with `--local`.\n' +
+                'Call `sherpa-review up --local <path> --base <ref>`; for a PR the base comes from the host.',
         );
     }
     const verdicts = parseVerdicts(options.get('--verdicts'));
     if (verdicts !== undefined && local === undefined) {
         throw new CliError(
-            'sherpa: `--verdicts` only makes sense with `--local`.\n' +
-                'Call `sherpa up --local <path> --verdicts \'<instruction>\'`; a PR takes its verdicts from the host.',
+            'sherpa-review: `--verdicts` only makes sense with `--local`.\n' +
+                'Call `sherpa-review up --local <path> --verdicts \'<instruction>\'`; a PR takes its verdicts from the host.',
         );
     }
 
@@ -221,7 +221,7 @@ function parseVerdicts(raw: string | undefined): string | undefined {
     }
     if (value.length > VERDICTS_INSTRUCTION_MAX_CHARS) {
         throw new CliError(
-            `sherpa: the \`--verdicts\` instruction is ${String(value.length)} characters long, ` +
+            `sherpa-review: the \`--verdicts\` instruction is ${String(value.length)} characters long, ` +
                 `the limit is ${String(VERDICTS_INSTRUCTION_MAX_CHARS)}.\n` +
                 'Pass what the user asked for on ship or on request changes in a sentence or two, in their words.',
         );
@@ -230,13 +230,13 @@ function parseVerdicts(raw: string | undefined): string | undefined {
 }
 
 const MISSING_VERDICTS_INSTRUCTION =
-    'sherpa: `--verdicts` needs the user\'s instruction for the outcome of the review.\n' +
-    'Call `sherpa up --local <path> --verdicts \'<what to do on ship or on request changes>\'` ' +
+    'sherpa-review: `--verdicts` needs the user\'s instruction for the outcome of the review.\n' +
+    'Call `sherpa-review up --local <path> --verdicts \'<what to do on ship or on request changes>\'` ' +
     'in the user\'s words, in single quotes; without such an instruction leave the flag out.';
 
 const MISSING_LOCAL_PATH =
-    'sherpa: `--local` needs the path of the project directory to review.\n' +
-    'Call `sherpa up --local <path>` — `.` is the directory you are in right now.';
+    'sherpa-review: `--local` needs the path of the project directory to review.\n' +
+    'Call `sherpa-review up --local <path>` — `.` is the directory you are in right now.';
 
 /**
  * Parse error hints don't print a complete command because the PR key and CLI path aren't known here.
@@ -254,7 +254,7 @@ function parseWorkerCommand(
     const sub = positionals[1];
     if ((sub !== 'next' && sub !== 'register') || positionals.length > 2) {
         throw new CliError(
-            'sherpa: group `worker` has two commands — `worker next` and `worker register`.\n' +
+            'sherpa-review: group `worker` has two commands — `worker next` and `worker register`.\n' +
                 'Run the full `worker next` command printed by `up`: it carries the CLI path and `--pr`.',
         );
     }
@@ -283,7 +283,7 @@ function parseLang(raw: string | undefined): Locale | undefined {
     const parsed = localeSchema.safeParse(value.toLowerCase());
     if (!parsed.success) {
         throw new CliError(
-            `sherpa: --lang expects \`ru\` or \`en\`, got \`${value}\`.\n` +
+            `sherpa-review: --lang expects \`ru\` or \`en\`, got \`${value}\`.\n` +
                 'Pass the language you speak with the reviewer in; if you are not sure, omit the flag ' +
                 'and the UI will pick the language itself.',
         );
@@ -299,13 +299,13 @@ function parseTaskCommand(
     const sub = positionals[1];
     if (sub !== 'complete' && sub !== 'progress' && sub !== 'fail') {
         throw new CliError(
-            'sherpa: group `task` has three commands — `complete`, `progress`, `fail`.\n' +
+            'sherpa-review: group `task` has three commands — `complete`, `progress`, `fail`.\n' +
                 `Syntax: \`task complete <id> --file <path>\`. ${COPY_PRINTED_COMMAND}`,
         );
     }
     if (positionals.length > 3) {
         throw new CliError(
-            `sherpa: unexpected arguments after \`task ${sub}\`: ${positionals.slice(3).join(' ')}.\n` +
+            `sherpa-review: unexpected arguments after \`task ${sub}\`: ${positionals.slice(3).join(' ')}.\n` +
                 `Syntax: ${taskSyntaxOf(sub)}. ${COPY_PRINTED_COMMAND}`,
         );
     }
@@ -325,7 +325,7 @@ function parseTaskCommand(
 function parseTaskId(raw: string | undefined, sub: TaskSubcommand): number {
     if (raw === undefined) {
         throw new CliError(
-            `sherpa: no task number given.\nSyntax: ${taskSyntaxOf(sub)}. The task number comes from the ` +
+            `sherpa-review: no task number given.\nSyntax: ${taskSyntaxOf(sub)}. The task number comes from the ` +
                 `output of \`worker next\`. ${COPY_PRINTED_COMMAND}`,
         );
     }
@@ -335,7 +335,7 @@ function parseTaskId(raw: string | undefined, sub: TaskSubcommand): number {
     const taskId = Number(digits);
     if (!Number.isInteger(taskId) || taskId <= 0) {
         throw new CliError(
-            `sherpa: the task number must be a positive number, got ${JSON.stringify(raw)}.\n` +
+            `sherpa-review: the task number must be a positive number, got ${JSON.stringify(raw)}.\n` +
                 'Take the number from the output of `worker next` (the `TASK sherpa/<id>` line). ' +
                 COPY_PRINTED_COMMAND,
         );
@@ -347,7 +347,7 @@ function requireOption(options: ReadonlyMap<OptionName, string>, name: OptionNam
     const value = options.get(name);
     if (value === undefined || value === '') {
         throw new CliError(
-            `sherpa: \`task ${sub}\` requires ${name}.\n` +
+            `sherpa-review: \`task ${sub}\` requires ${name}.\n` +
                 `Syntax: ${taskSyntaxOf(sub)}. ${COPY_PRINTED_COMMAND}`,
         );
     }
@@ -391,14 +391,14 @@ function splitArgs(argv: readonly string[]): {
         const name = separator === -1 ? arg : arg.slice(0, separator);
         if (isFlag(name)) {
             if (separator !== -1) {
-                throw new CliError(`sherpa: flag ${name} does not take a value.`);
+                throw new CliError(`sherpa-review: flag ${name} does not take a value.`);
             }
             flags.add(name);
             continue;
         }
         if (!isOption(name)) {
             throw new CliError(
-                `sherpa: unknown flag ${name}.\nAvailable: ${[...OPTIONS, ...FLAGS].join(', ')}, --version, --help.`,
+                `sherpa-review: unknown flag ${name}.\nAvailable: ${[...OPTIONS, ...FLAGS].join(', ')}, --version, --help.`,
             );
         }
 
@@ -426,7 +426,7 @@ function missingValueMessage(name: OptionName): string {
         case '--verdicts':
             return MISSING_VERDICTS_INSTRUCTION;
         default:
-            return `sherpa: flag ${name} has no value.`;
+            return `sherpa-review: flag ${name} has no value.`;
     }
 }
 

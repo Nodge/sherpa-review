@@ -1,6 +1,6 @@
 # Sherpa: AI-assisted code review
 
-The current version is `0.5.0` (in the root `package.json`, also printed by `sherpa --version` and shown in the UI top bar).
+The current version is `0.5.0` (in the root `package.json`, also printed by `sherpa-review --version` and shown in the UI top bar).
 
 Sherpa is a guide that leads the reviewer along a route through the diff.
 

@@ -30,7 +30,7 @@ export interface NextRun extends WorkerRun {
 }
 
 export interface FakeWorkerOptions {
-    /** Built `dist/sherpa.mjs`. The session uses the same artifact as production. */
+    /** Built `dist/sherpa-review.mjs`. The session uses the same artifact as production. */
     readonly bundlePath: string;
     readonly sherpaDir: string;
     readonly prKey: string;
@@ -161,10 +161,10 @@ interface ExecFileFailure {
     stderr?: string;
 }
 
-/** A nonzero code is a normal protocol outcome (`sherpa` reports rejections this way), not a test failure. */
+/** A nonzero code is a normal protocol outcome (`sherpa-review` reports rejections this way), not a test failure. */
 function failedRun(error: unknown): WorkerRun {
     if (!(error instanceof Error)) {
-        throw new Error(`sherpa invocation failed with a non-error: ${String(error)}`);
+        throw new Error(`sherpa-review invocation failed with a non-error: ${String(error)}`);
     }
 
     const failure = error as Error & ExecFileFailure;

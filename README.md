@@ -22,8 +22,8 @@ Symlink the `skill` directory into your harness skills directory (use your check
 
 ```
 mkdir -p ~/.claude/skills ~/.agents/skills
-ln -s ~/src/sherpa-review/skill ~/.claude/skills/sherpa   # Claude Code
-ln -s ~/src/sherpa-review/skill ~/.agents/skills/sherpa   # Codex
+ln -s ~/src/sherpa-review/skill ~/.claude/skills/sherpa-review   # Claude Code
+ln -s ~/src/sherpa-review/skill ~/.agents/skills/sherpa-review   # Codex
 ```
 
 The directory is self-contained: 2 built `.mjs` files (the CLI and server with the UI embedded), zero runtime dependencies. Neither pnpm nor a repository checkout is needed. You can copy it anywhere instead of symlinking it.
@@ -35,7 +35,7 @@ To update, run `git pull` in the checkout if you use a symlink, or copy the dire
 In an agent session:
 
 ```
-/sherpa https://github.com/quillmart/quillmart/pull/12345
+/sherpa-review https://github.com/quillmart/quillmart/pull/12345
 ```
 
 The argument can be a GitHub PR link or a key such as `github-quillmart--quillmart--12345`.
@@ -50,7 +50,7 @@ The agent then runs the loop and waits for tasks from the UI.
 
 By default, the server listens only on `127.0.0.1`. For network access, start a new server
 with `SHERPA_LISTEN_HOST=::`. It accepts IPv6 and IPv4 connections, including local
-CLI requests, and `sherpa up` prints a link with the VM's DNS name. The variable takes effect
+CLI requests, and `sherpa-review up` prints a link with the VM's DNS name. The variable takes effect
 when the server starts. Restart an existing server to apply it.
 
 This exposes the port on the network interfaces. Token checks still apply, but HTTP
@@ -132,7 +132,7 @@ On the first visit, Sherpa takes you through a short 8-step screen tour. `→` o
 
 ### Interface language
 
-Russian or English. By default, the agent supplies the language through the skill (`sherpa up --lang`). Without an agent session, it comes from the browser. To change it manually, use the ⌘K palette → "Interface language: English" / ": Russian". "Language: auto (from the agent or the browser)" restores automatic selection. The choice is global, survives restarts and applies to all PRs.
+Russian or English. By default, the agent supplies the language through the skill (`sherpa-review up --lang`). Without an agent session, it comes from the browser. To change it manually, use the ⌘K palette → "Interface language: English" / ": Russian". "Language: auto (from the agent or the browser)" restores automatic selection. The choice is global, survives restarts and applies to all PRs.
 
 The agent writes the route and chat answers in the same language. Sherpa records the generation language when it builds the route. If you later change the interface language, the provenance indicator names the route language and a banner offers to rebuild it in the new one. The existing route is not translated automatically.
 
@@ -159,7 +159,7 @@ All are optional. Sherpa uses defaults when they are absent.
 | `SHERPA_DIR` | Sherpa state root | `~/.sherpa` |
 | `SHERPA_PR` | PR key when `--pr` is not set | unset |
 | `SHERPA_LISTEN_HOST` | Listen address for a new server. `::` enables IPv6 and IPv4 | `127.0.0.1` |
-| `SHERPA_SERVER_BIN` | Path to the server module | adjacent `sherpa-server.mjs` in the skill directory |
+| `SHERPA_SERVER_BIN` | Path to the server module | adjacent `sherpa-review-server.mjs` in the skill directory |
 
 | `SHERPA_IDLE_SECONDS` | Debug. Idle shutdown threshold in seconds, `0` disables it | `900` (15 minutes) |
 | `SHERPA_WORKER_ID` | Debug. Pins the worker session identity | identity from this PR's `worker-id` file |
@@ -215,8 +215,8 @@ The Feedback form also links to a [project discussion](https://github.com/quillm
 
 ## Version
 
-`0.11.1` appears in `sherpa --version` and in the UI top bar.
+`0.11.1` appears in `sherpa-review --version` and in the UI top bar.
 
 ## Development
 
-The source lives beside the distribution: a TypeScript pnpm monorepo built with esbuild, with one `sherpa` command and an adjacent server module. See [`docs/`](docs/README.md) for how the system works and why, and [`CONTRIBUTING.md`](CONTRIBUTING.md) for building, running and testing.
+The source lives beside the distribution: a TypeScript pnpm monorepo built with esbuild, with one `sherpa-review` command and an adjacent server module. See [`docs/`](docs/README.md) for how the system works and why, and [`CONTRIBUTING.md`](CONTRIBUTING.md) for building, running and testing.

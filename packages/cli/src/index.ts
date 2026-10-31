@@ -9,7 +9,7 @@ import { checkNodeVersion } from './runtime.js';
  */
 const DAEMON_NODE_FLAGS = ['--use-system-ca'];
 
-/** `sherpa` CLI entry point: runtime check, command invocation, exit code. */
+/** `sherpa-review` CLI entry point: runtime check, command invocation, exit code. */
 async function main(): Promise<number> {
     const versionError = checkNodeVersion(process.versions.node);
     if (versionError !== null) {

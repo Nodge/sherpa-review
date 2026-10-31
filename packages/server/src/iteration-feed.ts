@@ -130,7 +130,7 @@ export class IterationFeed {
         this.log =
             options.log ??
             ((message: string): void => {
-                process.stderr.write(`sherpa-server: ${message}\n`);
+                process.stderr.write(`sherpa-review-server: ${message}\n`);
             });
     }
 
