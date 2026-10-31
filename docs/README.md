@@ -11,6 +11,7 @@ Code is the source of truth. These documents describe what the code cannot tell 
 | [`protocol.md`](protocol.md) | Session↔server protocol: constraints, CLI, tasks, queue, liveness, discovery, versions, endpoint table |
 | [`decisions.md`](decisions.md) | Decision log by subsystem. Record each new decision here |
 | [`testing.md`](testing.md) | Checks, unit tests, host contract suite, e2e, performance budgets, state gallery |
+| [`i18n-glossary.md`](i18n-glossary.md) | UI glossary: one English term per concept, the starting point for a new UI translation |
 | [`design/`](design/) | Design handoff: `README.md` (screens, tokens, state model), `SPEC-elements.md` (element behaviour, keyboard), `SPEC-additions-2026-08-26.md`, `SPEC-onboarding-2026-09-02.md`, `SPEC-theming-2026-09-12.md`, `*.dc.html` prototypes |
 | [`research/`](research/) | Research: GitHub API, difftastic, waiting for tasks in harnesses |
 
