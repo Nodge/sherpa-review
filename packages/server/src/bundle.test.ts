@@ -25,11 +25,11 @@ const packageRoot = path.resolve(import.meta.dirname, '..');
 /** Built once in globalSetup (`src/bundle.global-setup.ts`). Only runs here. */
 const bundlePath = path.join(packageRoot, 'dist', 'sherpa-review-server.mjs');
 /**
- * Distribution version from the root package.json: the build embeds it in the bundle, while `SERVER_VERSION`
+ * Distribution version from `packages/npm/package.json`: the build embeds it in the bundle, while `SERVER_VERSION`
  * in this process is zero (the development default), so it cannot be used for comparison.
  */
 const releaseVersion = (
-    JSON.parse(readFileSync(path.join(packageRoot, '../../package.json'), 'utf8')) as { version: string }
+    JSON.parse(readFileSync(path.join(packageRoot, '../npm/package.json'), 'utf8')) as { version: string }
 ).version;
 
 /**

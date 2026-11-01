@@ -18,7 +18,7 @@ import { ViewTabs } from './view-tabs.tsx';
  * Top bar (docs/design/README.md §0): mark, brandcrumb, view tabs, agent status, search and Feedback.
  */
 export interface TopBarProps {
-    /** Distribution version from the root package.json, inserted at build time. */
+    /** Distribution version from `packages/npm/package.json`, inserted at build time. */
     readonly version: string;
     /** New version available. null leaves the version as plain text. */
     readonly update?: UiUpdate | null;

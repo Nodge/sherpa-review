@@ -12,6 +12,10 @@ Record any decision that changes behaviour, a contract or an invariant in `docs/
 
 Before every commit, `pnpm -r typecheck && pnpm -r lint && pnpm -r test` must pass. E2E (`pnpm --filter @sherpa/e2e e2e`) is outside the required checks. Run it before a release and after changes to `packages/e2e`, the server or UI flows covered by e2e.
 
+## Releases
+
+A PR that changes what ships to users carries a changeset for `sherpa-review` (`pnpm changeset`, or `pnpm changeset --empty` when nothing user-visible changes). CI fails without one. The changeset text is the release note for Sherpa users: write it so that someone who has never read the code understands what changed for them, as far as the change allows. Rules and bump levels: `CONTRIBUTING.md#release`.
+
 ## Contracts
 
 - Everything the model reads or that crosses a process boundary has a schema in `packages/protocol` and passes validation. The UI consumes only data that passes its schema. The server rejects task results that fail validation (fail closed).

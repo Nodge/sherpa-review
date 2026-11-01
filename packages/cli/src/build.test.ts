@@ -8,9 +8,9 @@ import { describe, expect, it } from 'vitest';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const bundlePath = join(packageRoot, 'dist', 'sherpa-review.mjs');
-/** Distribution version from the root package.json, the single source for all three bundles. */
+/** Distribution version from `packages/npm/package.json`, the single source for all three bundles. */
 const releaseVersion = (
-    JSON.parse(readFileSync(join(packageRoot, '../../package.json'), 'utf8')) as { version: string }
+    JSON.parse(readFileSync(join(packageRoot, '../npm/package.json'), 'utf8')) as { version: string }
 ).version;
 
 // The bundle is built once in globalSetup (`src/bundle.global-setup.ts`).

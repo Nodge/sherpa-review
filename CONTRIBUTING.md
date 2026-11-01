@@ -59,7 +59,7 @@ The development proxy in `packages/ui/vite.config.ts` forwards `/api` to a runni
 To run a checkout build in an agent session, build the package:
 
 ```
-pnpm --filter @sherpa/ui build && pnpm --filter @sherpa/npm build
+pnpm build:package
 ```
 
 Then ask the agent to run `node <repo>/packages/npm/dist/bin/sherpa-review.mjs guide` and follow its output instead of invoking the installed skill. Outside the npx cache, the guide prints `node <path>` commands, so the whole session uses the checkout build. If you need a different server module, `SHERPA_SERVER_BIN` overrides the lookup beside the CLI.
@@ -127,15 +127,17 @@ For the video, use a 1280 × 800 viewport at device scale factor 2. Keep the ini
 
 ## Release
 
-Bump `version` in the root `package.json`, then prepare the package:
+Releases go through [changesets](https://github.com/changesets/changesets). The published package is `sherpa-review` in `packages/npm`, and its `package.json` holds the distribution version. Config: `.changeset/config.json`.
 
-```
-pnpm release
-```
+- A PR that changes what ships carries a changeset: `pnpm changeset`, select `sherpa-review`. The `@sherpa/*` packages are private and never get a changeset of their own. What counts as shipping is `changedFilePatterns` in the config: package sources and `package.json` files, build scripts, the UI's `vite.config.ts` and `index.html`. Tests, `src/dev/`, `packages/e2e`, docs and CI need none. A PR that touches a counted file without a user-visible change takes `pnpm changeset --empty`.
+- The changeset text is the release note in `packages/npm/CHANGELOG.md` and the GitHub release. Write it for a Sherpa user who has never read the code: what they can do now or what changed for them, in the words of the screen and the commands they type. Module names and internals stay out unless the change is about them. One user-visible change, one changeset. Bump: patch for fixes, minor for new features and behaviour, major for a break of the skill or CLI contract.
+- `pnpm run ci:changesets` (`changeset status --since=origin/main`) runs in CI on every push and PR and fails a counted change with no changeset. It is skipped for dependabot's own pushes. A dependabot PR that bumps a bundled runtime library ships to users, so add a patch changeset to it before merging ("Update <lib> to <version>"). A dev tooling bump alone takes none.
+- On push to main the Release workflow (`.github/workflows/release.yml`, `changesets/action`) opens or updates the "Upcoming Release" PR: `changeset version` bumps `packages/npm/package.json` and writes `CHANGELOG.md`.
+- Merging that PR runs `pnpm run ci:publish`: `pnpm build:package`, then `changeset publish`, which publishes every version not yet on npm with trusted publishing (OIDC, no token in the repository) and creates the tag `sherpa-review@x.y.z` and the GitHub release.
 
-`scripts/release.mjs` builds `@sherpa/ui` and `@sherpa/npm`. It checks that `sherpa-review --version` and `packages/npm/dist/package.json` match the root version, lists what `npm publish` would upload, and prints the publish command. Use `pnpm release --skip-build` to check an existing `dist`.
+`pnpm build:package` (`scripts/build-package.mjs`) builds the UI and the package. It checks that `sherpa-review --version` and `packages/npm/dist/package.json` carry the version of `packages/npm/package.json` and lists what npm would upload. Use `pnpm build:package --skip-build` to check an existing `dist`. CI runs it on every push.
 
-The script neither publishes nor runs git. To publish the package, run the printed `npm publish packages/npm/dist` command. Users get the release in their next agent session because the skill runs `npx -y sherpa-review@latest`.
+Users get a release in their next agent session because the skill runs `npx -y sherpa-review@latest`.
 
 ## Decisions
 

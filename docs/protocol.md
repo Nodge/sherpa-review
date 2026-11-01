@@ -276,7 +276,7 @@ The handshake happens on **every** worker request because the CLI keeps no state
 
 This usually happens after an upgrade because `up` reuses a live server. The previous release's daemon keeps serving the PR until it stops. A response outside the contract gets a separate diagnostic without an instruction to stop the server, since it may be a failure in a server of the current version.
 
-The distribution has its own version: the `version` field in the root `package.json`, embedded at build time. The npm distribution has no update channel because each new session runs the latest package through npx.
+The distribution has its own version: the `version` field of `packages/npm/package.json`, embedded at build time. The npm distribution has no update channel because each new session runs the latest package through npx.
 
 A build with an update channel (`UpdateChannel`) receives the latest published version in the `distributionVersionSchema` format (`packages/protocol/src/distribution.ts`) and compares it with the embedded one. If a newer version exists, the UI shows a toast with "what is new" and the channel's installation hint: an update command, or an installation directory and instruction link if the channel knows them (`uiUpdateInstallSchema`). The server downloads and installs nothing itself (`packages/server/src/update-check.ts`). It caches the check result for half an hour, and settings remember a version the reviewer dismissed.
 

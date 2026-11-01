@@ -12,8 +12,6 @@ const repoRoot = resolve(root, '../..');
 const distDir = resolve(root, 'dist');
 const binDir = resolve(distDir, 'bin');
 
-/** npm package name: `npx sherpa-review` and the skill stub call it by this name. */
-const PACKAGE_NAME = 'sherpa-review';
 const REPOSITORY = 'https://github.com/Nodge/sherpa-review';
 
 /**
@@ -74,7 +72,7 @@ for (const bundle of bundles) {
     copyFileSync(resolve(packageRoot, bundle.file), outfile);
     // Set permissions explicitly: the copy inherits them from the build file, which inherits them from past builds.
     chmodSync(outfile, bundle.mode);
-    process.stdout.write(`@sherpa/npm: ${outfile}\n`);
+    process.stdout.write(`sherpa-review: ${outfile}\n`);
 }
 
 writeNotices();
@@ -88,7 +86,7 @@ function writeNotices() {
     } catch (error) {
         fail(error.message);
     }
-    process.stdout.write(`@sherpa/npm: ${file}\n`);
+    process.stdout.write(`sherpa-review: ${file}\n`);
 }
 
 /**
@@ -101,12 +99,12 @@ function readUiModules() {
     try {
         list = JSON.parse(readFileSync(uiModulesFile, 'utf8'));
     } catch {
-        fail(`@sherpa/npm: no UI module list in ${uiModulesFile}. ${rebuild}`);
+        fail(`sherpa-review: no UI module list in ${uiModulesFile}. ${rebuild}`);
     }
     const uiDist = resolve(uiRoot, 'dist');
     const built = walk(uiDist).map((file) => relative(uiDist, file).split(sep).join(posix.sep)).sort();
     if (!Array.isArray(list.files) || JSON.stringify(list.files) !== JSON.stringify(built) || list.assets === undefined || list.workerFiles === undefined) {
-        fail(`@sherpa/npm: ${uiModulesFile} does not describe the files in ${uiDist}. ${rebuild}`);
+        fail(`sherpa-review: ${uiModulesFile} does not describe the files in ${uiDist}. ${rebuild}`);
     }
     try {
         return [...list.modules, ...assetSources(list.assets, uiRoot, list.workerFiles)];
@@ -121,7 +119,7 @@ function readMetafile(packageRoot, bundle) {
     const outputs = Object.keys(metafile.outputs);
     if (outputs.length !== 1 || outputs[0] !== bundle.file
         || metafile.outputs[bundle.file].bytes !== statSync(resolve(packageRoot, bundle.file)).size) {
-        fail(`@sherpa/npm: ${bundle.meta} in ${packageRoot} does not describe ${bundle.file}. Rebuild the package.`);
+        fail(`sherpa-review: ${bundle.meta} in ${packageRoot} does not describe ${bundle.file}. Rebuild the package.`);
     }
     return metafile;
 }
@@ -138,17 +136,20 @@ function fail(message) {
     process.exit(1);
 }
 
-/** The published manifest. The version comes from the root `package.json`, the single source. */
+/**
+ * The published manifest: name, version, description, license and engines from this package's `package.json`,
+ * which changesets versions. Its version is the single source for all three bundles.
+ */
 function writePackageJson() {
-    const rootManifest = JSON.parse(readFileSync(resolve(repoRoot, 'package.json'), 'utf8'));
+    const ownManifest = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
     const manifest = {
-        name: PACKAGE_NAME,
-        version: rootManifest.version,
-        description: 'Local code review with an AI route through a PR diff, run by the agent in your harness',
-        license: rootManifest.license,
+        name: ownManifest.name,
+        version: ownManifest.version,
+        description: ownManifest.description,
+        license: ownManifest.license,
         type: 'module',
-        bin: { [PACKAGE_NAME]: 'bin/sherpa-review.mjs' },
-        engines: rootManifest.engines,
+        bin: { [ownManifest.name]: 'bin/sherpa-review.mjs' },
+        engines: ownManifest.engines,
         repository: { type: 'git', url: `git+${REPOSITORY}.git` },
         homepage: REPOSITORY,
         bugs: `${REPOSITORY}/issues`,
@@ -156,5 +157,5 @@ function writePackageJson() {
     };
     const file = resolve(distDir, 'package.json');
     writeFileSync(file, `${JSON.stringify(manifest, null, 2)}\n`);
-    process.stdout.write(`@sherpa/npm: ${file}\n`);
+    process.stdout.write(`sherpa-review: ${file}\n`);
 }

@@ -1,4 +1,4 @@
-# @sherpa/npm
+# sherpa-review (`packages/npm`)
 
 This package builds the published `sherpa-review` npm package into `dist/`. The result contains `package.json`, `README.md`, `LICENSE`, `THIRD-PARTY-LICENSES.txt` and 2 files in `bin/`. Nothing at runtime reads the repository checkout or calls pnpm. See [`docs/architecture.md`](../../docs/architecture.md) §1 for the build design.
 
@@ -8,7 +8,7 @@ Build the UI first, then the npm package:
 
 ```
 pnpm --filter @sherpa/ui build
-pnpm --filter @sherpa/npm build
+pnpm --filter sherpa-review build
 ```
 
 The npm build assembles the CLI and server module. It does not build the UI, because the server embeds the existing `packages/ui/dist`. A missing UI build produces an error with instructions.
@@ -18,7 +18,7 @@ The npm build assembles the CLI and server module. It does not build the UI, bec
 - `dist/bin/sherpa-review.mjs` is the only executable. The worker loop runs this thin CLI on every request, so it contains neither the server nor the UI. Its `guide` command prints the session instructions that the skill stub in `skills/sherpa-review/SKILL.md` asks the agent to follow.
 - `dist/bin/sherpa-review-server.mjs` is the PR server module with embedded UI assets. Only `sherpa-review server` loads it with `import()`. The `up` command starts the daemon as `node <bin directory>/sherpa-review.mjs server …`. `SHERPA_SERVER_BIN` overrides the module path.
 
-`build.mjs` generates the manifest with the version from the root `package.json`, no dependencies and no scripts. The entire `dist/` directory is a build artifact and is not stored in git.
+`build.mjs` generates `dist/package.json` from this package's `package.json`: name, version, description, license and engines, with no dependencies and no scripts. changesets versions this `package.json` and writes `CHANGELOG.md` beside it. `publishConfig.directory` makes `pnpm publish` upload `dist/`. The entire `dist/` directory is a build artifact and is not stored in git.
 
 ## Bundled licenses
 
@@ -26,4 +26,4 @@ The npm build assembles the CLI and server module. It does not build the UI, bec
 
 ## Release
 
-Run `pnpm release` from the repository root to build and check the package. It prints the publish command without publishing. [`CONTRIBUTING.md`](../../CONTRIBUTING.md#release) describes the release steps.
+`pnpm build:package` from the repository root builds the UI and the package and checks the result. [`CONTRIBUTING.md`](../../CONTRIBUTING.md#release) describes how releases reach npm.

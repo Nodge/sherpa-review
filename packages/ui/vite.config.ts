@@ -8,10 +8,9 @@ import react from '@vitejs/plugin-react';
 import type { Plugin, ProxyOptions, Rolldown } from 'vite';
 import { defineConfig } from 'vite';
 
-// The distribution has one version, taken from the root package.json `version` field.
-// The UI package version is not the source.
-const rootPackageJson = JSON.parse(
-    readFileSync(fileURLToPath(new URL('../../package.json', import.meta.url)), 'utf8'),
+// The distribution has one version, the `version` of the published package, `packages/npm/package.json`.
+const distributionPackageJson = JSON.parse(
+    readFileSync(fileURLToPath(new URL('../npm/package.json', import.meta.url)), 'utf8'),
 ) as { version: string };
 
 /**
@@ -31,7 +30,7 @@ export default defineConfig({
         // Package assets are always emitted, so their source reaches the license notices. Inlined, they would leave no trace.
         assetsInlineLimit: (file) => (file.split(/[\\/]/u).includes('node_modules') ? false : undefined),
     },
-    define: { __SHERPA_VERSION__: JSON.stringify(rootPackageJson.version) },
+    define: { __SHERPA_VERSION__: JSON.stringify(distributionPackageJson.version) },
     server: proxy === null ? {} : { proxy },
     // The default 5 s is too short: progress scenario tests run dozens of rerenders and time out on
     // a busy machine (`pnpm -r test` runs all packages at once),
