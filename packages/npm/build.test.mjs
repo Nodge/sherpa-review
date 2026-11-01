@@ -63,6 +63,8 @@ describe('npm package build', () => {
             bin: { 'sherpa-review': 'bin/sherpa-review.mjs' },
             engines: root.engines,
         });
+        // npm resolves `sherpa-review@<version>` to a workspace root of the same name and version inside the checkout.
+        expect(root.name).not.toBe(manifest.name);
         expect(manifest).not.toHaveProperty('private');
         expect(manifest).not.toHaveProperty('dependencies');
         expect(manifest).not.toHaveProperty('scripts');
@@ -76,6 +78,8 @@ describe('npm package build', () => {
         expect(skill).toContain('npx -y sherpa-review@latest guide');
         expect(skill).not.toContain(' up --pr');
         expect(skill).not.toContain('worker next');
+        // A blanket stop rule would override the guide's recovery steps, such as resubmitting an oversized result.
+        expect(skill).not.toContain('If a command fails');
     });
 
     it('runs the built CLI with plain node', () => {
@@ -94,7 +98,7 @@ describe('npm package build', () => {
     it('prints the guide from the built CLI', () => {
         const stdout = execFileSync(process.execPath, [cliPath, 'guide'], { encoding: 'utf8' });
 
-        expect(stdout).toContain(`node ${cliPath} up --pr <pr>`);
+        expect(stdout).toContain(`node ${shellQuote(cliPath)} up --pr <pr>`);
         expect(stdout).toContain('**A GitHub PR URL**');
     });
 });
@@ -250,6 +254,11 @@ describe('running the installed package', () => {
         expect(existsSync(marker)).toBe(true);
     }, 60_000);
 });
+
+/** A word for a POSIX shell, the same rule as `shellQuote` in `packages/cli/src/format.ts`. */
+function shellQuote(value) {
+    return /^[\w@%+:,./-][\w@%+=:,./-]*$/u.test(value) ? value : `'${value.replaceAll("'", String.raw`'\''`)}'`;
+}
 
 /** Stops the daemon by PID with SIGTERM and waits so the server does not outlive the test. */
 async function stopProcess(pid) {

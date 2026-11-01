@@ -230,9 +230,9 @@ describe('errors', () => {
     });
 
     it('does not duplicate hints when the server already says what to do', () => {
-        const message = 'The CLI protocol version 9.9.9 is incompatible. Update the skill together with the CLI.';
+        const message = 'Task 7 is unknown or already closed. Call `worker next` for the next one.';
 
-        expect(formatRpcError({ code: 'version_incompatible', message }, 'worker', TARGET)).toBe(`sherpa-review: ${message}`);
+        expect(formatRpcError({ code: 'unknown_task', message }, 'worker', TARGET)).toBe(`sherpa-review: ${message}`);
     });
 
     it('worker conflict in the loop gives a terminal instruction to stop', () => {

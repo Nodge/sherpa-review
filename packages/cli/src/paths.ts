@@ -30,7 +30,7 @@ function sherpaDirOverrideFrom(env: Readonly<Record<string, string | undefined>>
 
 /**
  * Explicit server module path from `SHERPA_SERVER_BIN`. undefined means unset.
- * The server is normally a sibling file in the skill directory. Development runs need the override. `up` also uses it
+ * The server is normally a sibling file in the package's `bin/`. Development runs need the override. `up` also uses it
  * to pass the discovered module to the daemon.
  */
 export function serverBinOverrideFrom(env: Readonly<Record<string, string | undefined>>): string | undefined {

@@ -18,7 +18,7 @@ export interface CommandTarget {
 /**
  * Command the CLI prints for the model: `node <sherpa-review.mjs> <words> --pr <key> [<placeholder>]`.
  * The full path and key let a command copied as is work from any cwd, without the checkout
- * where the CLI discovers the PR, or substituting the skill path. The caller quotes values in `words`
+ * where the CLI discovers the PR, or substituting the CLI path. The caller quotes values in `words`
  * through `shellQuote`.
  * The placeholder (`--text "..."`) goes last. The model replaces it with its own text.
  */
@@ -306,8 +306,8 @@ const WORKER_CONFLICT_STOP =
     'another session has taken over.';
 
 /**
- * Next step by error code. The server already supplies instructions for `version_incompatible` and `unknown_task`,
- * so don't repeat them. For `lease_not_held`, the server instruction names
+ * Next step by error code. The server already supplies instructions for `unknown_task`, so don't repeat them.
+ * `version_incompatible` does not get here: the client replaces it with its own recovery text. For `lease_not_held`, the server instruction names
  * `worker next` briefly. The CLI adds the full command.
  */
 const NEXT_STEP_BY_CODE: Partial<Record<RpcErrorCode, (target: CommandTarget) => string>> = {

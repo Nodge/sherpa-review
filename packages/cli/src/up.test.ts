@@ -29,7 +29,7 @@ describe('server module discovery', () => {
     beforeEach(async () => {
         // Real tmp instead of an fs mock: the symlink case requires an actual symlink.
         workDir = await fs.mkdtemp(path.join(os.tmpdir(), 'sherpa-bin-'));
-        binDir = path.join(workDir, 'skill', 'bin');
+        binDir = path.join(workDir, 'sherpa-review', 'bin');
         await fs.mkdir(binDir, { recursive: true });
         await fs.writeFile(path.join(binDir, 'sherpa-review.mjs'), '// CLI\n');
         await fs.writeFile(path.join(binDir, 'sherpa-review-server.mjs'), '// server\n');
@@ -45,12 +45,13 @@ describe('server module discovery', () => {
         );
     });
 
-    it('finds the module through a symlink to the skill directory', async () => {
-        // This is how the skill is installed: `~/.claude/skills/sherpa-review -> <distribution>`.
-        const link = path.join(workDir, 'skills-sherpa');
-        await fs.symlink(path.join(workDir, 'skill'), link, 'dir');
+    it('finds the module through the node_modules/.bin link to the CLI', async () => {
+        // This is how npm and npx run the package: `node_modules/.bin/sherpa-review -> ../sherpa-review/bin/sherpa-review.mjs`.
+        const link = path.join(workDir, '.bin', 'sherpa-review');
+        await fs.mkdir(path.dirname(link));
+        await fs.symlink('../sherpa-review/bin/sherpa-review.mjs', link, 'file');
 
-        await expect(resolveServerBin(path.join(link, 'bin', 'sherpa-review.mjs'), undefined)).resolves.toBe(
+        await expect(resolveServerBin(link, undefined)).resolves.toBe(
             path.join(await fs.realpath(binDir), 'sherpa-review-server.mjs'),
         );
     });
@@ -135,7 +136,7 @@ describe('server startup in `up`', () => {
      * `body` is the body of the exported `runServer(argv)`.
      */
     async function fakeServer(body: string): Promise<string> {
-        const binDir = path.join(workDir, 'skill', 'bin');
+        const binDir = path.join(workDir, 'sherpa-review', 'bin');
         await fs.mkdir(binDir, { recursive: true });
         const file = path.join(binDir, 'sherpa-review-server.mjs');
         await fs.writeFile(file, `export async function runServer(argv) {\n${body}\nreturn 0;\n}\n`);
@@ -275,7 +276,7 @@ describe('server startup in `up`', () => {
     it('passes --install-dir to the daemon as the distribution root above bin/', async () => {
         await up(await fakeServer(WORKING_SERVER));
 
-        expect((await readManifest(sherpaDir)).installDir).toBe(await fs.realpath(path.join(workDir, 'skill')));
+        expect((await readManifest(sherpaDir)).installDir).toBe(await fs.realpath(path.join(workDir, 'sherpa-review')));
     });
 
     // Only the CLI knows the directory, base and branch. It passes them to the server as spawn arguments.

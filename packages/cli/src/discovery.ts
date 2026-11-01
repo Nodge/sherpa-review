@@ -14,6 +14,8 @@ import { assertValidPrKey, manifestPathFor, sherpaDirFrom, workerIdPathFor } fro
 /** Everything the CLI needs to call the PR server. */
 export interface ServerConnection {
     readonly prKey: string;
+    /** Server process from the manifest, named in the recovery text for a server of another version. */
+    readonly pid: number;
     readonly port: number;
     readonly token: string;
     readonly workerId: string;
@@ -54,7 +56,7 @@ export async function connectAs(
 
 async function openConnection(sherpaDir: string, prKey: string, workerId: string): Promise<ServerConnection> {
     const manifest = await readServerManifest(sherpaDir, prKey);
-    return { prKey, port: manifest.port, token: manifest.token, workerId };
+    return { prKey, pid: manifest.pid, port: manifest.port, token: manifest.token, workerId };
 }
 
 /**

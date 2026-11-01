@@ -133,7 +133,7 @@ describe('worker endpoints', () => {
             expect(response.status).toBe(409);
             const body = rpcErrorSchema.parse(await response.json());
             expect(body.error.code).toBe('version_incompatible');
-            expect(body.error.message).toContain('Update the skill');
+            expect(body.error.message).toContain(`kill ${String(process.pid)}`);
         });
 
         it('returns bad_request with details for malformed bodies and schema violations', async () => {

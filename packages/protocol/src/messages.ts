@@ -165,7 +165,7 @@ export type TaskAckResponse = z.infer<typeof taskAckResponseSchema>;
 export const rpcErrorCodeSchema = z.enum([
     /** Missing or invalid bearer token. */
     'unauthorized',
-    /** Incompatible protocol versions: "update the skill/server". */
+    /** Incompatible protocol versions: a server of another version still serves the PR. */
     'version_incompatible',
     /** The request failed schema validation. */
     'bad_request',

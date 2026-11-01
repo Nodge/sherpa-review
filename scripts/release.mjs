@@ -44,7 +44,12 @@ process.stdout.write(`\n${manifest.name}@${version}, ${String(packed.files.lengt
 for (const file of packed.files) {
     process.stdout.write(`  ${file.path}  ${String(file.size)} B\n`);
 }
-process.stdout.write(`\nPublish it:\n\n  npm publish ${relative(process.cwd(), distDir) || '.'}\n`);
+process.stdout.write(`\nPublish it:\n\n  npm publish ${shellQuote(relative(process.cwd(), distDir) || '.')}\n`);
+
+/** A word for a POSIX shell, the same rule as `shellQuote` in `packages/cli/src/format.ts`. */
+function shellQuote(value) {
+    return /^[\w@%+:,./-][\w@%+=:,./-]*$/u.test(value) ? value : `'${value.replaceAll("'", String.raw`'\''`)}'`;
+}
 
 function run(command, commandArgs) {
     execFileSync(command, commandArgs, { cwd: repoRoot, stdio: 'inherit' });
