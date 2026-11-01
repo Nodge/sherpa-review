@@ -63,7 +63,7 @@ if (r.session_id !== undefined) {
 }
 ```
 
-The wording from variant B was copied almost verbatim into `packages/skill/SKILL.md`.
+The wording from variant B was copied almost verbatim into `packages/skill/SKILL.md` (now the `sherpa-review guide` text, `packages/cli/src/guide.ts`).
 
 ### Repeat measurement on gpt-6-astra (2026-09-29)
 

@@ -59,14 +59,14 @@ describe('server module discovery', () => {
         const lonely = path.join(workDir, 'sherpa-review.mjs');
         await fs.writeFile(lonely, '// CLI\n');
 
-        await expect(resolveServerBin(lonely, undefined)).rejects.toThrow('skill distribution is incomplete');
+        await expect(resolveServerBin(lonely, undefined)).rejects.toThrow('package is incomplete');
     });
 
     it('returns the same error for an empty or nonexistent launch path without a stack trace', async () => {
         await expect(resolveServerBin(undefined, undefined)).rejects.toThrow(CliError);
-        await expect(resolveServerBin('   ', undefined)).rejects.toThrow('skill distribution is incomplete');
+        await expect(resolveServerBin('   ', undefined)).rejects.toThrow('package is incomplete');
         await expect(resolveServerBin(path.join(workDir, 'nonexistent.mjs'), undefined)).rejects.toThrow(
-            'skill distribution is incomplete',
+            'package is incomplete',
         );
     });
 
@@ -84,7 +84,7 @@ describe('server module discovery', () => {
         const broken = path.join(workDir, 'without-runServer.mjs');
         await fs.writeFile(broken, 'export const runServer = 42;\n');
 
-        await expect(loadServerModule(broken)).rejects.toThrow('skill distribution is incomplete');
+        await expect(loadServerModule(broken)).rejects.toThrow('package is incomplete');
     });
 
     it('reports the path and cause for a broken server module instead of asking to retry', async () => {
@@ -386,7 +386,7 @@ describe('server startup in `up`', () => {
                 entry: undefined,
                 startupTimeoutMs: STARTUP_TIMEOUT_MS,
             }),
-        ).rejects.toThrow('skill distribution is incomplete');
+        ).rejects.toThrow('package is incomplete');
     });
 
     // The daemon is the CLI itself. Without its path, there is nothing to spawn even with an explicit server module.
@@ -395,7 +395,7 @@ describe('server startup in `up`', () => {
 
         await expect(
             ensureServer({ prKey: PR_KEY, sherpaDir, entry: undefined, serverBin, startupTimeoutMs: STARTUP_TIMEOUT_MS }),
-        ).rejects.toThrow('skill distribution is incomplete');
+        ).rejects.toThrow('package is incomplete');
     });
 
     describe('terminating a stuck daemon', () => {

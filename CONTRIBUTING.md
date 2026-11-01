@@ -28,7 +28,7 @@ These must pass before every commit. E2E is outside the required checks. `packag
 
 `packages/cli` is the thin `sherpa-review` CLI (`up`, `worker next` and other commands). The worker loop calls it on every invocation, so startup is fast and there are no runtime dependencies. It builds into one `sherpa-review.mjs` bundle. Host adapters live in `src/hosts/` in the server and CLI.
 
-`packages/skill` is the harness distribution: `SKILL.md` plus the CLI and server module in `dist/bin/`. `dist/` is a build artifact and is not versioned (`.gitignore` excludes `dist/`).
+`packages/npm` builds the published `sherpa-review` npm package: a manifest plus the CLI and server module in `dist/bin/`. `dist/` is a build artifact and is not versioned (`.gitignore` excludes `dist/`). The skill itself is the stub `skills/sherpa-review/SKILL.md`, which runs `sherpa-review guide` through npx.
 
 `packages/fixtures` contains deterministic PRs (`medium`, `small`, `large`, `edge`, `huge`, `empty`), a fixture `ReviewHost` and domain object builders. Development mode, the state gallery and e2e use them.
 
@@ -52,7 +52,7 @@ pnpm --filter @sherpa/ui dev
 
 The development proxy in `packages/ui/vite.config.ts` forwards `/api` to a running server. It takes the address from `SHERPA_SERVER`, or from the first manifest in `~/.sherpa/servers/*.json`. The port is ephemeral and cannot be hardcoded. Starting a server after `vite dev` requires restarting vite. Open `http://localhost:5173/#t=<token>` with the token from the link the server printed.
 
-To use the skill from a checkout, build it (`pnpm --filter @sherpa/ui build && pnpm --filter @sherpa/skill build`) and symlink the distribution into the harness: `~/.claude/skills/sherpa-review` (Claude Code) or `~/.agents/skills/sherpa-review` (Codex) → `<repo>/packages/skill/dist`. `SHERPA_SERVER_BIN` overrides the server module lookup beside the CLI if you need a different module.
+To run a checkout build in an agent session, build the package (`pnpm --filter @sherpa/ui build && pnpm --filter @sherpa/npm build`) and ask the agent to run `node <repo>/packages/npm/dist/bin/sherpa-review.mjs guide` and follow its output instead of invoking the skill. Outside the npx cache, the guide prints `node <path>` commands, so the whole session stays on the checkout build. `SHERPA_SERVER_BIN` overrides the server module lookup beside the CLI if you need a different module.
 
 ## State gallery
 
@@ -96,6 +96,16 @@ Measurements are printed as `PERF …` lines. See `docs/testing.md` and `package
 ## Appearance
 
 The test in `packages/ui/src/styles/tokens.test.ts` compares the design tokens in `packages/ui/src/styles/tokens.css` with the table in `docs/design/README.md`. Changing a token without updating the design handoff, or vice versa, fails the checks. Then add a gallery card and compare it with the prototype. The prototype is a reference, not a source of code.
+
+## Release
+
+Bump `version` in the root `package.json`, then run:
+
+```
+pnpm release
+```
+
+`scripts/release.mjs` builds `@sherpa/ui` and `@sherpa/npm`, checks that `sherpa-review --version` and `packages/npm/dist/package.json` carry the root version, lists what `npm publish` would upload and prints the publish command. `--skip-build` checks an existing `dist`. The script publishes nothing and calls no git: run the printed `npm publish packages/npm/dist` yourself. Users get the release with their next agent session, as the skill runs `npx -y sherpa-review@latest`.
 
 ## Decisions
 

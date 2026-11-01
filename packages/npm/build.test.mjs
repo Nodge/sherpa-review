@@ -1,12 +1,12 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import process from 'node:process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 const packageRoot = dirname(fileURLToPath(import.meta.url));
 const distDir = join(packageRoot, 'dist');
@@ -14,6 +14,7 @@ const binDir = join(distDir, 'bin');
 const cliPath = join(binDir, 'sherpa-review.mjs');
 const serverPath = join(binDir, 'sherpa-review-server.mjs');
 const uiRoot = resolve(packageRoot, '../ui');
+const repoRoot = resolve(packageRoot, '../..');
 /** Distribution version from the root package.json, the single source for all three bundles. */
 const releaseVersion = JSON.parse(readFileSync(join(packageRoot, '../../package.json'), 'utf8')).version;
 
@@ -27,37 +28,44 @@ beforeAll(() => {
     execFileSync(process.execPath, ['build.mjs'], { cwd: packageRoot, stdio: 'pipe' });
 }, 120_000);
 
-describe('skill package build', () => {
-    // The harness links to `dist/`. An extra file there is junk in the installed skill.
-    it('makes dist/ a self-contained distribution with its license, command and server module', () => {
-        expect(readdirSync(distDir).sort()).toEqual(['LICENSE', 'SKILL.md', 'bin', 'version.json']);
+describe('npm package build', () => {
+    // `dist/` is what `npm publish` uploads. An extra file there is junk in every install.
+    it('makes dist/ the package: manifest, readme, license, command and server module', () => {
+        expect(readdirSync(distDir).sort()).toEqual(['LICENSE', 'README.md', 'bin', 'package.json']);
         expect(readdirSync(binDir).sort()).toEqual(['sherpa-review-server.mjs', 'sherpa-review.mjs']);
-        expect(statSync(cliPath).isFile()).toBe(true);
-        expect(statSync(serverPath).isFile()).toBe(true);
         // There is only one command: the server module does not run directly, the CLI loads it.
         expect(statSync(cliPath).mode & 0o111).toBe(0o111);
         expect(statSync(serverPath).mode & 0o111).toBe(0);
-        expect(readFileSync(join(distDir, 'SKILL.md'), 'utf8')).toBe(
-            readFileSync(join(packageRoot, '../../skills/sherpa-review/SKILL.md'), 'utf8'),
-        );
-        expect(readFileSync(join(distDir, 'LICENSE'), 'utf8')).toBe(
-            readFileSync(join(packageRoot, '../../LICENSE'), 'utf8'),
-        );
+        expect(readFileSync(join(distDir, 'LICENSE'), 'utf8')).toBe(readFileSync(join(repoRoot, 'LICENSE'), 'utf8'));
+        expect(readFileSync(join(distDir, 'README.md'), 'utf8')).toBe(readFileSync(join(repoRoot, 'README.md'), 'utf8'));
     });
 
-    /**
-     * The build does not know the release fields, so they stay null.
-     */
-    it('includes the distribution version and working tree state in version.json', () => {
-        const distVersion = JSON.parse(readFileSync(join(distDir, 'version.json'), 'utf8'));
+    // Zero runtime dependencies: `npx` downloads one tarball and runs it.
+    it('publishes sherpa-review with one bin and no dependencies', () => {
+        const manifest = JSON.parse(readFileSync(join(distDir, 'package.json'), 'utf8'));
+        const root = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'));
 
-        const head = git(['rev-parse', 'HEAD']);
-        expect(distVersion).toEqual({
+        expect(manifest).toMatchObject({
+            name: 'sherpa-review',
             version: releaseVersion,
-            builtFrom: head === null ? null : git(['status', '--short', '--', '.']) === '' ? head : `${head}-dirty`,
-            releasedAt: null,
-            whatsNew: null,
+            license: 'MIT',
+            type: 'module',
+            bin: { 'sherpa-review': 'bin/sherpa-review.mjs' },
+            engines: root.engines,
         });
+        expect(manifest).not.toHaveProperty('private');
+        expect(manifest).not.toHaveProperty('dependencies');
+        expect(manifest).not.toHaveProperty('scripts');
+    });
+
+    // The guide lives in the CLI (`sherpa-review guide`). An installed skill stays as it was copied.
+    it('keeps the skill a stub that calls the guide of the latest package', () => {
+        const skill = readFileSync(join(repoRoot, 'skills/sherpa-review/SKILL.md'), 'utf8');
+
+        expect(skill).toMatch(/^---\nname: sherpa-review\n/u);
+        expect(skill).toContain('npx -y sherpa-review@latest guide');
+        expect(skill).not.toContain(' up --pr');
+        expect(skill).not.toContain('worker next');
     });
 
     it('runs the built CLI with plain node', () => {
@@ -73,16 +81,6 @@ describe('skill package build', () => {
         expect(readFileSync(serverPath, 'utf8')).toContain('node:sqlite');
     });
 
-    // The guide lives in the CLI (`sherpa-review guide`). A copied skill stays as it was installed.
-    it('keeps SKILL.md a stub that calls the guide', () => {
-        const skill = readFileSync(join(distDir, 'SKILL.md'), 'utf8');
-
-        expect(skill).toMatch(/^---\nname: sherpa-review\n/u);
-        expect(skill).toContain('npx -y sherpa-review@latest guide');
-        expect(skill).not.toContain(' up --pr');
-        expect(skill).not.toContain('worker next');
-    });
-
     it('prints the guide from the built CLI', () => {
         const stdout = execFileSync(process.execPath, [cliPath, 'guide'], { encoding: 'utf8' });
 
@@ -92,20 +90,38 @@ describe('skill package build', () => {
 });
 
 /**
- * The distribution as the user sees it: a copy of `dist/` in another directory, plain node, its own state.
+ * The package as the user gets it: `npm pack` of `dist/`, installed into another directory the way npx installs it,
+ * run through the `node_modules/.bin` link, with its own state.
  * Uses a fixture key because live review hosts are forbidden in tests (docs/testing.md).
  */
-describe('running the built distribution', () => {
+describe('running the installed package', () => {
     const PR_KEY = 'fixture-medium';
+    let installRoot;
+    let binLink;
     let workDir;
-    let skillDir;
     let sherpaDir;
 
+    beforeAll(() => {
+        installRoot = mkdtempSync(join(tmpdir(), 'sherpa-npm-'));
+        const packed = JSON.parse(
+            execFileSync('npm', ['pack', distDir, '--pack-destination', installRoot, '--json'], { encoding: 'utf8' }),
+        );
+        // No dependencies, so nothing to fetch: the install works offline.
+        execFileSync(
+            'npm',
+            ['install', join(installRoot, packed[0].filename), '--offline', '--no-audit', '--no-fund', '--ignore-scripts'],
+            { cwd: installRoot, stdio: 'pipe' },
+        );
+        binLink = join(installRoot, 'node_modules', '.bin', 'sherpa-review');
+    }, 120_000);
+
+    afterAll(() => {
+        rmSync(installRoot, { recursive: true, force: true });
+    });
+
     beforeEach(() => {
-        workDir = mkdtempSync(join(tmpdir(), 'sherpa-skill-'));
-        skillDir = join(workDir, 'skill');
+        workDir = mkdtempSync(join(tmpdir(), 'sherpa-work-'));
         sherpaDir = join(workDir, 'state');
-        cpSync(distDir, skillDir, { recursive: true });
     });
 
     afterEach(async () => {
@@ -120,7 +136,7 @@ describe('running the built distribution', () => {
         // The test environment must not override server discovery or the PR key.
         const { SHERPA_SERVER_BIN: _bin, SHERPA_PR: _pr, SHERPA_WORKER_ID: _worker, ...inherited } = process.env;
         const env = { ...inherited, SHERPA_DIR: sherpaDir, ...extraEnv };
-        return spawnSync(process.execPath, [join(skillDir, 'bin', 'sherpa-review.mjs'), ...args], {
+        return spawnSync(process.execPath, [binLink, ...args], {
             cwd: workDir,
             encoding: 'utf8',
             env,
@@ -128,6 +144,13 @@ describe('running the built distribution', () => {
             timeout: 20_000,
         });
     }
+
+    it('packs only the package files', () => {
+        const installed = join(installRoot, 'node_modules', 'sherpa-review');
+
+        expect(readdirSync(installed).sort()).toEqual(['LICENSE', 'README.md', 'bin', 'package.json']);
+        expect(sherpa(['--version']).stdout.trim()).toBe(releaseVersion);
+    });
 
     function up() {
         return sherpa(['up', '--pr', PR_KEY, '--no-open', '--harness', 'test']);
@@ -148,7 +171,7 @@ describe('running the built distribution', () => {
         // The daemon is this same CLI running `sherpa-review server`, with Node flags from the CLI root (`src/index.ts`):
         // without `--use-system-ca`, the server does not trust the custom CA that signs the hosts.
         const daemon = execFileSync('ps', ['-o', 'args=', '-p', String(first.pid)], { encoding: 'utf8' });
-        expect(daemon).toContain(`bin/sherpa-review.mjs server --pr ${PR_KEY}`);
+        expect(daemon).toContain(`node_modules/sherpa-review/bin/sherpa-review.mjs server --pr ${PR_KEY}`);
         if (process.allowedNodeEnvironmentFlags.has('--use-system-ca')) {
             expect(daemon).toContain('--use-system-ca');
         }
@@ -165,7 +188,10 @@ describe('running the built distribution', () => {
         const ready = up();
         expect(ready.status, ready.stderr).toBe(0);
         const nextCommand = /Then run `([^`]+)`/u.exec(ready.stdout)?.[1];
-        expect(nextCommand).toMatch(new RegExp(`^node \\S+/bin/sherpa-review\\.mjs worker next --pr ${PR_KEY}$`, 'u'));
+        // The real file behind the `.bin` link: the server module sits beside it.
+        expect(nextCommand).toMatch(
+            new RegExp(`^node \\S+/node_modules/sherpa-review/bin/sherpa-review\\.mjs worker next --pr ${PR_KEY}$`, 'u'),
+        );
 
         const issued = shell(nextCommand);
         expect(issued.status, issued.stderr).toBe(0);
@@ -234,18 +260,5 @@ async function stopProcess(pid) {
         process.kill(pid, 'SIGKILL');
     } catch {
         // Already stopped.
-    }
-}
-
-function git(args) {
-    try {
-        return execFileSync('git', args, {
-            cwd: resolve(packageRoot, '../..'),
-            encoding: 'utf8',
-            stdio: ['ignore', 'pipe', 'ignore'],
-        }).trim();
-    } catch {
-        // A source copy outside a git checkout correctly builds with builtFrom: null.
-        return null;
     }
 }

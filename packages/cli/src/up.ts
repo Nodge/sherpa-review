@@ -372,11 +372,11 @@ async function waitForExit(child: ChildProcess, timeoutMs: number): Promise<bool
 }
 
 const REINSTALL_HINT =
-    'Reinstall the Sherpa skill as a whole (the directory with SKILL.md and bin/). ' +
+    'Reinstall the sherpa-review package. Under npx, delete its directory in the npm cache (`~/.npm/_npx`) and run the skill again. ' +
     'Show this text to the user and stop — do not start the worker loop.';
 
 const INCOMPLETE_DISTRIBUTION =
-    `sherpa-review: the skill distribution is incomplete — ${SERVER_BIN_NAME} must sit next to sherpa-review.mjs.\n${REINSTALL_HINT}`;
+    `sherpa-review: the package is incomplete — ${SERVER_BIN_NAME} must sit next to sherpa-review.mjs.\n${REINSTALL_HINT}`;
 
 async function isFile(filePath: string): Promise<boolean> {
     try {

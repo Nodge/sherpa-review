@@ -222,6 +222,15 @@ importers:
         specifier: workspace:*
         version: link:../protocol
 
+  packages/npm:
+    devDependencies:
+      '@sherpa/cli':
+        specifier: workspace:*
+        version: link:../cli
+      '@sherpa/server':
+        specifier: workspace:*
+        version: link:../server
+
   packages/protocol:
     dependencies:
       markdown-it:
@@ -255,15 +264,6 @@ importers:
       tsx:
         specifier: 4.23.15
         version: 4.23.15
-
-  packages/skill:
-    devDependencies:
-      '@sherpa/cli':
-        specifier: workspace:*
-        version: link:../cli
-      '@sherpa/server':
-        specifier: workspace:*
-        version: link:../server
 
   packages/ui:
     dependencies:

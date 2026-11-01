@@ -404,7 +404,7 @@ describe('CLI against server', () => {
         const result = await sherpaWith({}, 'up');
 
         expect(result.code).toBe(1);
-        expect(result.stderr).toContain('skill distribution is incomplete');
+        expect(result.stderr).toContain('package is incomplete');
         expect(result.stderr).toContain('do not start the worker loop');
     });
 
@@ -446,7 +446,7 @@ describe('CLI against server', () => {
         const result = await sherpaWith({ extraEnv: { SHERPA_SERVER_BIN: broken } }, 'server', '--pr', PR_KEY);
 
         expect(result.code).toBe(1);
-        expect(result.stderr).toContain('skill distribution is incomplete');
+        expect(result.stderr).toContain('package is incomplete');
     });
 
     it('server reports clear errors for a missing module beside the CLI and a nonexistent SHERPA_SERVER_BIN', async () => {
@@ -459,7 +459,7 @@ describe('CLI against server', () => {
         );
 
         expect(lonely.code).toBe(1);
-        expect(lonely.stderr).toContain('skill distribution is incomplete');
+        expect(lonely.stderr).toContain('package is incomplete');
         expect(missing.code).toBe(1);
         expect(missing.stderr).toContain('SHERPA_SERVER_BIN points at');
     });

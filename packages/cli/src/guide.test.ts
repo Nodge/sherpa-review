@@ -85,7 +85,7 @@ describe('sherpa-review guide', () => {
 
 describe('the start command in the guide', () => {
     it('pins an npx run to its exact version', () => {
-        const cli = '/home/me/.npm/_npx/0123abcd/node_modules/.bin/sherpa-review';
+        const cli = '/home/me/.npm/_npx/0123abcd/node_modules/sherpa-review/bin/sherpa-review.mjs';
 
         expect(startCommandPrefix(cli, '0.12.0')).toBe('npx -y sherpa-review@0.12.0');
     });
@@ -95,8 +95,8 @@ describe('the start command in the guide', () => {
             'node /usr/lib/node_modules/sherpa-review/bin/sherpa-review.mjs',
         );
         // A dev build has no published version to pin.
-        expect(startCommandPrefix('/home/me/.npm/_npx/0123abcd/node_modules/.bin/sherpa-review', '0.0.0')).toBe(
-            'node /home/me/.npm/_npx/0123abcd/node_modules/.bin/sherpa-review',
+        expect(startCommandPrefix('/home/me/.npm/_npx/0123abcd/node_modules/sherpa-review/bin/sherpa-review.mjs', '0.0.0')).toBe(
+            'node /home/me/.npm/_npx/0123abcd/node_modules/sherpa-review/bin/sherpa-review.mjs',
         );
         expect(startCommandPrefix('/tmp/my dir/sherpa-review.mjs', '0.12.0')).toBe("node '/tmp/my dir/sherpa-review.mjs'");
     });
