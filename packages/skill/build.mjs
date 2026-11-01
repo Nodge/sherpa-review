@@ -35,7 +35,7 @@ const bundles = [
 
 rmSync(distDir, { recursive: true, force: true });
 mkdirSync(binDir, { recursive: true });
-copyFileSync(resolve(root, 'SKILL.md'), resolve(distDir, 'SKILL.md'));
+copyFileSync(resolve(repoRoot, 'skills/sherpa-review/SKILL.md'), resolve(distDir, 'SKILL.md'));
 copyFileSync(resolve(repoRoot, 'LICENSE'), resolve(distDir, 'LICENSE'));
 
 for (const bundle of bundles) {

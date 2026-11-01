@@ -19,6 +19,9 @@ export const gitCliHost: CliHostPlugin = {
         ownsDirectory: hasOwnGitDir,
         detect: detectGitCheckout,
     },
+    guide: {
+        requirements: ['Local review reads the working tree of a git checkout with `git`.'],
+    },
 };
 
 /**

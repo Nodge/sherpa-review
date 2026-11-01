@@ -27,6 +27,23 @@ function commandLine(target: CommandTarget, words: string, placeholder?: string)
     return (placeholder === undefined ? parts : [...parts, placeholder]).join(' ');
 }
 
+/** npm package name: `guide` pins the session to it with an exact version. */
+const NPM_PACKAGE = 'sherpa-review';
+
+/**
+ * Start of the `up` commands that `guide` prints. Run from the npx cache, it is `npx -y sherpa-review@<version>`:
+ * npx keeps the cache directory of a tag (`@latest`) in place and installs a new version over it, while the
+ * directory of an exact version never changes. `up` then prints the absolute path inside that directory, and
+ * the session keeps the version its server started with. Anywhere else (a global install, a checkout build) it
+ * is `node <this CLI>`. A dev build (`0.0.0`) has no published version to pin.
+ */
+export function startCommandPrefix(cliPath: string, version: string): string {
+    const fromNpxCache = cliPath.split(/[\\/]/u).includes('_npx');
+    return fromNpxCache && version !== '0.0.0'
+        ? `npx -y ${shellQuote(`${NPM_PACKAGE}@${version}`)}`
+        : `node ${shellQuote(cliPath)}`;
+}
+
 export function workerNextCommand(target: CommandTarget): string {
     return commandLine(target, 'worker next');
 }
@@ -217,6 +234,7 @@ export function formatOversizedResult(taskId: number, file: string, bytes: numbe
 
 export function helpText(): string {
     const commands: readonly (readonly [string, string])[] = [
+        ['sherpa-review guide', 'print the session guide: how to start a review and run the worker loop'],
         [
             'sherpa-review up [--local <path> [--verdicts <instruction>]] [--harness <name>] [--model <name>] ' +
                 '[--lang <ru|en>] [--no-open]',
@@ -281,7 +299,7 @@ function nextStepFor(code: RpcErrorCode, role: CallRole, target: CommandTarget):
 
 /**
  * The worker slot went to another session during work, so the loop can't continue.
- * The phrase "stop the loop" is a marker from SKILL.md. Don't change it independently of that file.
+ * The phrase "stop the loop" is a marker from the `sherpa-review guide` text (`guide.ts`), held by `guide.test.ts`.
  */
 const WORKER_CONFLICT_STOP =
     'This session is no longer the worker of this PR: stop the loop and do not call `sherpa-review` again — ' +

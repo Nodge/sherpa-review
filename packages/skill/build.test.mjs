@@ -38,7 +38,7 @@ describe('skill package build', () => {
         expect(statSync(cliPath).mode & 0o111).toBe(0o111);
         expect(statSync(serverPath).mode & 0o111).toBe(0);
         expect(readFileSync(join(distDir, 'SKILL.md'), 'utf8')).toBe(
-            readFileSync(join(packageRoot, 'SKILL.md'), 'utf8'),
+            readFileSync(join(packageRoot, '../../skills/sherpa-review/SKILL.md'), 'utf8'),
         );
         expect(readFileSync(join(distDir, 'LICENSE'), 'utf8')).toBe(
             readFileSync(join(packageRoot, '../../LICENSE'), 'utf8'),
@@ -73,51 +73,21 @@ describe('skill package build', () => {
         expect(readFileSync(serverPath, 'utf8')).toContain('node:sqlite');
     });
 
-    it('describes startup and the worker loop in SKILL.md', () => {
-        const skill = readFileSync(join(packageRoot, 'SKILL.md'), 'utf8');
+    // The guide lives in the CLI (`sherpa-review guide`). A copied skill stays as it was installed.
+    it('keeps SKILL.md a stub that calls the guide', () => {
+        const skill = readFileSync(join(distDir, 'SKILL.md'), 'utf8');
 
         expect(skill).toMatch(/^---\nname: sherpa-review\n/u);
-        expect(skill).toContain('bin/sherpa-review.mjs up --pr');
-        // The loop uses exactly the command printed by `up`, including the full path and `--pr`.
-        expect(skill).toContain('exactly the `worker next` command that `up` printed');
-        expect(skill).not.toContain('bin/sherpa-review.mjs worker next');
-        expect(skill).toContain('--model');
-        expect(skill).toContain('DONE');
-        // Shared task context rule: a path under `shared/` is read once per session.
-        expect(skill).toContain('`shared/`');
-        expect(skill).toContain('once per session');
-        // The task supplies the result file. A custom path in shared tmp would collide across sessions on one machine.
-        expect(skill).toContain('only to the file path the task gives you');
+        expect(skill).toContain('npx -y sherpa-review@latest guide');
+        expect(skill).not.toContain(' up --pr');
+        expect(skill).not.toContain('worker next');
     });
 
-    /**
-     * The SKILL.md loop recognizes situations by exact output phrases: "stop the loop" ends the loop,
-     * DONE ends the work. If the wording diverges, the model silently stops recognizing these situations,
-     * so the build tests the agreement.
-     */
-    it('uses the exact loop marker phrases from SKILL.md in CLI and server output', () => {
-        const skill = readFileSync(join(packageRoot, 'SKILL.md'), 'utf8');
-        const cli = readFileSync(cliPath, 'utf8');
-        const server = readFileSync(serverPath, 'utf8');
+    it('prints the guide from the built CLI', () => {
+        const stdout = execFileSync(process.execPath, [cliPath, 'guide'], { encoding: 'utf8' });
 
-        // Quotes in the SKILL.md body enclose exactly the phrases the model looks for in output.
-        // Frontmatter does not count: its quotes serve the YAML validator. Nor do code spans, where quotes are code.
-        const body = skill.replace(/^---\n[\s\S]*?\n---\n/u, '').replace(/`[^`\n]*`/gu, '');
-        const markers = [...body.matchAll(/"([^"]+)"/gu)].map((match) => match[1]);
-        expect(markers).toEqual(expect.arrayContaining(['stop the loop']));
-
-        for (const marker of [...markers, 'DONE']) {
-            expect(`${cli}\n${server}`, marker).toContain(marker);
-        }
-    });
-
-    // Bootstrap is inside `sherpa-review up`. Mentioning the server or registration in SKILL.md again
-    // gives the model extra knowledge that will diverge from the CLI at the next startup change.
-    it('keeps server and registration details out of SKILL.md', () => {
-        const skill = readFileSync(join(packageRoot, 'SKILL.md'), 'utf8');
-
-        expect(skill).not.toContain('@sherpa/server');
-        expect(skill).not.toContain('worker register');
+        expect(stdout).toContain(`node ${cliPath} up --pr <pr>`);
+        expect(stdout).toContain('**A GitHub PR URL**');
     });
 });
 

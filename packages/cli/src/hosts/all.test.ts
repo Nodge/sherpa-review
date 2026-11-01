@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { CommandRunner } from '../command.js';
 import { resolvePrKey } from '../discovery.js';
+import { guideText } from '../guide.js';
 
 import { CLI_HOSTS } from './all.js';
 
@@ -10,6 +11,15 @@ import { CLI_HOSTS } from './all.js';
 const run: CommandRunner = () => Promise.reject(new Error('commands are not run here'));
 
 describe('built-in CLI hosts', () => {
+    it('bring their parts into the guide', () => {
+        const guide = guideText(CLI_HOSTS, 'sherpa-review');
+
+        expect(guide).toContain('**A GitHub PR URL**');
+        expect(guide).toContain('`GITHUB_TOKEN`, `GH_TOKEN`');
+        expect(guide).toContain('Local review reads the working tree of a git checkout');
+        expect(guide).toContain('(git: merge-base with the default branch)');
+    });
+
     it('GitHub link and ready-made keys', async () => {
         await expect(
             resolvePrKey('https://github.com/acme/ui--kit/pull/7/files#diff-abc', {}, CLI_HOSTS, run),

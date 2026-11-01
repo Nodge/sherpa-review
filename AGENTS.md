@@ -22,7 +22,7 @@ Before every commit, `pnpm -r typecheck && pnpm -r lint && pnpm -r test` must pa
 
 ## Language
 
-Write all project text in English, including SKILL.md, CLI output, task text, HTTP errors, UI text, `server.log`, code comments and documentation. The loop markers ("stop the loop", "DONE") are a contract between SKILL.md and the code, covered by a test in `packages/skill`.
+Write all project text in English, including SKILL.md, CLI output, task text, HTTP errors, UI text, `server.log`, code comments and documentation. The loop markers ("stop the loop", "DONE") are a contract between the `sherpa-review guide` text and the rest of the CLI output, covered by a test in `packages/cli` (`guide.test.ts`).
 
 Text the reviewer reads (UI, route text, release `--notes` in the update toast) describes what they see on screen, using their vocabulary: "context expansion is no longer blocked by changes outside your ownership zone" → "the arrows that reveal hidden diff lines work again in the route".
 
