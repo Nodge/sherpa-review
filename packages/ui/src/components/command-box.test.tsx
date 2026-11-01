@@ -12,7 +12,7 @@ import { CommandBox } from './command-box.tsx';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const COMMAND = '/sherpa fixture-4821';
+const COMMAND = '/sherpa-review fixture-4821';
 
 const mounted: (() => void)[] = [];
 

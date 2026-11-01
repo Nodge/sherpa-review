@@ -52,9 +52,8 @@ for (const bundle of bundles) {
 writeVersionFile();
 
 /**
- * `dist/version.json` follows `distributionVersionSchema`. The server compares
- * this file from main with the embedded version. Release fields (`releasedAt`, `whatsNew`) are filled by
- * `scripts/release.mjs` in the target directory. They are absent from the build artifact.
+ * `dist/version.json` follows `distributionVersionSchema`. Release fields (`releasedAt`, `whatsNew`) stay null
+ * in the build artifact: only a release fills them.
  */
 function writeVersionFile() {
     const version = JSON.parse(readFileSync(resolve(repoRoot, 'package.json'), 'utf8')).version;

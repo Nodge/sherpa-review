@@ -1,0 +1,19 @@
+version: 2
+updates:
+    - package-ecosystem: github-actions
+      directory: /
+      schedule:
+          interval: weekly
+    - package-ecosystem: npm
+      directory: /
+      schedule:
+          interval: weekly
+      groups:
+          npm:
+              patterns: ['*']
+      cooldown:
+          default-days: 7
+      ignore:
+          # 7.x is the native compiler package; typescript-eslint doesn't support it yet.
+          - dependency-name: typescript
+            update-types: ['version-update:semver-major']

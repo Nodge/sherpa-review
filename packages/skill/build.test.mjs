@@ -46,8 +46,7 @@ describe('skill package build', () => {
     });
 
     /**
-     * The server uses this file to check for a new version. The build does not know the release fields,
-     * which `scripts/release.mjs` fills in the target directory.
+     * The build does not know the release fields, so they stay null.
      */
     it('includes the distribution version and working tree state in version.json', () => {
         const distVersion = JSON.parse(readFileSync(join(distDir, 'version.json'), 'utf8'));

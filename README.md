@@ -1,6 +1,6 @@
 # Sherpa
 
-Sherpa is a local code review tool. The reviewer reads a pull request diff in the browser, while an AI agent in another session of the same harness builds a **route** through it. The route is an ordered narrative of what changed and its consequences. The agent also answers questions right beside the code. The server and UI run on localhost. Sherpa makes external requests only to the PR host, GitHub with your GitHub token, and to the feedback channel when you send feedback.
+Sherpa is a local code review tool. The reviewer reads a pull request diff in the browser, while an AI agent in another session of the same harness builds a **route** through it. The route is an ordered narrative of what changed and its consequences. The agent also answers questions right beside the code. The server and UI run on localhost. Sherpa makes external requests only to GitHub, with your token, and to the npm registry to check for updates.
 
 The UI is a complete review interface: file tree and search, a highlighted diff with context expansion, threads and comment drafts, and ship. All of it keeps working without an agent. The route is a layer over the reader, which works on its own.
 
@@ -8,27 +8,35 @@ For reviewers in a monorepo or on GitHub who receive more PRs than they can read
 
 ## Requirements
 
-
-
 - For GitHub PRs, a token: `$GITHUB_TOKEN` → `$GH_TOKEN` → `gh auth token`. No checkout is needed because the PR is read through the API. For the "My files" lens to include CODEOWNERS teams (`@org/team`), the token needs the `read:org` scope.
 - For local review, any git repository checkout.
 - Node ≥ 22.13 (on the 23 release line, 23.4 or later, because earlier versions lack `node:sqlite`).
+- pnpm, to build the skill from a checkout. `corepack enable` installs the version the repository pins.
 - An agent harness: Claude Code (tested) or Codex (supported, tested less). Any other harness works too if it supports skills and can call bash.
-- Model: this configuration has been tested with `opus:high` and `gpt-5.60-sol:high`. These are the recommended models.
+- Model: this configuration has been tested with `opus:high` and `gpt-5.6-sol:high`. These are the recommended models.
 
 ## Installation
 
-Symlink the `skill` directory into your harness skills directory (use your checkout path):
+There is no npm release yet, so the skill is built from a checkout:
+
+```
+git clone https://github.com/Nodge/sherpa-review.git ~/src/sherpa-review
+cd ~/src/sherpa-review
+pnpm install --frozen-lockfile
+pnpm --filter @sherpa/ui build && pnpm --filter @sherpa/skill build
+```
+
+The build puts the skill into `packages/skill/dist`. Symlink it into your harness skills directory:
 
 ```
 mkdir -p ~/.claude/skills ~/.agents/skills
-ln -s ~/src/sherpa-review/skill ~/.claude/skills/sherpa-review   # Claude Code
-ln -s ~/src/sherpa-review/skill ~/.agents/skills/sherpa-review   # Codex
+ln -s ~/src/sherpa-review/packages/skill/dist ~/.claude/skills/sherpa-review   # Claude Code
+ln -s ~/src/sherpa-review/packages/skill/dist ~/.agents/skills/sherpa-review   # Codex
 ```
 
-The directory is self-contained: 2 built `.mjs` files (the CLI and server with the UI embedded), zero runtime dependencies. Neither pnpm nor a repository checkout is needed. You can copy it anywhere instead of symlinking it.
+The directory is self-contained: `SKILL.md` and 2 built `.mjs` files (the CLI and server with the UI embedded), zero runtime dependencies. You can copy it anywhere instead of symlinking it.
 
-To update, run `git pull` in the checkout if you use a symlink, or copy the directory again.
+To update, run `git pull` in the checkout and repeat the build commands.
 
 ## Starting a review
 
@@ -46,11 +54,11 @@ The UI opens in your browser automatically, and the agent prints the link either
 
 The agent then runs the loop and waits for tasks from the UI.
 
-### Direct VM access over IPv6
+### Access from another machine
 
 By default, the server listens only on `127.0.0.1`. For network access, start a new server
 with `SHERPA_LISTEN_HOST=::`. It accepts IPv6 and IPv4 connections, including local
-CLI requests, and `sherpa-review up` prints a link with the VM's DNS name. The variable takes effect
+CLI requests, and `sherpa-review up` prints a link with the machine's DNS name. The variable takes effect
 when the server starts. Restart an existing server to apply it.
 
 This exposes the port on the network interfaces. Token checks still apply, but HTTP
@@ -78,7 +86,7 @@ Unified and split modes, syntax highlighting and word-level highlighting within 
 
 In `.md`, `.markdown` and `.mdown` files, the **Markdown** button renders the document. **Code** returns to the source. Select a few words or a sentence and choose "Ask the agent" to include the exact quote and its line context in the question. Use "Comment" to leave a regular review comment anchored to the same lines and visible in both modes. Changed documents have versions from before and after the edit. Expand omitted context in code mode.
 
-The "My files" lens counts only CODEOWNERS rules that requested you specifically. The PCI DSS lens appears only when the PR touches files in the audit scope. Generated files are muted and count as viewed by default. Right-click a file, or use "⋯" in its card header or the file tree, to copy its path, copy its link on the review host, open it on the host's website or mark it viewed.
+The "My files" lens counts only CODEOWNERS rules that requested you specifically. Generated files are muted and count as viewed by default. Right-click a file, or use "⋯" in its card header or the file tree, to copy its path, copy its link on the review host, open it on the host's website or mark it viewed.
 
 File viewed marks sync with the review host in both directions. Your marks go to the host if it supports them, and host marks come back. Local marks win conflicts. Route stop marks, line-level coverage and the "generated files are viewed" default stay local. Viewed content collapses, so the density of code on screen shows your progress. After "Viewed", the screen moves to the next file, or the next stop in the route.
 
@@ -155,12 +163,10 @@ All are optional. Sherpa uses defaults when they are absent.
 
 | Variable | Purpose | Default |
 |---|---|---|
-
 | `SHERPA_DIR` | Sherpa state root | `~/.sherpa` |
 | `SHERPA_PR` | PR key when `--pr` is not set | unset |
 | `SHERPA_LISTEN_HOST` | Listen address for a new server. `::` enables IPv6 and IPv4 | `127.0.0.1` |
 | `SHERPA_SERVER_BIN` | Path to the server module | adjacent `sherpa-review-server.mjs` in the skill directory |
-
 | `SHERPA_IDLE_SECONDS` | Debug. Idle shutdown threshold in seconds, `0` disables it | `900` (15 minutes) |
 | `SHERPA_WORKER_ID` | Debug. Pins the worker session identity | identity from this PR's `worker-id` file |
 | `SHERPA_SERVER` | Debug, UI development server only. Running server address for the `/api` proxy | first running server manifest |
@@ -180,32 +186,26 @@ All state lives in `~/.sherpa` (directories 0700, manifests 0600):
 
 External requests cover the following:
 
-
 - **GitHub**, only for PRs on github.com, with your token: PR metadata, diff and file contents, threads, drafts and publishing, viewed marks, CODEOWNERS and organisation team membership.
-- **Feedback**, only when you click Feedback and have a token for the channel.
 - **Update checks** ask the npm registry for the latest published version, at most once every 30 minutes.
 
 There is no telemetry. The server listens on `127.0.0.1` by default. The UI access token lives in the link fragment and is not sent to the server.
 
 ## Troubleshooting
 
-**Server log** is at `~/.sherpa/prs/<PR key>/server.log`, in Russian. If the daemon fails to start, the CLI prints the last 20 log lines automatically.
+**Server log** is at `~/.sherpa/prs/<PR key>/server.log`, in English. If the daemon fails to start, the CLI prints the last 20 log lines automatically.
 
 **The server died but left its manifest.** The next launch checks the pid in the manifest and `/healthz` on its port. It moves a stale manifest aside and takes its place automatically. To clean up manually, delete `~/.sherpa/servers/<PR key>.json` while the server is stopped.
 
 **`worker_conflict` and "stop the loop".** Each PR has one worker slot. A new session replaces the old one, which receives an error containing "stop the loop" and stops its loop. This is expected. Continue in the new session. Two agents cannot work on the same PR.
 
-**The server stopped on its own.** After 15 minutes with no open tabs or CLI calls, the PR server stops. There is no `down` command, so it would otherwise stay in memory until the machine restarts. The tab says "Server unavailable, reconnecting…". Run `/sherpa <PR>` again. State lives in SQLite and survives the shutdown.
+**The server stopped on its own.** After 15 minutes with no open tabs or CLI calls, the PR server stops. There is no `down` command, so it would otherwise stay in memory until the machine restarts. The tab says "Server unavailable, reconnecting…". Run `/sherpa-review <PR>` again. State lives in SQLite and survives the shutdown.
 
 **The UI says "Agent disconnected".** The server is running, but the worker session was closed, restarted or replaced. The full reader remains available: diff, search, comments, ship and previously built route snapshots. Only new questions and generation are unavailable. "Connect the agent" in the top bar gives you the launch command. Run it in any harness to make the session a worker again.
 
 ## Feedback
 
-The Feedback button in the UI creates an issue through the configured feedback channel, with your text and, unless you clear the checkbox, context (version, PR, screen, route phase and worker). You can see the context before sending.
-
-If the feedback channel is unavailable, the button says so and your text stays in the form for copying.
-
-The Feedback form also links to a [project discussion](https://github.com/quillmart/quillmart/discussions) for questions, discussion and feedback without an issue.
+The Feedback button in the top bar opens [GitHub issues](https://github.com/Nodge/sherpa-review/issues) for this repository in the browser. Sherpa itself sends nothing. Security problems go through [SECURITY.md](SECURITY.md), not a public issue.
 
 ## Limits
 
@@ -219,7 +219,7 @@ The Feedback form also links to a [project discussion](https://github.com/quillm
 
 ## Development
 
-The source lives beside the distribution: a TypeScript pnpm monorepo built with esbuild, with one `sherpa-review` command and an adjacent server module. See [`docs/`](docs/README.md) for how the system works and why, and [`CONTRIBUTING.md`](CONTRIBUTING.md) for building, running and testing.
+Sherpa is a TypeScript pnpm monorepo built with esbuild: one `sherpa-review` command and a server module beside it. See [`docs/`](docs/README.md) for how the system works and why, and [`CONTRIBUTING.md`](CONTRIBUTING.md) for building, running and testing.
 
 ## License
 

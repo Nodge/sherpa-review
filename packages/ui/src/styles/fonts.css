@@ -2,8 +2,8 @@
  * Vendored IBM Plex (docs/design/README.md, "Assets"): fonts arrive as npm packages and go into
  * the build. No network is needed at runtime, and a restricted network would block Google Fonts.
  *
- * Use complete font variants: they include Latin and Cyrillic in one file, and our UI is Russian
- * (everything the reviewer reads is in Russian). Split versions divide the font by alphabet
+ * Use complete font variants: they include Latin and Cyrillic in one file, and the UI has an English
+ * and a Russian locale. Split versions divide the font by alphabet
  * and would require unicode-range for each variant to save space, which makes no sense on a local
  * machine.
  *

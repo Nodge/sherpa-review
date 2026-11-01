@@ -100,7 +100,7 @@ function mountPanel(overrides: Partial<ChatPanelProps> = {}) {
         notes: [],
         loading: false,
         error: null,
-        reconnectCommand: '/sherpa fixture-4821',
+        reconnectCommand: '/sherpa-review fixture-4821',
         anchor: null,
         focusRequest: 0,
         scrollRequest: null,
@@ -383,7 +383,7 @@ describe('chat panel composer', () => {
                     notes={[]}
                     loading={false}
                     error={null}
-                    reconnectCommand="/sherpa fixture-4821"
+                    reconnectCommand="/sherpa-review fixture-4821"
                     anchor={ANCHOR}
                     focusRequest={0}
                     scrollRequest={null}
@@ -448,7 +448,7 @@ describe('chat panel composer', () => {
                     notes={[]}
                     loading={false}
                     error={null}
-                    reconnectCommand="/sherpa fixture-medium"
+                    reconnectCommand="/sherpa-review fixture-medium"
                     anchor={null}
                     focusRequest={0}
                     scrollRequest={null}
@@ -471,7 +471,7 @@ describe('chat panel composer', () => {
         });
 
         expect(host.querySelector<HTMLTextAreaElement>('textarea')?.disabled).toBe(true);
-        expect(host.querySelector<HTMLInputElement>('.command-box__command')?.value).toBe('/sherpa fixture-medium');
+        expect(host.querySelector<HTMLInputElement>('.command-box__command')?.value).toBe('/sherpa-review fixture-medium');
     });
 });
 
