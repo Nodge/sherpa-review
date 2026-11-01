@@ -62,6 +62,8 @@ export interface UpdateSource {
     subscribe: (listener: () => void) => () => void;
     /** Recheck bypassing TTL, the command palette action "Check for updates". */
     force: () => Promise<UpdateForceResult>;
+    /** The server is built with an update channel: goes into the snapshot as `updateChannel`. */
+    readonly hasChannel: boolean;
 }
 
 export interface UiRoutesOptions {
@@ -332,6 +334,7 @@ function buildState(options: UiRoutesOptions): UiState {
         feedback: options.feedback,
         iterations: options.iterationFeed?.iterations() ?? [],
         update: options.update.get(),
+        updateChannel: options.update.hasChannel,
         generationCap: options.route.currentGenerationCap(),
     };
 }

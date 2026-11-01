@@ -70,15 +70,16 @@ export function useUpdateToast(update: UiUpdate | null, tourActive = false): Upd
 /**
  * "Check for updates" palette command in the "Sherpa" group: forces a check bypassing TTL and
  * returns a status line in the palette itself, so the palette stays open.
+ * The command is registered while the component is mounted. App mounts it only with `uiState.updateChannel`.
  */
-export function useUpdateCheckCommand(options: {
+export function UpdateCheckCommand(props: {
     readonly token: string;
     /** Embedded version of this distribution, shown when there is no update. */
     readonly current: string;
     readonly onStatus: (status: string) => void;
-}): void {
+}): null {
     const t = useT();
-    const { token, current, onStatus } = options;
+    const { token, current, onStatus } = props;
 
     useShortcut({
         id: 'update.check',
@@ -104,4 +105,6 @@ export function useUpdateCheckCommand(options: {
             );
         },
     });
+
+    return null;
 }

@@ -116,7 +116,7 @@ The PCI DSS lens is conditional. The adapter asks the host for the intersection 
 
 **Feedback about Sherpa itself:** a UI button and palette command create an issue with free text, an optional category and automatically attached context (version, PR, screen, route phase, worker). The context is shown before submission, and you can uncheck it.
 
-**Updates:** the server asks the update channel whether a new version is available (at most once every 30 minutes) and shows a toast with release notes and the update command. Nothing downloads or installs automatically.
+**Updates:** the server asks the update channel whether a new version is available (at most once every 30 minutes) and shows a toast with release notes and the update command. The "Check for updates" palette command asks right away. Nothing downloads or installs automatically. A distribution without an update channel has neither the toast nor the command.
 
 **Deferred:** 👍/👎 reactions on route elements (generation quality is separate from product feedback). Opening a file in an external editor. A manual verification checklist, key takeaways and diagrams as stop components.
 

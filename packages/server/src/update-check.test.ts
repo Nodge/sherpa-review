@@ -2,14 +2,20 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import type { DistributionVersion, UiUpdate, UiUpdateInstall } from '@sherpa/protocol';
-import { rpcErrorSchema, UI_DEV_ENDPOINTS, UI_ENDPOINTS, uiUpdateCheckResponseSchema } from '@sherpa/protocol';
+import {
+    rpcErrorSchema,
+    UI_DEV_ENDPOINTS,
+    UI_ENDPOINTS,
+    uiStateSchema,
+    uiUpdateCheckResponseSchema,
+} from '@sherpa/protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { fixtureHostPlugin } from './hosts/fixture/plugin.js';
 import type { SherpaServer } from './server.js';
 import { startServer } from './server.js';
 import { SettingsStore } from './settings-store.js';
-import { makeTempSherpaDir, plainHostPlugin, postJson, removeTempSherpaDir } from './test-support.js';
+import { get, makeTempSherpaDir, plainHostPlugin, postJson, removeTempSherpaDir } from './test-support.js';
 import type { UpdateChannel, UpdateChannelRequest } from './update-channel.js';
 import type { UpdateCheckOptions, UpdateCheckerOptions } from './update-check.js';
 import { UpdateChecker } from './update-check.js';
@@ -414,6 +420,23 @@ describe('version check endpoints', () => {
         servers.push(server);
         return server;
     }
+
+    async function updateChannelOf(server: SherpaServer): Promise<boolean> {
+        const response = await get(server.port, UI_ENDPOINTS.state, server.token);
+        return uiStateSchema.parse(await response.json()).updateChannel;
+    }
+
+    it('with a channel the snapshot carries `updateChannel: true`, also on the fixture host with the check disabled', async () => {
+        expect(await updateChannelOf(await start('plain-4821'))).toBe(true);
+        expect(await updateChannelOf(await start('fixture-medium'))).toBe(true);
+    });
+
+    it('without a channel the snapshot carries `updateChannel: false`', async () => {
+        const server = await startServer({ updateChannel: null, feedbackChannel: null, prKey: 'plain-4821', sherpaDir, longPollSeconds: 0.3, hosts: HOSTS });
+        servers.push(server);
+
+        expect(await updateChannelOf(server)).toBe(false);
+    });
 
     it('force on a fixture host returns the contract without asking the channel', async () => {
         const { channel, latest } = resolving(LATEST);

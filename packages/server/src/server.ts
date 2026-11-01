@@ -130,7 +130,7 @@ export interface StartServerOptions {
      * the UI and CLI don't know about it. Latency measurements adjust section batch sizes here.
      */
     route?: Partial<RouteConfig>;
-    /** Build update channel from the composition root. null disables checks and keeps `uiState.update` null. */
+    /** Build update channel from the composition root. null disables checks, and the snapshot carries `updateChannel: false`. */
     updateChannel: UpdateChannel | null;
     /** Update check injection point. Tests replace the install directory, transport, clock and cache. */
     updateCheck?: UpdateCheckOptions;
