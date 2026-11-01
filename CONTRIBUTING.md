@@ -8,7 +8,7 @@ Build, run and send a PR. Agent rules and canonical contracts are in `AGENTS.md`
 pnpm install --frozen-lockfile
 ```
 
-Node ≥ 22.13 (`engines` in the root `package.json`), and the exact pnpm version recorded in `packageManager`, `pnpm@11.10.0`. `corepack` installs it automatically.
+Node ≥ 22.13 (`engines` in the root `package.json`), and the exact pnpm version recorded in `packageManager`, `pnpm@12.16.1`. `corepack` installs it automatically.
 
 ## Checks
 

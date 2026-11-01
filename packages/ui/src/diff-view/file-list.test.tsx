@@ -50,7 +50,6 @@ const virtual = vi.hoisted(() => {
     interface FakeVirtualizer {
         count: number;
         scrollOffset: number;
-        scrollAdjustments: number;
         measurementsCache: readonly FakeItem[];
         shouldAdjustScrollPositionOnItemSizeChange?: unknown;
         readonly scrollToIndex: ReturnType<typeof vi.fn>;
@@ -71,7 +70,6 @@ const virtual = vi.hoisted(() => {
         const fake: FakeVirtualizer = {
             count: 0,
             scrollOffset: 0,
-            scrollAdjustments: 0,
             measurementsCache: [],
             scrollToIndex: vi.fn(),
             resizeItem: vi.fn(),

@@ -14,7 +14,7 @@
     "node": ">=22.13"
   },
   "devDependencies": {
-    "@playwright/test": "^1.62.1",
+    "@playwright/test": "1.64.1",
     "@sherpa/cli": "workspace:*",
     "@sherpa/fixtures": "workspace:*"
   }

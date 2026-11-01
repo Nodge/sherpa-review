@@ -4,6 +4,10 @@ Decisions made during development, grouped by subsystem: what was decided and wh
 
 To maintain the log, add each new decision as a dated entry in its section. When reversing an old decision, keep its entry. Mark the new one "replaces the decision of …", and leave the old one as history. Each entry records a decision in 1 to 3 sentences: what was decided, why, and what it constrains going forward. It is not a work report. Leave out implementation progress, measurements, file lists and line numbers, which belong in the code and PR.
 
+## Dependency management
+
+- **2026-11-01 · External dependencies use exact versions.** Updating dependencies or pnpm requires an explicit change and the project checks. `saveExact` pins newly added packages, and internal dependencies keep `workspace:*`.
+
 ## Session↔server protocol
 
 - **2026-08-19 · Version handshake on every worker request, not just the first `next`.** The CLI stores no state between invocations, and the check costs almost nothing.

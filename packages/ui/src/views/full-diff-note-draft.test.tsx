@@ -74,6 +74,8 @@ Element.prototype.getBoundingClientRect = function fakeRect(): DOMRect {
     };
 };
 for (const [name, value] of [
+    ['clientWidth', VIEWPORT_WIDTH],
+    ['clientHeight', VIEWPORT_HEIGHT],
     ['offsetWidth', VIEWPORT_WIDTH],
     ['offsetHeight', VIEWPORT_HEIGHT],
 ] as const) {

@@ -48,7 +48,7 @@ Element.prototype.getBoundingClientRect = function fakeRect(): DOMRect {
         toJSON: () => ({}),
     };
 };
-for (const name of ['offsetWidth', 'offsetHeight'] as const) {
+for (const name of ['clientWidth', 'clientHeight', 'offsetWidth', 'offsetHeight'] as const) {
     Object.defineProperty(HTMLElement.prototype, name, { configurable: true, get: () => VIEWPORT });
 }
 Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: () => undefined });

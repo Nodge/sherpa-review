@@ -1,5 +1,5 @@
 import MarkdownIt from 'markdown-it';
-import type { StateInline, Token } from 'markdown-it';
+import type { Env, MarkdownIt as MarkdownItInstance, StateInline, Token } from 'markdown-it';
 
 /**
  * Markdown parsing for everything the reviewer reads. `markdown-it` parses it all (commonmark,
@@ -108,7 +108,7 @@ const MAX_QUOTE_DEPTH = 2;
 
 const HEADING_LEVELS: readonly HeadingLevel[] = [1, 2, 3, 4, 5, 6];
 
-function createParser(linkify: boolean): MarkdownIt {
+function createParser(linkify: boolean): MarkdownItInstance {
     const md = new MarkdownIt('default', { html: false, linkify });
     // Bare addresses need a scheme: `markdown.ts` and `www.x` do not become links.
     md.linkify.set({ fuzzyLink: false, fuzzyEmail: false });
@@ -136,7 +136,7 @@ type InlineRule = (state: StateInline, silent: boolean) => boolean;
  * must match source lines because anchors in the markdown file viewer depend on them.
  * Code keeps newlines in `content`. Links and images store the removed newline count in `meta`.
  */
-function keepLineBreaks(md: MarkdownIt): void {
+function keepLineBreaks(md: MarkdownItInstance): void {
     wrapInlineRule(md, 'backticks', (state, start, count) => {
         const token = state.tokens[count];
         const raw = state.src.slice(start, state.pos);
@@ -163,7 +163,7 @@ function keepLineBreaks(md: MarkdownIt): void {
 }
 
 /** Replaces a built-in inline parsing rule. `after` sees the position before the rule and its first token index. */
-function wrapInlineRule(md: MarkdownIt, name: string, after: (state: StateInline, start: number, count: number) => void): void {
+function wrapInlineRule(md: MarkdownItInstance, name: string, after: (state: StateInline, start: number, count: number) => void): void {
     // `Ruler` has no public access to rule functions, only replacement by name.
     const rules = (md.inline.ruler as unknown as { readonly __rules__: readonly { readonly name: string; readonly fn: InlineRule }[] }).__rules__;
     const original = rules.find((rule) => rule.name === name)?.fn;
@@ -231,7 +231,7 @@ export function parseStop(source: string): StopMarkup {
     let longestList = 0;
     const out: MarkdownBlock[] = [];
 
-    const env: { references?: Record<string, unknown> } = {};
+    const env: Env = {};
     for (const node of tree(plainParser.parse(source, env))) {
         markViolations(node, ctx, false);
         if (node.token.type === 'paragraph_open') {
@@ -432,8 +432,8 @@ function table(node: Node, ctx: Context): Extract<MarkdownBlock, { kind: 'table'
     };
 }
 
-function alignOf(style: string | null): TableAlign {
-    const align = /text-align:(left|center|right)/.exec(style ?? '')?.[1];
+function alignOf(style: string | number | null): TableAlign {
+    const align = /text-align:(left|center|right)/.exec(typeof style === 'string' ? style : '')?.[1];
     return align === 'left' || align === 'center' || align === 'right' ? align : null;
 }
 
@@ -574,8 +574,8 @@ function inlineNode(node: Node, ctx: Context): InlineNode[] {
             violate(ctx, 'strike');
             break;
         case 'link_open': {
-            const href = token.attrGet('href') ?? '';
-            if (profile === 'comment' ? SAFE_HREF.test(href) : profile === 'stop' && (WEB_HREF.test(href) || STOP_HREF.test(href))) {
+            const href = token.attrGet('href');
+            if (typeof href === 'string' && (profile === 'comment' ? SAFE_HREF.test(href) : profile === 'stop' && (WEB_HREF.test(href) || STOP_HREF.test(href)))) {
                 return [{ kind: 'link', href, children: inline(node.children, ctx) }];
             }
             violate(ctx, 'link');
@@ -616,7 +616,7 @@ function literalInline(node: Node, ctx: Context): InlineNode[] {
 
 function destination(token: Token, attr: 'href' | 'src'): string {
     const title = token.attrGet('title');
-    return `${token.attrGet(attr) ?? ''}${title === null ? '' : ` "${title}"`}`;
+    return `${String(token.attrGet(attr) ?? '')}${title === null ? '' : ` "${String(title)}"`}`;
 }
 
 /** Merges adjacent text nodes, removes empty ones. */

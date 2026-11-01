@@ -264,17 +264,11 @@ export function DiffFileList({
         scrollPaddingStart,
     });
 
-    /**
-     * In virtual-core 3.17.8, `shouldAdjustScrollPositionOnItemSizeChange` is an instance property,
-     * not a hook option. Passing it to `useVirtualizer` silently does nothing.
-     *
-     * Always compensate for cards entirely above the viewport, regardless of scroll direction.
-     * The library disables compensation when scrolling up by default, so a file parsed above
-     * would pull the list away from the cursor. Cards touching the viewport or below it grow
-     * downward. Adjusting the scroll position for them would move visible text.
-     */
+    // This is an instance property, not a useVirtualizer option.
+    // Compensate for cards entirely above the viewport in either scroll direction.
+    // Visible cards grow downward so the text under the cursor stays in place.
     virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item) =>
-        item.end <= (virtualizer.scrollOffset ?? 0) + scrollPaddingStart + virtualizer.scrollAdjustments;
+        item.end <= (virtualizer.scrollOffset ?? 0) + scrollPaddingStart;
 
     const previousTypography = useRef({ textSize, codeLineHeight, cardChromeHeight });
     useEffect(() => {
@@ -400,8 +394,7 @@ export function DiffFileList({
         const previous = previousCollapseReasons.current;
         const frame = requestAnimationFrame(() => {
             previousCollapseReasons.current = collapseReasons;
-            const viewportTop =
-                (virtualizer.scrollOffset ?? 0) + scrollPaddingStart + virtualizer.scrollAdjustments;
+            const viewportTop = (virtualizer.scrollOffset ?? 0) + scrollPaddingStart;
             let anchorIndex: number | null = null;
             for (let index = 0; index < files.length; index += 1) {
                 const file = files[index];

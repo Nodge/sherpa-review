@@ -71,8 +71,10 @@ Element.prototype.getBoundingClientRect = function fakeRect(): DOMRect {
     };
 };
 
-// The virtualizer gets the scroll container size from `offsetWidth`/`offsetHeight`.
+// The virtualizer reads the scroll container size from clientWidth/clientHeight.
 for (const [name, value] of [
+    ['clientWidth', VIEWPORT_WIDTH],
+    ['clientHeight', VIEWPORT_HEIGHT],
     ['offsetWidth', VIEWPORT_WIDTH],
     ['offsetHeight', VIEWPORT_HEIGHT],
 ] as const) {
