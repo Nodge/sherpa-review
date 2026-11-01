@@ -22,7 +22,8 @@ const releaseVersion = JSON.parse(readFileSync(join(packageRoot, '../../package.
 beforeAll(() => {
     // The chain does not build the UI (the server module embeds a prebuilt `ui/dist`), but `dist`
     // is not stored in git. Build it here on a clean checkout so the module has something to embed.
-    if (!existsSync(join(uiRoot, 'dist', 'index.html'))) {
+    // A UI built before the module list existed is rebuilt too: the notices need the list.
+    if (!existsSync(join(uiRoot, 'dist', 'index.html')) || !existsSync(join(uiRoot, 'build', 'bundled-modules.json'))) {
         execFileSync('pnpm', ['--filter', '@sherpa/ui', 'build'], { cwd: uiRoot, stdio: 'pipe' });
     }
     execFileSync(process.execPath, ['build.mjs'], { cwd: packageRoot, stdio: 'pipe' });
@@ -31,7 +32,7 @@ beforeAll(() => {
 describe('npm package build', () => {
     // `dist/` is what `npm publish` uploads. An extra file there is junk in every install.
     it('makes dist/ the package: manifest, readme, license, command and server module', () => {
-        expect(readdirSync(distDir).sort()).toEqual(['LICENSE', 'LICENSE-IBM-Plex.txt', 'README.md', 'bin', 'package.json']);
+        expect(readdirSync(distDir).sort()).toEqual(['LICENSE', 'LICENSE-IBM-Plex.txt', 'README.md', 'THIRD-PARTY-LICENSES.txt', 'bin', 'package.json']);
         expect(readdirSync(binDir).sort()).toEqual(['sherpa-review-server.mjs', 'sherpa-review.mjs']);
         // There is only one command: the server module does not run directly, the CLI loads it.
         expect(statSync(cliPath).mode & 0o111).toBe(0o111);
@@ -48,6 +49,29 @@ describe('npm package build', () => {
         for (const family of ['plex-sans', 'plex-mono']) {
             expect(readFileSync(join(uiRoot, 'node_modules/@ibm', family, 'LICENSE.txt'), 'utf8'), family).toBe(shipped);
         }
+    });
+
+    // MIT, BSD and ISC require the license text beside the bundled code. The list comes from the build metadata.
+    it('ships license notices of the third-party packages bundled into bin/', () => {
+        const notices = readFileSync(join(distDir, 'THIRD-PARTY-LICENSES.txt'), 'utf8');
+        const entries = [...notices.matchAll(/^={80}\n(.+)@([^@\n]+)\nLicense: (.+)$/gmu)].map(([, name, , license]) => ({
+            name,
+            license,
+        }));
+        const names = entries.map((entry) => entry.name);
+
+        // UI (react, react-dom, highlight.js), server (diff), both bundles (zod), the UI build's injected helpers (vite, rolldown).
+        for (const name of ['react', 'react-dom', 'zod', 'diff', 'highlight.js', 'vite', 'rolldown']) {
+            expect(names, name).toContain(name);
+        }
+        expect(entries.find((entry) => entry.name === 'react')?.license).toBe('MIT');
+        expect(notices).toContain('Copyright (c) Meta Platforms, Inc. and affiliates.');
+        expect(notices).toContain('Permission is hereby granted, free of charge');
+        expect(names.filter((name) => name.startsWith('@sherpa/'))).toEqual([]);
+        for (const name of ['vitest', 'esbuild', 'typescript', 'eslint']) {
+            expect(names, name).not.toContain(name);
+        }
+        expect(names).toEqual([...names].sort());
     });
 
     // Zero runtime dependencies: `npx` downloads one tarball and runs it.
@@ -162,7 +186,7 @@ describe('running the installed package', () => {
     it('packs only the package files', () => {
         const installed = join(installRoot, 'node_modules', 'sherpa-review');
 
-        expect(readdirSync(installed).sort()).toEqual(['LICENSE', 'LICENSE-IBM-Plex.txt', 'README.md', 'bin', 'package.json']);
+        expect(readdirSync(installed).sort()).toEqual(['LICENSE', 'LICENSE-IBM-Plex.txt', 'README.md', 'THIRD-PARTY-LICENSES.txt', 'bin', 'package.json']);
         expect(sherpa(['--version']).stdout.trim()).toBe(releaseVersion);
     });
 

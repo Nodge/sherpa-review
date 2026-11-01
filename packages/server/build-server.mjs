@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, posix, relative, resolve, sep } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -26,7 +26,7 @@ try {
  * storage uses the built-in `node:sqlite`, so the entire server bundles into one file (docs/protocol.md §2).
  * The file is not executable: the CLI loads it with `import()` in `sherpa-review server` and calls the `runServer` export.
  */
-await build({
+const result = await build({
     entryPoints: [resolve(root, 'src/bundle.ts')],
     outfile,
     bundle: true,
@@ -36,8 +36,13 @@ await build({
     packages: 'bundle',
     define: { __SHERPA_VERSION__: JSON.stringify(version) },
     plugins: [inlineUiAssets(assetsModule, assets)],
+    // Metafile input paths are relative to it.
+    absWorkingDir: root,
+    metafile: true,
     logLevel: 'info',
 });
+// What went into the bundle, for the third-party license notices of the npm package.
+writeFileSync(resolve(root, 'dist/sherpa-review-server.meta.json'), JSON.stringify(result.metafile));
 
 /**
  * Replaces the `src/ui-assets.ts` module: the map is empty in source, filled with `ui/dist` contents in the bundle.
