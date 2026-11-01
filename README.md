@@ -199,10 +199,6 @@ The Feedback button in the top bar opens [GitHub issues](https://github.com/Nodg
 - Hosts are GitHub and a local git checkout.
 - Sherpa does not generate its own findings. It shows existing comments, including AI review comments.
 
-## Version
-
-`sherpa-review --version` and the UI top bar show the version.
-
 ## Development
 
 Sherpa is a TypeScript pnpm monorepo built with esbuild: one `sherpa-review` command and a server module beside it. See [`docs/`](docs/README.md) for how the system works and why, and [`CONTRIBUTING.md`](CONTRIBUTING.md) for building, running and testing.

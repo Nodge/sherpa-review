@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { esbuildInputs, packageOf, thirdPartyNotices } from './third-party-licenses.mjs';
+import { assetSources, esbuildInputs, packageOf, thirdPartyNotices } from './third-party-licenses.mjs';
 
 describe('packageOf', () => {
     it('takes the package after the last node_modules in the pnpm layout', () => {
@@ -45,6 +45,37 @@ describe('packageOf', () => {
             /"commonjsHelpers\.js" maps to no package/u,
         );
         expect(() => packageOf('\0toString/x.js')).toThrow(/"toString" maps to no package/u);
+    });
+});
+
+describe('assetSources', () => {
+    const UI = '/repo/packages/ui';
+    const FONT = '/repo/node_modules/.pnpm/@ibm+plex-sans@1.1.0/node_modules/@ibm/plex-sans/fonts/a.woff2';
+
+    it('returns package and own sources, and accepts worker bundles without one', () => {
+        const assets = {
+            'assets/a.woff2': [FONT],
+            'assets/mark.svg': [`${UI}/src/assets/mark.svg`],
+            'assets/worker.js': [],
+        };
+
+        expect(assetSources(assets, UI, ['assets/worker.js'])).toEqual([FONT, `${UI}/src/assets/mark.svg`]);
+        expect(packageOf(FONT)?.name).toBe('@ibm/plex-sans');
+    });
+
+    it('fails on an asset without a known source', () => {
+        expect(() => assetSources({ 'assets/x.png': [] }, UI, [])).toThrow(/assets\/x\.png with no known source/u);
+    });
+
+    it('fails on a sourceless JS asset that no worker build produced', () => {
+        expect(() => assetSources({ 'assets/vendor-helper.js': [] }, UI, ['assets/worker.js'])).toThrow(
+            /assets\/vendor-helper\.js with no known source/u,
+        );
+    });
+
+    it('fails on a source outside node_modules and the UI package', () => {
+        expect(() => assetSources({ 'assets/x.png': ['/elsewhere/x.png'] }, UI, [])).toThrow(/outside node_modules/u);
+        expect(() => assetSources({ 'assets/x.png': ['/repo/packages/ui-other/x.png'] }, UI, [])).toThrow(/outside/u);
     });
 });
 

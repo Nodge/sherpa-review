@@ -32,7 +32,7 @@ beforeAll(() => {
 describe('npm package build', () => {
     // `dist/` is what `npm publish` uploads. An extra file there is junk in every install.
     it('makes dist/ the package: manifest, readme, license, command and server module', () => {
-        expect(readdirSync(distDir).sort()).toEqual(['LICENSE', 'LICENSE-IBM-Plex.txt', 'README.md', 'THIRD-PARTY-LICENSES.txt', 'bin', 'package.json']);
+        expect(readdirSync(distDir).sort()).toEqual(['LICENSE', 'README.md', 'THIRD-PARTY-LICENSES.txt', 'bin', 'package.json']);
         expect(readdirSync(binDir).sort()).toEqual(['sherpa-review-server.mjs', 'sherpa-review.mjs']);
         // There is only one command: the server module does not run directly, the CLI loads it.
         expect(statSync(cliPath).mode & 0o111).toBe(0o111);
@@ -41,17 +41,7 @@ describe('npm package build', () => {
         expect(readFileSync(join(distDir, 'README.md'), 'utf8')).toBe(readFileSync(join(repoRoot, 'README.md'), 'utf8'));
     });
 
-    // The OFL requires its text beside the embedded fonts. One file covers both families while their licenses match.
-    it('ships the IBM Plex font license of both families', () => {
-        const shipped = readFileSync(join(distDir, 'LICENSE-IBM-Plex.txt'), 'utf8');
-
-        expect(shipped).toContain('SIL Open Font License, Version 1.1');
-        for (const family of ['plex-sans', 'plex-mono']) {
-            expect(readFileSync(join(uiRoot, 'node_modules/@ibm', family, 'LICENSE.txt'), 'utf8'), family).toBe(shipped);
-        }
-    });
-
-    // MIT, BSD and ISC require the license text beside the bundled code. The list comes from the build metadata.
+    // MIT, BSD, ISC and the fonts' OFL require the license text beside the bundled code. The list comes from the build metadata.
     it('ships license notices of the third-party packages bundled into bin/', () => {
         const notices = readFileSync(join(distDir, 'THIRD-PARTY-LICENSES.txt'), 'utf8');
         const entries = [...notices.matchAll(/^={80}\n(.+)@([^@\n]+)\nLicense: (.+)$/gmu)].map(([, name, , license]) => ({
@@ -65,6 +55,11 @@ describe('npm package build', () => {
             expect(names, name).toContain(name);
         }
         expect(entries.find((entry) => entry.name === 'react')?.license).toBe('MIT');
+        // The fonts are UI build assets, not modules.
+        for (const name of ['@ibm/plex-sans', '@ibm/plex-mono']) {
+            expect(entries.find((entry) => entry.name === name)?.license, name).toBe('OFL-1.1');
+        }
+        expect(notices).toContain('SIL Open Font License, Version 1.1');
         expect(notices).toContain('Copyright (c) Meta Platforms, Inc. and affiliates.');
         expect(notices).toContain('Permission is hereby granted, free of charge');
         expect(names.filter((name) => name.startsWith('@sherpa/'))).toEqual([]);
@@ -186,7 +181,7 @@ describe('running the installed package', () => {
     it('packs only the package files', () => {
         const installed = join(installRoot, 'node_modules', 'sherpa-review');
 
-        expect(readdirSync(installed).sort()).toEqual(['LICENSE', 'LICENSE-IBM-Plex.txt', 'README.md', 'THIRD-PARTY-LICENSES.txt', 'bin', 'package.json']);
+        expect(readdirSync(installed).sort()).toEqual(['LICENSE', 'README.md', 'THIRD-PARTY-LICENSES.txt', 'bin', 'package.json']);
         expect(sherpa(['--version']).stdout.trim()).toBe(releaseVersion);
     });
 

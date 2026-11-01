@@ -27,6 +27,10 @@ const bundled = bundledModules();
 export default defineConfig({
     plugins: [react(), bundled.main],
     worker: { plugins: () => [bundled.worker()] },
+    build: {
+        // Package assets are always emitted, so their source reaches the license notices. Inlined, they would leave no trace.
+        assetsInlineLimit: (file) => (file.split(/[\\/]/u).includes('node_modules') ? false : undefined),
+    },
     define: { __SHERPA_VERSION__: JSON.stringify(rootPackageJson.version) },
     server: proxy === null ? {} : { proxy },
     // The default 5 s is too short: progress scenario tests run dozens of rerenders and time out on
@@ -36,14 +40,16 @@ export default defineConfig({
 });
 
 /**
- * Writes the modules whose code ended up in the build, and the files the build emitted, to
+ * Writes the modules whose code ended up in the build, the files the build emitted and the sources of its assets to
  * `build/bundled-modules.json` for the third-party license notices of the npm package. It lives outside `dist/`
  * because the server bundle embeds all of `dist/`. Only a build written to `dist/` updates it, so the list always
  * describes the assets the server embeds. Worker bundles are separate builds and report through `worker.plugins`.
  */
 function bundledModules(): { main: Plugin; worker: () => Plugin } {
     const modules = new Set<string>();
+    const workerFiles = new Set<string>();
     let active = false;
+    let root = '';
 
     const collect = (bundle: Rolldown.OutputBundle): void => {
         for (const output of Object.values(bundle)) {
@@ -65,11 +71,13 @@ function bundledModules(): { main: Plugin; worker: () => Plugin } {
         name: 'sherpa-bundled-modules',
         apply: 'build',
         configResolved(config) {
-            const outDir = path.resolve(config.root, config.build.outDir);
+            root = config.root;
+            const outDir = path.resolve(root, config.build.outDir);
             active = config.build.write && outDir === fileURLToPath(new URL('dist', import.meta.url));
         },
         buildStart() {
             modules.clear();
+            workerFiles.clear();
         },
         generateBundle(_options, bundle) {
             collect(bundle);
@@ -80,7 +88,20 @@ function bundledModules(): { main: Plugin; worker: () => Plugin } {
             }
             const file = fileURLToPath(new URL('build/bundled-modules.json', import.meta.url));
             mkdirSync(path.dirname(file), { recursive: true });
-            const list = { files: Object.keys(bundle).sort(), modules: [...modules].sort() };
+            // Source files of emitted assets (fonts, images), as absolute paths: their packages need notices too.
+            // Rolldown reports them relative to the root or absolute.
+            const assets = Object.fromEntries(
+                Object.values(bundle)
+                    .filter((output) => output.type === 'asset')
+                    .sort((a, b) => (a.fileName < b.fileName ? -1 : 1))
+                    .map((asset) => [asset.fileName, asset.originalFileNames.map((file) => path.resolve(root, file)).sort()]),
+            );
+            const list = {
+                files: Object.keys(bundle).sort(),
+                modules: [...modules].sort(),
+                assets,
+                workerFiles: [...workerFiles].sort(),
+            };
             writeFileSync(file, `${JSON.stringify(list, null, 2)}\n`);
         },
     };
@@ -89,6 +110,12 @@ function bundledModules(): { main: Plugin; worker: () => Plugin } {
         apply: 'build',
         generateBundle(_options, bundle) {
             collect(bundle);
+            // The main build emits worker chunks as assets without a source. These names exempt them in the npm build.
+            for (const output of Object.values(bundle)) {
+                if (output.type === 'chunk') {
+                    workerFiles.add(output.fileName);
+                }
+            }
         },
     });
     return { main, worker };

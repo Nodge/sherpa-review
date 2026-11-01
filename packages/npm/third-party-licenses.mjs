@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 
 /** LICENSE, LICENCE, COPYING, with an optional `-MIT`-style suffix and `.md` or `.txt`. */
 const LICENSE_FILE = /^(licen[cs]e|copying)(-\w+)?(\.(md|txt))?$/iu;
@@ -36,6 +36,29 @@ export function packageOf(modulePath, virtualPackages = {}) {
     }
     const name = segments.slice(0, nameLength).join('/');
     return { name, dir: `${normalized.slice(1, index)}${marker}${name}` };
+}
+
+/**
+ * Source files of the UI build's emitted assets (file → absolute sources). A source in `node_modules` belongs to its
+ * package, one inside the UI package is ours. Worker bundles (`workerFiles`) have no source, and the module list
+ * already has their modules. Any other asset without a known source throws, so a new kind of asset is not skipped.
+ */
+export function assetSources(assets, uiRoot, workerFiles) {
+    return Object.entries(assets).flatMap(([file, sources]) => {
+        if (sources.length === 0 && !workerFiles.includes(file)) {
+            throw new Error(`@sherpa/npm: the UI build emitted ${file} with no known source, so its license is unknown.`);
+        }
+        for (const source of sources) {
+            const inside = relative(uiRoot, source);
+            const own = !inside.startsWith('..') && !isAbsolute(inside);
+            if (packageOf(source) === null && !own) {
+                throw new Error(
+                    `@sherpa/npm: the UI build emitted ${file} from ${source}, outside node_modules and the UI package.`,
+                );
+            }
+        }
+        return sources;
+    });
 }
 
 /**
@@ -90,8 +113,7 @@ export function thirdPartyNotices(modulePaths, virtualPackages = {}) {
     return [
         'Third-party software bundled in sherpa-review',
         '',
-        'bin/sherpa-review.mjs and bin/sherpa-review-server.mjs include code from the packages below.',
-        'The IBM Plex fonts embedded in the server module are covered by LICENSE-IBM-Plex.txt.',
+        'bin/sherpa-review.mjs and bin/sherpa-review-server.mjs include code and assets (fonts) from the packages below.',
         '',
         ...sections.map((section) => `${section}\n`),
     ].join('\n');

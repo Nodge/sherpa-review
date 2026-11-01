@@ -5,7 +5,7 @@ import { dirname, posix, relative, resolve, sep } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
-import { esbuildInputs, thirdPartyNotices } from './third-party-licenses.mjs';
+import { assetSources, esbuildInputs, thirdPartyNotices } from './third-party-licenses.mjs';
 
 const root = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(root, '../..');
@@ -17,8 +17,8 @@ const PACKAGE_NAME = 'sherpa-review';
 const REPOSITORY = 'https://github.com/Nodge/sherpa-review';
 
 /**
- * `dist/` is the `sherpa-review` npm package: package.json, README, LICENSE, the IBM Plex font license and
- * third-party license notices beside `bin/` with two files.
+ * `dist/` is the `sherpa-review` npm package: package.json, README, LICENSE and third-party license notices
+ * beside `bin/` with two files.
  * There is one command, the executable `sherpa-review.mjs`. `sherpa-review-server.mjs` is the server module with
  * embedded UI, which the CLI loads with `import()` only in `sherpa-review server`. This keeps the worker loop,
  * which calls the CLI on every request, from loading the server.
@@ -46,7 +46,7 @@ const bundles = [
     },
 ];
 
-/** Modules and emitted files of the UI build, which the server module embeds. Written by `vite.config.ts`. */
+/** Modules, emitted files and asset sources of the UI build, which the server module embeds. Written by `vite.config.ts`. */
 const uiRoot = resolve(repoRoot, 'packages/ui');
 const uiModulesFile = resolve(uiRoot, 'build/bundled-modules.json');
 const uiModules = readUiModules();
@@ -63,12 +63,6 @@ rmSync(distDir, { recursive: true, force: true });
 mkdirSync(binDir, { recursive: true });
 copyFileSync(resolve(repoRoot, 'README.md'), resolve(distDir, 'README.md'));
 copyFileSync(resolve(repoRoot, 'LICENSE'), resolve(distDir, 'LICENSE'));
-// The server module embeds IBM Plex fonts, and the OFL requires its text to travel with them.
-// Sans and Mono ship the same license file, the test checks both.
-copyFileSync(
-    resolve(repoRoot, 'packages/ui/node_modules/@ibm/plex-sans/LICENSE.txt'),
-    resolve(distDir, 'LICENSE-IBM-Plex.txt'),
-);
 
 const bundledModules = [...uiModules];
 for (const bundle of bundles) {
@@ -111,10 +105,14 @@ function readUiModules() {
     }
     const uiDist = resolve(uiRoot, 'dist');
     const built = walk(uiDist).map((file) => relative(uiDist, file).split(sep).join(posix.sep)).sort();
-    if (!Array.isArray(list.files) || JSON.stringify(list.files) !== JSON.stringify(built)) {
+    if (!Array.isArray(list.files) || JSON.stringify(list.files) !== JSON.stringify(built) || list.assets === undefined || list.workerFiles === undefined) {
         fail(`@sherpa/npm: ${uiModulesFile} does not describe the files in ${uiDist}. ${rebuild}`);
     }
-    return list.modules;
+    try {
+        return [...list.modules, ...assetSources(list.assets, uiRoot, list.workerFiles)];
+    } catch (error) {
+        fail(error.message);
+    }
 }
 
 /** The esbuild metafile of a bundle, checked to describe the file being copied. */
