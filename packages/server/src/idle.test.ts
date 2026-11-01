@@ -253,8 +253,11 @@ describe('server idle shutdown', () => {
     it('requests delay shutdown', async () => {
         const server = await start();
 
-        for (let attempt = 0; attempt < 4; attempt += 1) {
-            await delay(OVER_IDLE_MS / 4);
+        // Each gap must stay well under the threshold even on a loaded CI runner, where a fetch alone can take
+        // tens of milliseconds. The total span is measured, not derived from the gap count.
+        const started = Date.now();
+        for (let attempt = 0; Date.now() - started < OVER_IDLE_MS; attempt += 1) {
+            await delay((SHORT_IDLE_SECONDS * 1000) / 6);
             const health = await fetch(`http://127.0.0.1:${String(server.port)}/healthz`, {
                 headers: { authorization: `Bearer ${server.token}` },
             });
