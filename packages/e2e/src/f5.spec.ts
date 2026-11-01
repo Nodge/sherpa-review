@@ -134,7 +134,7 @@ function fullReviewSpec(locale: 'ru' | 'en', s: Strings): void {
             await expect(page.getByRole('tab', { name: s.routeTab, exact: true })).toBeVisible();
             await expect(page.getByRole('tab', { name: s.diffTab, exact: true })).toBeVisible();
             await expect(page.getByRole('button', { name: s.agentDisconnected, exact: true })).toBeVisible();
-            await expect(page.getByRole('textbox', { name: s.commandBox })).toHaveValue('/sherpa fixture-medium');
+            await expect(page.getByRole('textbox', { name: s.commandBox })).toHaveValue('/sherpa-review fixture-medium');
 
             await page.getByRole('tab', { name: s.diffTab, exact: true }).click();
             await expect(page.locator('.full-diff')).toBeVisible();

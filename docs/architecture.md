@@ -220,7 +220,7 @@ The file tree and card list are virtualized, and a web worker parses patches. A 
 
 The frame-time budget is a mean ≤ 16.7 ms and p95 ≤ 33 ms, measured on `fixture-huge` (100 files, about 25 thousand changed lines) in a separate run of `packages/e2e/src/performance.spec.ts`.
 
-**Security.** Everything runs on localhost by default. `SHERPA_LISTEN_HOST=::` exposes the server over IPv6 and IPv4, and the UI link then uses the virtual machine's name. Every API endpoint requires a bearer token, including the UI. The only exception is SSE, where the token arrives as a query parameter because `EventSource` does not support headers. Direct HTTP access is unencrypted.
+**Security.** Everything runs on localhost by default. `SHERPA_LISTEN_HOST=::` exposes the server over IPv6 and IPv4, and the UI link then uses the machine's DNS name. Every API endpoint requires a bearer token, including the UI. The only exception is SSE, where the token arrives as a query parameter because `EventSource` does not support headers. Direct HTTP access is unencrypted.
 
 The server compares token hashes in constant time (`packages/server/src/auth.ts`). Comparing the strings themselves would require equal lengths and reveal the real token's length. The UI link carries its token in the fragment, so it never reaches the server but survives page reloads.
 

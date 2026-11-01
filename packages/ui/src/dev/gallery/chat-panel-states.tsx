@@ -127,7 +127,7 @@ function ChatState({
                 notes={notes}
                 loading={false}
                 error={null}
-                reconnectCommand="/sherpa fixture-4821"
+                reconnectCommand="/sherpa-review fixture-4821"
                 anchor={exchanges.at(-1)?.anchor ?? null}
                 focusRequest={0}
                 scrollRequest={null}

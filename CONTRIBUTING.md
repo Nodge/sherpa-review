@@ -28,7 +28,7 @@ These must pass before every commit. E2E is outside the required checks. `packag
 
 `packages/cli` is the thin `sherpa-review` CLI (`up`, `worker next` and other commands). The worker loop calls it on every invocation, so startup is fast and there are no runtime dependencies. It builds into one `sherpa-review.mjs` bundle. Host adapters live in `src/hosts/` in the server and CLI.
 
-`packages/skill` is the harness distribution: `SKILL.md` plus the CLI and server module in `dist/bin/`. `dist/` itself is a build artifact and is not versioned (`.gitignore` excludes `packages/*/dist/`). Its copy in the root `skill/` directory is versioned. The release script puts it there, and committing this directory delivers the update to users.
+`packages/skill` is the harness distribution: `SKILL.md` plus the CLI and server module in `dist/bin/`. `dist/` is a build artifact and is not versioned (`.gitignore` excludes `dist/`).
 
 `packages/fixtures` contains deterministic PRs (`medium`, `small`, `large`, `edge`, `huge`, `empty`), a fixture `ReviewHost` and domain object builders. Development mode, the state gallery and e2e use them.
 
@@ -97,20 +97,10 @@ Measurements are printed as `PERF …` lines. See `docs/testing.md` and `package
 
 The test in `packages/ui/src/styles/tokens.test.ts` compares the design tokens in `packages/ui/src/styles/tokens.css` with the table in `docs/design/README.md`. Changing a token without updating the design handoff, or vice versa, fails the checks. Then add a gallery card and compare it with the prototype. The prototype is a reference, not a source of code.
 
-## Releasing the distribution
-
-```
-pnpm release --notes "<one sentence>"
-```
-
-`--notes` is required. The update toast shows this sentence (up to 140 characters). The script (`scripts/release.mjs`) builds `@sherpa/ui` and `@sherpa/skill`, checks `sherpa-review --version` and `version.json` against the root `package.json` version, and requires the same version in the root `README.md`. It recreates `<target>/skill/` from `packages/skill/dist` and sets `releasedAt` and `whatsNew`. The target defaults to the repository root. Use `--target` to write to a separate directory, or `--skip-build` to use an existing `dist`. Finally, it prints the list of published files and ready-to-run `git add skill` / `git commit` commands. The script does not call `git`. A person commits manually.
-
-The update toast compares the embedded version with `skill/version.json` from main, so this commit is what delivers the version to users.
-
 ## Decisions
 
 When you change behaviour, a contract or an invariant, record it in `docs/decisions.md`: subsystem section, date, what and why. Mark a superseded decision as superseded, without deleting it.
 
 ## PR
 
-Branch from main, pass the checks, then run `gh pr create`. Describe what changes and why. If the change touches the server, UI flows or `packages/e2e`, run e2e before submitting.
+Branch from main, pass the checks, then run `gh pr create`. CI (`.github/workflows/ci.yml`) runs the same checks on Node 22, 24 and 26, and `main` accepts only PRs with green CI. Describe what changes and why. If the change touches the server, UI flows or `packages/e2e`, run e2e before submitting.

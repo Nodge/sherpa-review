@@ -17,12 +17,3 @@ Building the skill builds the server module and CLI and assembles the distributi
 
 To install in a harness, symlink the distribution: `~/.claude/skills/sherpa-review` → `<repo>/packages/skill/dist`. You can also copy the directory anywhere. It is self-contained.
 
-## Release
-
-```
-pnpm release --notes "<phrase>" [--target <directory>] [--skip-build]
-```
-
-`scripts/release.mjs` builds the chain, checks `sherpa-review --version` and `dist/version.json` against the root `package.json` version (the single source) and recreates `skill/` in the target directory. The default target is the repository root: the distribution sits beside the source and is committed together with it. Use `--target` for runs in a separate directory.
-
-`--notes` is required: the update toast shows this one "what is new" sentence, which goes into the published `skill/version.json` with the release date. The distribution README is the repository's root `README.md`. The release does not copy it, only checks that it contains the version number. The script does not call `git`. It prints `git add skill` and `git commit` for you to run manually.

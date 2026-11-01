@@ -33,7 +33,7 @@ function topBar(pr: typeof PR | null, feedback: UiFeedbackChannel | null = ISSUE
             version="0.0.0"
             breadcrumb={breadcrumbFor('fixture-4821', pr)}
             agent={agentPillView({ kind: 'never' }, [], t)}
-            reconnectCommand="/sherpa fixture-4821"
+            reconnectCommand="/sherpa-review fixture-4821"
             chatOpen={false}
             onToggleChat={() => undefined}
             view="overview"
@@ -103,20 +103,20 @@ describe('agent indicator popover', () => {
         const html = renderToStaticMarkup(
             <AgentPill
                 view={agentPillView({ kind: 'never' }, [], t)}
-                reconnectCommand="/sherpa fixture-medium"
+                reconnectCommand="/sherpa-review fixture-medium"
                 defaultOpen
             />,
         );
 
         expect(html).toContain('Connect the agent');
-        expect(html).toContain('/sherpa fixture-medium');
+        expect(html).toContain('/sherpa-review fixture-medium');
     });
 
     it('explains agent disconnection: the reader remains fully functional', () => {
         const html = renderToStaticMarkup(
             <AgentPill
                 view={agentPillView({ kind: 'never' }, [], t)}
-                reconnectCommand="/sherpa fixture-medium"
+                reconnectCommand="/sherpa-review fixture-medium"
                 defaultOpen
             />,
         );
@@ -138,7 +138,7 @@ describe('agent indicator popover', () => {
                         lastSeenAt: '2026-08-24T11:59:00.000Z',
                     },
                     [], t)}
-                reconnectCommand="/sherpa fixture-medium"
+                reconnectCommand="/sherpa-review fixture-medium"
                 defaultOpen
             />,
         );

@@ -7,6 +7,7 @@ To maintain the log, add each new decision as a dated entry in its section. When
 ## Dependency management
 
 - **2026-11-01 · External dependencies use exact versions.** Updating dependencies or pnpm requires an explicit change and the project checks. `saveExact` pins newly added packages, and internal dependencies keep `workspace:*`.
+- **2026-11-01 · Dependabot proposes updates in one weekly PR, for versions at least 7 days old.** Exact pins stay, and the PR goes through the same CI as any change. The TypeScript major waits for typescript-eslint support.
 
 ## Session↔server protocol
 
@@ -58,6 +59,7 @@ To maintain the log, add each new decision as a dated entry in its section. When
 - **2026-10-10 · Checkout selection for `up --local` first tries the VCS whose marker is in the directory itself, then the first in list order that recognizes the directory.** This preserves the previous fixed VCS order without naming VCS implementations in the CLI core. The "deepest checkout root wins" rule was rejected because it queries every VCS on each call for a single case: a nested Git repository opened from somewhere other than its root.
 - **2026-10-19 · Printed commands are complete: `node <path to sherpa.mjs> … --pr <key>`.** Commands without `--pr` failed to find the PR outside a checkout where the CLI could discover it. The model also added its own skill path to a bare `sherpa …`. Every command the CLI prints for the model therefore contains the absolute path to the running CLI and the key it connected to, quoted for a POSIX shell. SKILL.md instructs the model to run them as printed. Only the builders in `packages/cli/src/format.ts` assemble them.
 - **2026-10-31 · The public name is `sherpa-review` everywhere: GitHub repository, npm package, skill, command and distribution files.** Bare `sherpa` is taken on npm and lost on GitHub among speech recognition projects, and one name in all places removes the question of what to install and what to call. The skill is `sherpa-review` (`/sherpa-review`, `~/.claude/skills/sherpa-review`), the distribution is `bin/sherpa-review.mjs` and `bin/sherpa-review-server.mjs`, CLI messages use the `sherpa-review:` prefix. The product name Sherpa, the private `@sherpa/*` workspace scope, `~/.sherpa`, `SHERPA_*` variables and the `sherpa:` markers in GitHub review bodies stay: they are not typed by users, and changing them would orphan existing state and drafts.
+- **2026-11-01 · Until there is an npm release, the skill is installed by building a checkout and symlinking `packages/skill/dist`.** The release script that committed the built distribution to a root `skill/` directory did not survive the move to GitHub, so no build artifact is versioned. Publishing to npm replaces this path.
 
 ## Host adapters
 

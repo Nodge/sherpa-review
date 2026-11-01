@@ -24,7 +24,7 @@ function clickPill(view: AgentPillView, onToggleChat = vi.fn()) {
         root.render(
             <AgentPill
                 view={view}
-                reconnectCommand="/sherpa fixture-medium"
+                reconnectCommand="/sherpa-review fixture-medium"
                 onToggleChat={onToggleChat}
             />,
         );
@@ -73,6 +73,6 @@ describe('clicking the agent indicator', () => {
         const { host, onToggleChat } = clickPill(view('disconnected'));
 
         expect(onToggleChat).not.toHaveBeenCalled();
-        expect(host.querySelector<HTMLInputElement>('.command-box__command')?.value).toBe('/sherpa fixture-medium');
+        expect(host.querySelector<HTMLInputElement>('.command-box__command')?.value).toBe('/sherpa-review fixture-medium');
     });
 });

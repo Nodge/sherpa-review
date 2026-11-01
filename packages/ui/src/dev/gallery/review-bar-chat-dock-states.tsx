@@ -112,7 +112,7 @@ function DockState({ overlay }: { overlay: boolean }) {
                     notes={NOTES}
                     loading={false}
                     error={null}
-                    reconnectCommand="/sherpa fixture-medium"
+                    reconnectCommand="/sherpa-review fixture-medium"
                     anchor={null}
                     focusRequest={0}
                     scrollRequest={null}
