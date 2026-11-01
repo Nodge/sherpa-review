@@ -14,7 +14,8 @@ const PACKAGE_NAME = 'sherpa-review';
 const REPOSITORY = 'https://github.com/Nodge/sherpa-review';
 
 /**
- * `dist/` is the `sherpa-review` npm package: package.json, README and LICENSE beside `bin/` with two files.
+ * `dist/` is the `sherpa-review` npm package: package.json, README, LICENSE and the IBM Plex font license beside
+ * `bin/` with two files.
  * There is one command, the executable `sherpa-review.mjs`. `sherpa-review-server.mjs` is the server module with
  * embedded UI, which the CLI loads with `import()` only in `sherpa-review server`. This keeps the worker loop,
  * which calls the CLI on every request, from loading the server.
@@ -38,6 +39,12 @@ rmSync(distDir, { recursive: true, force: true });
 mkdirSync(binDir, { recursive: true });
 copyFileSync(resolve(repoRoot, 'README.md'), resolve(distDir, 'README.md'));
 copyFileSync(resolve(repoRoot, 'LICENSE'), resolve(distDir, 'LICENSE'));
+// The server module embeds IBM Plex fonts, and the OFL requires its text to travel with them.
+// Sans and Mono ship the same license file, the test checks both.
+copyFileSync(
+    resolve(repoRoot, 'packages/ui/node_modules/@ibm/plex-sans/LICENSE.txt'),
+    resolve(distDir, 'LICENSE-IBM-Plex.txt'),
+);
 
 for (const bundle of bundles) {
     const packageRoot = resolve(root, bundle.pkg);

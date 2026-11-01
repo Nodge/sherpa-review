@@ -1,6 +1,6 @@
 # @sherpa/npm
 
-Builds the `sherpa-review` npm package (`docs/architecture.md §1`) into `dist/`: `package.json`, `README.md` and `LICENSE` beside `bin/` with two files. Nothing at runtime reads the repository checkout or calls pnpm.
+Builds the `sherpa-review` npm package (`docs/architecture.md §1`) into `dist/`: `package.json`, `README.md`, `LICENSE` and the IBM Plex font license `LICENSE-IBM-Plex.txt` beside `bin/` with two files. Nothing at runtime reads the repository checkout or calls pnpm.
 
 - `dist/bin/sherpa-review.mjs` is the only command, a thin CLI without the server or UI. The worker loop calls it on every request, so startup must stay fast. `sherpa-review guide` prints the session guide the skill stub (`skills/sherpa-review/SKILL.md`) runs.
 - `dist/bin/sherpa-review-server.mjs` is the PR server module with embedded UI assets, not an executable. Only `sherpa-review server` loads it with `import()`. This is the process `sherpa-review up` daemonizes as `node <bin directory>/sherpa-review.mjs server …`. Override the module path with `SHERPA_SERVER_BIN`.

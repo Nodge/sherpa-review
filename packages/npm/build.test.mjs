@@ -31,13 +31,23 @@ beforeAll(() => {
 describe('npm package build', () => {
     // `dist/` is what `npm publish` uploads. An extra file there is junk in every install.
     it('makes dist/ the package: manifest, readme, license, command and server module', () => {
-        expect(readdirSync(distDir).sort()).toEqual(['LICENSE', 'README.md', 'bin', 'package.json']);
+        expect(readdirSync(distDir).sort()).toEqual(['LICENSE', 'LICENSE-IBM-Plex.txt', 'README.md', 'bin', 'package.json']);
         expect(readdirSync(binDir).sort()).toEqual(['sherpa-review-server.mjs', 'sherpa-review.mjs']);
         // There is only one command: the server module does not run directly, the CLI loads it.
         expect(statSync(cliPath).mode & 0o111).toBe(0o111);
         expect(statSync(serverPath).mode & 0o111).toBe(0);
         expect(readFileSync(join(distDir, 'LICENSE'), 'utf8')).toBe(readFileSync(join(repoRoot, 'LICENSE'), 'utf8'));
         expect(readFileSync(join(distDir, 'README.md'), 'utf8')).toBe(readFileSync(join(repoRoot, 'README.md'), 'utf8'));
+    });
+
+    // The OFL requires its text beside the embedded fonts. One file covers both families while their licenses match.
+    it('ships the IBM Plex font license of both families', () => {
+        const shipped = readFileSync(join(distDir, 'LICENSE-IBM-Plex.txt'), 'utf8');
+
+        expect(shipped).toContain('SIL Open Font License, Version 1.1');
+        for (const family of ['plex-sans', 'plex-mono']) {
+            expect(readFileSync(join(uiRoot, 'node_modules/@ibm', family, 'LICENSE.txt'), 'utf8'), family).toBe(shipped);
+        }
     });
 
     // Zero runtime dependencies: `npx` downloads one tarball and runs it.
@@ -148,7 +158,7 @@ describe('running the installed package', () => {
     it('packs only the package files', () => {
         const installed = join(installRoot, 'node_modules', 'sherpa-review');
 
-        expect(readdirSync(installed).sort()).toEqual(['LICENSE', 'README.md', 'bin', 'package.json']);
+        expect(readdirSync(installed).sort()).toEqual(['LICENSE', 'LICENSE-IBM-Plex.txt', 'README.md', 'bin', 'package.json']);
         expect(sherpa(['--version']).stdout.trim()).toBe(releaseVersion);
     });
 
