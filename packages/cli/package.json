@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "description": "Thin sherpa-review CLI: starts a PR server and runs the worker loop",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "MIT",
   "type": "module",
   "bin": {
     "sherpa-review": "./dist/sherpa-review.mjs"

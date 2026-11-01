@@ -12,7 +12,7 @@ const binDir = resolve(distDir, 'bin');
 const DIRTY_SUFFIX = '-dirty';
 
 /**
- * `dist/` is the skill distribution: SKILL.md beside `bin/` with two files. It is `dist`
+ * `dist/` is the skill distribution: SKILL.md, LICENSE and version.json beside `bin/` with two files. It is `dist`
  * that gets linked into the harness (`~/.claude/skills/sherpa-review`), so package source files stay out.
  * There is one command, the executable `sherpa-review.mjs`. `sherpa-review-server.mjs` is the server module with embedded UI,
  * which the CLI loads with `import()` only in `sherpa-review server`. This keeps the worker loop, which calls the CLI
@@ -36,6 +36,7 @@ const bundles = [
 rmSync(distDir, { recursive: true, force: true });
 mkdirSync(binDir, { recursive: true });
 copyFileSync(resolve(root, 'SKILL.md'), resolve(distDir, 'SKILL.md'));
+copyFileSync(resolve(repoRoot, 'LICENSE'), resolve(distDir, 'LICENSE'));
 
 for (const bundle of bundles) {
     const packageRoot = resolve(root, bundle.pkg);

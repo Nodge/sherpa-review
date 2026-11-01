@@ -220,3 +220,7 @@ The Feedback form also links to a [project discussion](https://github.com/quillm
 ## Development
 
 The source lives beside the distribution: a TypeScript pnpm monorepo built with esbuild, with one `sherpa-review` command and an adjacent server module. See [`docs/`](docs/README.md) for how the system works and why, and [`CONTRIBUTING.md`](CONTRIBUTING.md) for building, running and testing.
+
+## License
+
+[MIT](LICENSE), copyright (c) 2026 Maksim Zemskov.

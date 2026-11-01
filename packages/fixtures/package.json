@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "description": "Deterministic PR fixtures and a fixture ReviewHost for dev mode, the gallery and e2e",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "MIT",
   "type": "module",
   "main": "./src/index.ts",
   "exports": {

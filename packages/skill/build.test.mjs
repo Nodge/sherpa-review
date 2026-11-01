@@ -29,8 +29,8 @@ beforeAll(() => {
 
 describe('skill package build', () => {
     // The harness links to `dist/`. An extra file there is junk in the installed skill.
-    it('makes dist/ a self-contained distribution: SKILL.md, the command and the server module in bin/', () => {
-        expect(readdirSync(distDir).sort()).toEqual(['SKILL.md', 'bin', 'version.json']);
+    it('makes dist/ a self-contained distribution with its license, command and server module', () => {
+        expect(readdirSync(distDir).sort()).toEqual(['LICENSE', 'SKILL.md', 'bin', 'version.json']);
         expect(readdirSync(binDir).sort()).toEqual(['sherpa-review-server.mjs', 'sherpa-review.mjs']);
         expect(statSync(cliPath).isFile()).toBe(true);
         expect(statSync(serverPath).isFile()).toBe(true);
@@ -39,6 +39,9 @@ describe('skill package build', () => {
         expect(statSync(serverPath).mode & 0o111).toBe(0);
         expect(readFileSync(join(distDir, 'SKILL.md'), 'utf8')).toBe(
             readFileSync(join(packageRoot, 'SKILL.md'), 'utf8'),
+        );
+        expect(readFileSync(join(distDir, 'LICENSE'), 'utf8')).toBe(
+            readFileSync(join(packageRoot, '../../LICENSE'), 'utf8'),
         );
     });
 
