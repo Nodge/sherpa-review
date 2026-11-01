@@ -15,6 +15,7 @@ const STATE: UiState = {
     feedback: { kind: 'issues', available: true, reason: null, discussionUrl: null },
     iterations: [],
     update: null,
+    updateChannel: false,
     generationCap: null,
     tasks: [
         {

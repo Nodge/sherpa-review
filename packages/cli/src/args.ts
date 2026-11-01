@@ -7,6 +7,7 @@ import { CliError } from './errors.js';
 export type Command =
     | { readonly kind: 'version' }
     | { readonly kind: 'help' }
+    | { readonly kind: 'guide' }
     | {
           readonly kind: 'server';
           /** Server arguments passed through unchanged. The server module's `runServer` parses them, not the CLI. */
@@ -113,6 +114,12 @@ export function parseArgs(argv: readonly string[]): Command {
     if (group !== 'up' && (options.has('--local') || options.has('--base') || options.has('--verdicts'))) {
         throw new CliError('sherpa-review: --local, --base and --verdicts are only available for `sherpa-review up`.');
     }
+    if (group === 'guide') {
+        if (positionals.length > 1 || options.size > 0) {
+            throw new CliError('sherpa-review: `sherpa-review guide` takes no arguments.');
+        }
+        return { kind: 'guide' };
+    }
     if (group === 'up') {
         return parseUpCommand(positionals, options, flags, prKey);
     }
@@ -125,7 +132,7 @@ export function parseArgs(argv: readonly string[]): Command {
 
     throw new CliError(
         `sherpa-review: unknown command ${JSON.stringify(positionals.join(' '))}.\n` +
-            'Available: `sherpa-review up`, `sherpa-review worker next`, `sherpa-review task complete|progress|fail <id>`; ' +
+            'Available: `sherpa-review guide`, `sherpa-review up`, `sherpa-review worker next`, `sherpa-review task complete|progress|fail <id>`; ' +
             '`sherpa-review --help` lists them all.',
     );
 }

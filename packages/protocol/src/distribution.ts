@@ -6,9 +6,8 @@ import { semverSchema } from './version.js';
 export const DISTRIBUTION_WHATS_NEW_MAX_CHARS = 140;
 
 /**
- * Distribution `version.json`: build and release version. The update channel returns the latest
- * published version in the same format, and the server compares it with the embedded one. The build writes `version` and `builtFrom`,
- * and the release command adds `releasedAt` and `whatsNew`. Release fields are nullable: before release, `dist/` has the same file without them.
+ * Distribution version as an update channel reports the latest published one. The server compares it with
+ * the embedded version. Everything but `version` is nullable: a channel may not know it.
  */
 export const distributionVersionSchema = z.object({
     version: semverSchema,

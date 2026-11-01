@@ -1,6 +1,6 @@
 # Sherpa rules for agents
 
-A local code review tool. The reviewer reads a PR diff in the browser, while an AI agent in the same harness builds a route through the diff and answers questions. Seven packages in a pnpm monorepo under `packages/` (`protocol`, `server`, `ui`, `cli`, `skill`, `fixtures`, `e2e`), TypeScript throughout, Node ≥ 22.13. See `docs/architecture.md` for the system design and `CONTRIBUTING.md` for running, building and testing.
+A local code review tool. The reviewer reads a PR diff in the browser, while an AI agent in the same harness builds a route through the diff and answers questions. Seven packages in a pnpm monorepo under `packages/` (`protocol`, `server`, `ui`, `cli`, `npm`, `fixtures`, `e2e`), TypeScript throughout, Node ≥ 22.13. See `docs/architecture.md` for the system design and `CONTRIBUTING.md` for running, building and testing.
 
 ## Source of truth
 
@@ -17,12 +17,13 @@ Before every commit, `pnpm -r typecheck && pnpm -r lint && pnpm -r test` must pa
 - Everything the model reads or that crosses a process boundary has a schema in `packages/protocol` and passes validation. The UI consumes only data that passes its schema. The server rejects task results that fail validation (fail closed).
 - Review hosts and update and feedback channels are plugins registered through the composition roots in `packages/server/src/hosts/all.ts` and `packages/cli/src/hosts/all.ts`. The core does not know hosts by name. Host-specific behaviour stays inside the `ReviewHost` adapter (`packages/protocol/src/review-host.ts`). A new host method needs a flag in `HostCapabilities` and a check in the contract test suite at `packages/server/src/hosts/review-host-contract.ts`.
 
+- The skill (`skills/sherpa-review/SKILL.md`) is a stub that runs `npx -y sherpa-review@latest guide`. Session instructions for the model live in `packages/cli/src/guide.ts`, not in SKILL.md.
 - The CLI is one self-contained `.mjs` with no runtime dependencies. The server is one bundle with the UI embedded. Any new dependency in `cli` or `server` must be bundled by esbuild.
 - Increment the protocol version (`packages/protocol/src/version.ts`) whenever worker endpoints or the task format change incompatibly.
 
 ## Language
 
-Write all project text in English, including SKILL.md, CLI output, task text, HTTP errors, UI text, `server.log`, code comments and documentation. The loop markers ("stop the loop", "DONE") are a contract between SKILL.md and the code, covered by a test in `packages/skill`.
+Write all project text in English, including SKILL.md, CLI output, task text, HTTP errors, UI text, `server.log`, code comments and documentation. The loop markers ("stop the loop", "DONE") are a contract between the `sherpa-review guide` text and the rest of the CLI output, covered by a test in `packages/cli` (`guide.test.ts`).
 
 Text the reviewer reads (UI, route text, release `--notes` in the update toast) describes what they see on screen, using their vocabulary: "context expansion is no longer blocked by changes outside your ownership zone" → "the arrows that reveal hidden diff lines work again in the route".
 

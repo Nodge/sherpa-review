@@ -24,9 +24,9 @@ jobs:
               run: pnpm -r typecheck
             - name: ESLint
               run: pnpm -r lint
-            # The same build the README gives for installing the skill from a checkout.
-            - name: Build the skill
-              run: pnpm --filter @sherpa/ui build && pnpm --filter @sherpa/skill build
+            # The same build `pnpm release` runs before publishing to npm.
+            - name: Build the npm package
+              run: pnpm --filter @sherpa/ui build && pnpm --filter @sherpa/npm build
 
     test:
         needs: [lint]

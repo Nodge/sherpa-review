@@ -12,7 +12,7 @@ import { CliError } from './errors.js';
 import { formatUiUrl } from './format.js';
 import { manifestPathFor, serverLogPathFor } from './paths.js';
 
-/** The server module is an adjacent file in the skill directory, next to the CLI itself. */
+/** The server module is an adjacent file in the package's `bin/`, next to the CLI itself. */
 const SERVER_BIN_NAME = 'sherpa-review-server.mjs';
 
 /** How long to wait for the daemon to publish a live manifest. */
@@ -112,8 +112,8 @@ export async function ensureServer(options: EnsureServerOptions): Promise<Ensure
 }
 
 /**
- * Path to the server module. Normally the adjacent file in the skill directory. Resolves the real path
- * through realpath because the skill directory is installed as a symlink (`~/.claude/skills/sherpa-review`).
+ * Path to the server module. Normally the adjacent file in the package's `bin/`. Resolves the real path
+ * through realpath because npm runs the CLI through a symlink (`node_modules/.bin/sherpa-review`).
  * `SHERPA_SERVER_BIN` overrides discovery for development runs and tests.
  */
 export async function resolveServerBin(entry: string | undefined, override: string | undefined): Promise<string> {
@@ -122,7 +122,7 @@ export async function resolveServerBin(entry: string | undefined, override: stri
         if (!(await isFile(explicit))) {
             throw new CliError(
                 `sherpa-review: SHERPA_SERVER_BIN points at ${explicit}, but there is no file there.\n` +
-                    'Fix the path or unset the variable to take the server from the skill directory.',
+                    'Fix the path or unset the variable to take the server module from beside the CLI.',
             );
         }
         return explicit;
@@ -215,8 +215,8 @@ function isProcessAlive(pid: number): boolean {
  * the parent checked. stdio goes to a log file. Nothing reads it at runtime, but it remains for the user
  * when startup fails. The log has no token: the CLI builds the token link after reading the manifest.
  *
- * `--install-dir` is the distribution directory (parent of `bin/`). Only the
- * CLI knows where the skill is installed, and the server needs it for update instructions.
+ * `--install-dir` is the package directory (parent of `bin/`). Only the
+ * CLI knows where the package is installed, and the server needs it for update instructions.
  */
 async function spawnDaemon(
     entry: string,
@@ -372,11 +372,11 @@ async function waitForExit(child: ChildProcess, timeoutMs: number): Promise<bool
 }
 
 const REINSTALL_HINT =
-    'Reinstall the Sherpa skill as a whole (the directory with SKILL.md and bin/). ' +
+    'Reinstall the sherpa-review package. Under npx, delete its directory in the npm cache (`~/.npm/_npx`) and run the skill again. ' +
     'Show this text to the user and stop — do not start the worker loop.';
 
 const INCOMPLETE_DISTRIBUTION =
-    `sherpa-review: the skill distribution is incomplete — ${SERVER_BIN_NAME} must sit next to sherpa-review.mjs.\n${REINSTALL_HINT}`;
+    `sherpa-review: the package is incomplete — ${SERVER_BIN_NAME} must sit next to sherpa-review.mjs.\n${REINSTALL_HINT}`;
 
 async function isFile(filePath: string): Promise<boolean> {
     try {

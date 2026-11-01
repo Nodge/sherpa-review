@@ -1,3 +1,5 @@
+import { fileURLToPath } from 'node:url';
+
 import { run } from './cli.js';
 import { CLI_HOSTS } from './hosts/all.js';
 import { checkNodeVersion } from './runtime.js';
@@ -26,6 +28,8 @@ async function main(): Promise<number> {
         err: (text) => {
             process.stderr.write(`${text}\n`);
         },
+        // The real file, not the `node_modules/.bin` link npx and npm run: the server module sits beside it.
+        entry: fileURLToPath(import.meta.url),
         daemonNodeFlags: DAEMON_NODE_FLAGS,
     });
 }

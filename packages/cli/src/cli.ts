@@ -25,9 +25,11 @@ import {
     formatTask,
     formatUpReady,
     helpText,
+    startCommandPrefix,
     taskCompleteCommand,
     workerNextCommand,
 } from './format.js';
+import { guideText } from './guide.js';
 import type { CliHostPlugin } from './hosts/plugin.js';
 import { resolveLocalTarget } from './local.js';
 import {
@@ -79,6 +81,9 @@ export async function run(argv: readonly string[], io: CliIo): Promise<number> {
                 return 0;
             case 'help':
                 io.out(helpText());
+                return 0;
+            case 'guide':
+                io.out(guideText(io.hosts, startCommandPrefix(path.resolve(entryOf(io) ?? 'sherpa-review.mjs'), CLI_VERSION)));
                 return 0;
             case 'server':
                 return await server(command, io);

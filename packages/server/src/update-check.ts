@@ -88,6 +88,8 @@ export class UpdateChecker {
     /** Channel hint. null means no channel. */
     private readonly install: UiUpdateInstall | null;
     private readonly enabled: boolean;
+    /** The server is built with a channel. Independent of `enabled` and the dev version: the UI uses it to decide whether to offer the check. */
+    readonly hasChannel: boolean;
     private readonly listeners = new Set<() => void>();
     /** Latest known published version. null means unknown, not checked or a failed check. */
     private latest: DistributionVersion | null = null;
@@ -104,6 +106,7 @@ export class UpdateChecker {
         this.cacheFile = options.cacheFile ?? updateCheckPathFor(options.sherpaDir);
         this.currentVersion = options.currentVersion ?? SERVER_VERSION;
         this.channel = options.channel;
+        this.hasChannel = options.channel !== null;
         this.install = options.channel?.install(options.installDir ?? null) ?? null;
         this.enabled = options.enabled ?? true;
     }

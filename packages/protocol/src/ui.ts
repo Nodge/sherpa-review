@@ -179,6 +179,11 @@ export const uiStateSchema = z.object({
      * without an update channel, host without a check), failed, the version is current or the reviewer dismissed it.
      */
     update: uiUpdateSchema.nullable(),
+    /**
+     * The server is built with an update channel (`UpdateChannel`). Without one the UI does not offer an update
+     * check: no palette command, `update` is always null. The host's `disablesUpdateCheck` does not affect the flag.
+     */
+    updateChannel: z.boolean(),
     /** Generation cap for the current route snapshot. null if there is no snapshot or nothing was truncated. */
     generationCap: uiGenerationCapSchema.nullable(),
 });

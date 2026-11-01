@@ -29,7 +29,7 @@ describe('server module discovery', () => {
     beforeEach(async () => {
         // Real tmp instead of an fs mock: the symlink case requires an actual symlink.
         workDir = await fs.mkdtemp(path.join(os.tmpdir(), 'sherpa-bin-'));
-        binDir = path.join(workDir, 'skill', 'bin');
+        binDir = path.join(workDir, 'sherpa-review', 'bin');
         await fs.mkdir(binDir, { recursive: true });
         await fs.writeFile(path.join(binDir, 'sherpa-review.mjs'), '// CLI\n');
         await fs.writeFile(path.join(binDir, 'sherpa-review-server.mjs'), '// server\n');
@@ -45,12 +45,13 @@ describe('server module discovery', () => {
         );
     });
 
-    it('finds the module through a symlink to the skill directory', async () => {
-        // This is how the skill is installed: `~/.claude/skills/sherpa-review -> <distribution>`.
-        const link = path.join(workDir, 'skills-sherpa');
-        await fs.symlink(path.join(workDir, 'skill'), link, 'dir');
+    it('finds the module through the node_modules/.bin link to the CLI', async () => {
+        // This is how npm and npx run the package: `node_modules/.bin/sherpa-review -> ../sherpa-review/bin/sherpa-review.mjs`.
+        const link = path.join(workDir, '.bin', 'sherpa-review');
+        await fs.mkdir(path.dirname(link));
+        await fs.symlink('../sherpa-review/bin/sherpa-review.mjs', link, 'file');
 
-        await expect(resolveServerBin(path.join(link, 'bin', 'sherpa-review.mjs'), undefined)).resolves.toBe(
+        await expect(resolveServerBin(link, undefined)).resolves.toBe(
             path.join(await fs.realpath(binDir), 'sherpa-review-server.mjs'),
         );
     });
@@ -59,14 +60,14 @@ describe('server module discovery', () => {
         const lonely = path.join(workDir, 'sherpa-review.mjs');
         await fs.writeFile(lonely, '// CLI\n');
 
-        await expect(resolveServerBin(lonely, undefined)).rejects.toThrow('skill distribution is incomplete');
+        await expect(resolveServerBin(lonely, undefined)).rejects.toThrow('package is incomplete');
     });
 
     it('returns the same error for an empty or nonexistent launch path without a stack trace', async () => {
         await expect(resolveServerBin(undefined, undefined)).rejects.toThrow(CliError);
-        await expect(resolveServerBin('   ', undefined)).rejects.toThrow('skill distribution is incomplete');
+        await expect(resolveServerBin('   ', undefined)).rejects.toThrow('package is incomplete');
         await expect(resolveServerBin(path.join(workDir, 'nonexistent.mjs'), undefined)).rejects.toThrow(
-            'skill distribution is incomplete',
+            'package is incomplete',
         );
     });
 
@@ -84,7 +85,7 @@ describe('server module discovery', () => {
         const broken = path.join(workDir, 'without-runServer.mjs');
         await fs.writeFile(broken, 'export const runServer = 42;\n');
 
-        await expect(loadServerModule(broken)).rejects.toThrow('skill distribution is incomplete');
+        await expect(loadServerModule(broken)).rejects.toThrow('package is incomplete');
     });
 
     it('reports the path and cause for a broken server module instead of asking to retry', async () => {
@@ -135,7 +136,7 @@ describe('server startup in `up`', () => {
      * `body` is the body of the exported `runServer(argv)`.
      */
     async function fakeServer(body: string): Promise<string> {
-        const binDir = path.join(workDir, 'skill', 'bin');
+        const binDir = path.join(workDir, 'sherpa-review', 'bin');
         await fs.mkdir(binDir, { recursive: true });
         const file = path.join(binDir, 'sherpa-review-server.mjs');
         await fs.writeFile(file, `export async function runServer(argv) {\n${body}\nreturn 0;\n}\n`);
@@ -275,7 +276,7 @@ describe('server startup in `up`', () => {
     it('passes --install-dir to the daemon as the distribution root above bin/', async () => {
         await up(await fakeServer(WORKING_SERVER));
 
-        expect((await readManifest(sherpaDir)).installDir).toBe(await fs.realpath(path.join(workDir, 'skill')));
+        expect((await readManifest(sherpaDir)).installDir).toBe(await fs.realpath(path.join(workDir, 'sherpa-review')));
     });
 
     // Only the CLI knows the directory, base and branch. It passes them to the server as spawn arguments.
@@ -386,7 +387,7 @@ describe('server startup in `up`', () => {
                 entry: undefined,
                 startupTimeoutMs: STARTUP_TIMEOUT_MS,
             }),
-        ).rejects.toThrow('skill distribution is incomplete');
+        ).rejects.toThrow('package is incomplete');
     });
 
     // The daemon is the CLI itself. Without its path, there is nothing to spawn even with an explicit server module.
@@ -395,7 +396,7 @@ describe('server startup in `up`', () => {
 
         await expect(
             ensureServer({ prKey: PR_KEY, sherpaDir, entry: undefined, serverBin, startupTimeoutMs: STARTUP_TIMEOUT_MS }),
-        ).rejects.toThrow('skill distribution is incomplete');
+        ).rejects.toThrow('package is incomplete');
     });
 
     describe('terminating a stuck daemon', () => {

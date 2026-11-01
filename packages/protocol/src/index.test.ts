@@ -566,7 +566,7 @@ describe('locale, onboarding, update', () => {
         );
     });
 
-    it('version.json: release fields are nullable, whatsNew is bounded', () => {
+    it('distribution version: release fields are nullable, whatsNew is bounded', () => {
         const built = { version: '0.5.0', builtFrom: 'b1e4515-dirty', releasedAt: null, whatsNew: null };
         expect(distributionVersionSchema.parse(built)).toEqual(built);
         expect(

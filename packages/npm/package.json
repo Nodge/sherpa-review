@@ -1,13 +1,13 @@
 {
-  "name": "@sherpa/skill",
+  "name": "@sherpa/npm",
   "version": "0.0.0",
-  "description": "Sherpa skill distribution for a harness: SKILL.md and built bundles",
+  "description": "Builds the sherpa-review npm package: the CLI and the server module with the UI embedded",
   "private": true,
   "license": "MIT",
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
-    "typecheck": "echo \"@sherpa/skill: nothing to typecheck\"",
+    "typecheck": "echo \"@sherpa/npm: nothing to typecheck\"",
     "lint": "eslint . --no-error-on-unmatched-pattern",
     "test": "vitest run"
   },

@@ -1,15 +1,11 @@
 import type { FeedbackChannelFactory } from '../feedback-channel.js';
 import { linkFeedbackChannel } from '../feedback-channel.js';
-import { NpmUpdateChannel } from '../npm-update-channel.js';
 import type { UpdateChannel } from '../update-channel.js';
 
 import { fixtureHostPlugin } from './fixture/plugin.js';
 import { githubHostPlugin } from './github/plugin.js';
 import { localGitHostPlugin } from './local/git-plugin.js';
 import type { HostPlugin } from './plugin.js';
-
-/** npm package name. */
-const NPM_PACKAGE = 'sherpa-review';
 
 /** Sherpa repository on GitHub. */
 const GITHUB_REPO = 'nodge/sherpa-review';
@@ -20,8 +16,11 @@ const GITHUB_REPO = 'nodge/sherpa-review';
  */
 export const ALL_HOSTS: readonly HostPlugin[] = [githubHostPlugin, localGitHostPlugin, fixtureHostPlugin];
 
-/** Update channel: the package `latest` tag in the npm registry. */
-export const UPDATE_CHANNEL: UpdateChannel = new NpmUpdateChannel(NPM_PACKAGE);
+/**
+ * No update channel in this distribution: the skill runs `npx sherpa-review@latest`, so a new session gets a new release.
+ * `NpmUpdateChannel` stays in the code, unconnected.
+ */
+export const UPDATE_CHANNEL: UpdateChannel | null = null;
 
 /** Feedback channel: the button opens GitHub repository issues. */
 export const FEEDBACK_CHANNEL: FeedbackChannelFactory = () =>

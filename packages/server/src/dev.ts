@@ -1,5 +1,6 @@
 import path from 'node:path';
 
+import { DEV_UPDATE_CHANNEL } from './dev-update-channel.js';
 import { ServerAlreadyRunningError } from './errors.js';
 import { ALL_HOSTS, FEEDBACK_CHANNEL, UPDATE_CHANNEL } from './hosts/all.js';
 import { formatUiUrl, readOption, resolveUiDir, UI_BUILD_HINT } from './launch.js';
@@ -44,7 +45,7 @@ async function main(argv: readonly string[]): Promise<number> {
         ...(repo === null ? {} : { repo: path.resolve(repo) }),
         ...(reviewBase === null ? {} : { base: reviewBase }),
         ...(reviewBranch === null ? {} : { branch: reviewBranch }),
-        updateChannel: UPDATE_CHANNEL,
+        updateChannel: UPDATE_CHANNEL ?? DEV_UPDATE_CHANNEL,
         updateCheck: installDir === null ? {} : { installDir },
         feedbackChannel: FEEDBACK_CHANNEL({ installDir }),
     };

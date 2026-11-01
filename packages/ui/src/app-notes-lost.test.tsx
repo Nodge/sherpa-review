@@ -102,6 +102,7 @@ function mountApp(options: { readonly notes?: readonly AgentNote[]; readonly vie
         feedback: { kind: 'issues', available: false, reason: 'The test feedback channel is unavailable.', discussionUrl: null },
         iterations: [{ ...V2.iteration, status: 'active' }],
         update: null,
+        updateChannel: false,
         generationCap: null,
     };
     const snapshot: StoreSnapshot = {

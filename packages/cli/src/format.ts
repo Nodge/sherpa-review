@@ -18,13 +18,30 @@ export interface CommandTarget {
 /**
  * Command the CLI prints for the model: `node <sherpa-review.mjs> <words> --pr <key> [<placeholder>]`.
  * The full path and key let a command copied as is work from any cwd, without the checkout
- * where the CLI discovers the PR, or substituting the skill path. The caller quotes values in `words`
+ * where the CLI discovers the PR, or substituting the CLI path. The caller quotes values in `words`
  * through `shellQuote`.
  * The placeholder (`--text "..."`) goes last. The model replaces it with its own text.
  */
 function commandLine(target: CommandTarget, words: string, placeholder?: string): string {
     const parts = ['node', shellQuote(target.cliPath), words, '--pr', shellQuote(target.prKey)];
     return (placeholder === undefined ? parts : [...parts, placeholder]).join(' ');
+}
+
+/** npm package name: `guide` pins the session to it with an exact version. */
+const NPM_PACKAGE = 'sherpa-review';
+
+/**
+ * Start of the `up` commands that `guide` prints. Run from the npx cache, it is `npx -y sherpa-review@<version>`:
+ * npx keeps the cache directory of a tag (`@latest`) in place and installs a new version over it, while the
+ * directory of an exact version never changes. `up` then prints the absolute path inside that directory, and
+ * the session keeps the version its server started with. Anywhere else (a global install, a checkout build) it
+ * is `node <this CLI>`. A dev build (`0.0.0`) has no published version to pin.
+ */
+export function startCommandPrefix(cliPath: string, version: string): string {
+    const fromNpxCache = cliPath.split(/[\\/]/u).includes('_npx');
+    return fromNpxCache && version !== '0.0.0'
+        ? `npx -y ${shellQuote(`${NPM_PACKAGE}@${version}`)}`
+        : `node ${shellQuote(cliPath)}`;
 }
 
 export function workerNextCommand(target: CommandTarget): string {
@@ -217,6 +234,7 @@ export function formatOversizedResult(taskId: number, file: string, bytes: numbe
 
 export function helpText(): string {
     const commands: readonly (readonly [string, string])[] = [
+        ['sherpa-review guide', 'print the session guide: how to start a review and run the worker loop'],
         [
             'sherpa-review up [--local <path> [--verdicts <instruction>]] [--harness <name>] [--model <name>] ' +
                 '[--lang <ru|en>] [--no-open]',
@@ -281,15 +299,15 @@ function nextStepFor(code: RpcErrorCode, role: CallRole, target: CommandTarget):
 
 /**
  * The worker slot went to another session during work, so the loop can't continue.
- * The phrase "stop the loop" is a marker from SKILL.md. Don't change it independently of that file.
+ * The phrase "stop the loop" is a marker from the `sherpa-review guide` text (`guide.ts`), held by `guide.test.ts`.
  */
 const WORKER_CONFLICT_STOP =
     'This session is no longer the worker of this PR: stop the loop and do not call `sherpa-review` again — ' +
     'another session has taken over.';
 
 /**
- * Next step by error code. The server already supplies instructions for `version_incompatible` and `unknown_task`,
- * so don't repeat them. For `lease_not_held`, the server instruction names
+ * Next step by error code. The server already supplies instructions for `unknown_task`, so don't repeat them.
+ * `version_incompatible` does not get here: the client replaces it with its own recovery text. For `lease_not_held`, the server instruction names
  * `worker next` briefly. The CLI adds the full command.
  */
 const NEXT_STEP_BY_CODE: Partial<Record<RpcErrorCode, (target: CommandTarget) => string>> = {

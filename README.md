@@ -1,6 +1,6 @@
 # Sherpa
 
-Sherpa is a local code review tool. The reviewer reads a pull request diff in the browser, while an AI agent in another session of the same harness builds a **route** through it. The route is an ordered narrative of what changed and its consequences. The agent also answers questions right beside the code. The server and UI run on localhost. Sherpa makes external requests only to GitHub, with your token, and to the npm registry to check for updates.
+Sherpa is a local code review tool. The reviewer reads a pull request diff in the browser, while an AI agent in another session of the same harness builds a **route** through it. The route is an ordered narrative of what changed and its consequences. The agent also answers questions right beside the code. The server and UI run on localhost. Sherpa makes external requests only to GitHub, with your token, and, through npx, to the npm registry when a session starts.
 
 The UI is a complete review interface: file tree and search, a highlighted diff with context expansion, threads and comment drafts, and ship. All of it keeps working without an agent. The route is a layer over the reader, which works on its own.
 
@@ -11,32 +11,23 @@ For reviewers in a monorepo or on GitHub who receive more PRs than they can read
 - For GitHub PRs, a token: `$GITHUB_TOKEN` → `$GH_TOKEN` → `gh auth token`. No checkout is needed because the PR is read through the API. For the "My files" lens to include CODEOWNERS teams (`@org/team`), the token needs the `read:org` scope.
 - For local review, any git repository checkout.
 - Node ≥ 22.13 (on the 23 release line, 23.4 or later, because earlier versions lack `node:sqlite`).
-- pnpm, to build the skill from a checkout. `corepack enable` installs the version the repository pins.
+- npm, which comes with Node, for `npx`.
 - An agent harness: Claude Code (tested) or Codex (supported, tested less). Any other harness works too if it supports skills and can call bash.
 - Model: this configuration has been tested with `opus:high` and `gpt-5.6-sol:high`. These are the recommended models.
 
 ## Installation
 
-There is no npm release yet, so the skill is built from a checkout:
+Install the skill with [`skills`](https://skills.sh):
 
 ```
-git clone https://github.com/Nodge/sherpa-review.git ~/src/sherpa-review
-cd ~/src/sherpa-review
-pnpm install --frozen-lockfile
-pnpm --filter @sherpa/ui build && pnpm --filter @sherpa/skill build
+npx skills add Nodge/sherpa-review -g
 ```
 
-The build puts the skill into `packages/skill/dist`. Symlink it into your harness skills directory:
+`-g` makes it available in all projects, without it the skill goes into the current one. The CLI asks which harnesses to install it for: Claude Code, Codex and others.
 
-```
-mkdir -p ~/.claude/skills ~/.agents/skills
-ln -s ~/src/sherpa-review/packages/skill/dist ~/.claude/skills/sherpa-review   # Claude Code
-ln -s ~/src/sherpa-review/packages/skill/dist ~/.agents/skills/sherpa-review   # Codex
-```
+The skill is a stub that runs `npx -y sherpa-review@latest guide`. Everything else lives in the [`sherpa-review`](https://www.npmjs.com/package/sherpa-review) npm package: 2 built `.mjs` files (the CLI and the server with the UI embedded), zero runtime dependencies.
 
-The directory is self-contained: `SKILL.md` and 2 built `.mjs` files (the CLI and server with the UI embedded), zero runtime dependencies. You can copy it anywhere instead of symlinking it.
-
-To update, run `git pull` in the checkout and repeat the build commands.
+There is nothing to update by hand. Every new agent session takes the latest published version, and a running session keeps the version it started with.
 
 ## Starting a review
 
@@ -149,10 +140,6 @@ The agent writes the route and chat answers in the same language. Sherpa records
 Light and dark. The button in the top bar shows the current theme and switches it without
 a reload. The choice is saved for all PRs and survives restarts. Dark is the default.
 
-### Updates
-
-The server checks the npm registry for a newer published version at most once every 30 minutes. It caches the result so servers for all your PRs do not keep calling the API. If a newer version is published, a toast in the bottom-left corner shows what is new in one sentence and how to update. Nothing downloads or installs automatically. To check now, use the ⌘K palette → "Check for updates". "Do not remind me about X" silences that version only. The next version will appear again.
-
 ### Settings
 
 Settings survive startup. Diff mode, ship mode, editor layout, language, theme and onboarding state live in `~/.sherpa/settings.json`, shared by all PRs. Collapsed directories, cards and recent palette commands live in the database for the specific PR.
@@ -166,7 +153,7 @@ All are optional. Sherpa uses defaults when they are absent.
 | `SHERPA_DIR` | Sherpa state root | `~/.sherpa` |
 | `SHERPA_PR` | PR key when `--pr` is not set | unset |
 | `SHERPA_LISTEN_HOST` | Listen address for a new server. `::` enables IPv6 and IPv4 | `127.0.0.1` |
-| `SHERPA_SERVER_BIN` | Path to the server module | adjacent `sherpa-review-server.mjs` in the skill directory |
+| `SHERPA_SERVER_BIN` | Path to the server module | adjacent `sherpa-review-server.mjs` in the package's `bin/` |
 | `SHERPA_IDLE_SECONDS` | Debug. Idle shutdown threshold in seconds, `0` disables it | `900` (15 minutes) |
 | `SHERPA_WORKER_ID` | Debug. Pins the worker session identity | identity from this PR's `worker-id` file |
 | `SHERPA_SERVER` | Debug, UI development server only. Running server address for the `/api` proxy | first running server manifest |
@@ -182,12 +169,11 @@ All state lives in `~/.sherpa` (directories 0700, manifests 0600):
 - `prs/<PR key>/payload/` contains task context files the agent reads.
 - `prs/<PR key>/blobs/` caches diff images.
 - `settings.json` contains global UI settings.
-- `update-check.json` caches version checks.
 
 External requests cover the following:
 
 - **GitHub**, only for PRs on github.com, with your token: PR metadata, diff and file contents, threads, drafts and publishing, viewed marks, CODEOWNERS and organisation team membership.
-- **Update checks** ask the npm registry for the latest published version, at most once every 30 minutes.
+- **The npm registry**, when the skill starts a session: `npx` resolves the latest `sherpa-review` version and downloads it if it is new.
 
 There is no telemetry. The server listens on `127.0.0.1` by default. The UI access token lives in the link fragment and is not sent to the server.
 
@@ -212,10 +198,6 @@ The Feedback button in the top bar opens [GitHub issues](https://github.com/Nodg
 - One PR per session, one session per PR.
 - Hosts are GitHub and a local git checkout.
 - Sherpa does not generate its own findings. It shows existing comments, including AI review comments.
-
-## Version
-
-`0.11.1` appears in `sherpa-review --version` and in the UI top bar.
 
 ## Development
 

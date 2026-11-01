@@ -288,6 +288,7 @@ function mount(options: MountOptions = {}): Mounted {
             feedback: { kind: 'issues', available: false, reason: 'Test feedback channel is unavailable.', discussionUrl: null },
             iterations: [],
             update: null,
+            updateChannel: false,
             generationCap: null,
         },
         error: null,

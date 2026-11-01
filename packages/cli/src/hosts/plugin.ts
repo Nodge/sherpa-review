@@ -16,6 +16,19 @@ export interface CliHostPlugin {
     readonly discoverPr?: PrDiscoverer;
     /** Checkout of this VCS for local review. */
     readonly detectLocal?: LocalDetector;
+    /** The host's part of the session guide printed by `sherpa-review guide`. */
+    readonly guide?: HostGuide;
+}
+
+/**
+ * Markdown pieces for `sherpa-review guide`, in English: the model reads them. The core inserts them into its
+ * sections in plugin list order and takes the local review base from `detectLocal`.
+ */
+export interface HostGuide {
+    /** Items of the mode list: which skill arguments are PRs of this host and what to do with them. */
+    readonly arguments?: readonly string[];
+    /** Paragraphs on what the host needs to work and what to do when it is missing. */
+    readonly requirements?: readonly string[];
 }
 
 export type PrDiscovery =

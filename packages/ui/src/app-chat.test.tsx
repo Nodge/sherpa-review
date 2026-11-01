@@ -141,6 +141,7 @@ function mountApp(options: {
         feedback: { kind: 'issues', available: false, reason: 'The test feedback channel is unavailable.', discussionUrl: null },
         iterations: [],
         update: null,
+        updateChannel: false,
         generationCap: null,
     };
     let snapshot: StoreSnapshot = {

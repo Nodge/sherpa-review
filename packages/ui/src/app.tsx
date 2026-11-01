@@ -34,7 +34,7 @@ import {
     reviewActionBarVisible,
     ReviewActionBar,
 } from './components/review-action-bar.tsx';
-import { useUpdateCheckCommand, useUpdateToast } from './components/update-state.js';
+import { UpdateCheckCommand, useUpdateToast } from './components/update-state.js';
 import { UpdateToast } from './components/update-toast.tsx';
 import { ReviewComplete } from './components/review-complete.tsx';
 import { ShortcutCheatsheet } from './components/shortcut-cheatsheet.tsx';
@@ -132,13 +132,8 @@ export function App({ store, session, token }: AppProps) {
     }, [shortcutRegistry, view]);
     const state = snapshot.state;
     const reviewReady = state !== null;
-    // The "Check for updates" palette command. The toast below waits until the tour ends.
+    // Palette status line: the "Check for updates" command answers with it.
     const [paletteStatus, setPaletteStatus] = useState<string | null>(null);
-    useUpdateCheckCommand({
-        token,
-        current: state?.update?.current ?? UI_VERSION,
-        onStatus: setPaletteStatus,
-    });
     // The browser tab identifies the PR (#37). Before metadata arrives, it uses the number from the key, so it is never empty.
     const documentTitle = state === null ? null : documentTitleFor(state.prKey, state.pr);
     const reviewHost = state?.reviewHost ?? null;
@@ -1161,6 +1156,13 @@ export function App({ store, session, token }: AppProps) {
                 generating={generating}
                 onGenerate={startGeneration}
             />
+            {state.updateChannel ? (
+                <UpdateCheckCommand
+                    token={token}
+                    current={state.update?.current ?? UI_VERSION}
+                    onStatus={setPaletteStatus}
+                />
+            ) : null}
 
             {cheatsheetOpen ? (
                 <ShortcutCheatsheet

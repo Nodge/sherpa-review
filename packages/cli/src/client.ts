@@ -203,13 +203,18 @@ async function callWorker<TRequest extends WorkerRequestBase, TResponse>(
     const response = await send(connection, call.endpoint, JSON.stringify(request.data), call.timeoutMs);
 
     if (!response.ok) {
-        const failure = parseRpcError(response.text);
-        throw new RpcCallError(failure.code, formatRpcError(failure, call.role, call.target));
+        const failure = parseRpcError(response.text, call.role);
+        // The server's own hint may come from an older release, so the current CLI gives the recovery.
+        const message =
+            failure.code === 'version_incompatible'
+                ? otherServerVersion(connection, call.role)
+                : formatRpcError(failure, call.role, call.target);
+        throw new RpcCallError(failure.code, message);
     }
 
     const parsed = call.responseSchema.safeParse(parseJson(response.text));
     if (!parsed.success) {
-        throw new CliError(contractMismatch());
+        throw new CliError(contractMismatch(call.role));
     }
     return parsed.data;
 }
@@ -289,11 +294,11 @@ const sendViaHttp: Transport = (connection, endpoint, body, timeoutMs) =>
         request.end(body);
     });
 
-/** An error body outside the contract means a version mismatch. The server must return `rpcErrorSchema`. */
-function parseRpcError(text: string): RpcError['error'] {
+/** The server must return `rpcErrorSchema`. A body outside it gets `contractMismatch`, not the version recovery. */
+function parseRpcError(text: string, role: CallRole): RpcError['error'] {
     const parsed = rpcErrorSchema.safeParse(parseJson(text));
     if (!parsed.success) {
-        throw new CliError(contractMismatch());
+        throw new CliError(contractMismatch(role));
     }
     return parsed.data.error;
 }
@@ -315,9 +320,34 @@ function invalidRequest(details: readonly string[]): string {
     ].join('\n');
 }
 
-function contractMismatch(): string {
+/**
+ * Recovery from a server that reports `version_incompatible`. `up` reuses a live server, so after an upgrade the
+ * previous release's daemon keeps serving the PR until it goes idle. Registration happens in `up` and
+ * `worker register`, which the model reruns as is. Other calls run inside the loop, where the start command is not known.
+ */
+function otherServerVersion(connection: ServerConnection, role: CallRole): string {
+    const pid = String(connection.pid);
+    const rerun = role === 'register' ? 'run the same command again' : 'run the skill again';
     return (
-        'sherpa-review: the server replied off-contract — most likely the CLI and the server versions diverged.\n' +
-        'Update the Sherpa skill together with the CLI and restart the server.'
+        `sherpa-review: a Sherpa server of another version is still running for this PR (pid ${pid}), ` +
+        'and this CLI cannot work with it.\n' +
+        `Stop it with \`kill ${pid}\`, or wait until it stops on its own after 15 idle minutes, then ${rerun}.\n` +
+        fatalTail(role)
     );
+}
+
+/** A response outside the contract: a server failure or a build that speaks another protocol. */
+function contractMismatch(role: CallRole): string {
+    return (
+        'sherpa-review: the server replied off-contract — it may have failed, or it runs a build that speaks ' +
+        'another protocol.\n' +
+        fatalTail(role)
+    );
+}
+
+/** "stop the loop" is a marker from the `sherpa-review guide` text, held by `guide.test.ts`. */
+function fatalTail(role: CallRole): string {
+    return role === 'register'
+        ? 'Show this text to the user and stop — do not start the worker loop.'
+        : 'Show this text to the user and stop the loop.';
 }

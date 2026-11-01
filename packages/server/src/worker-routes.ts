@@ -196,8 +196,9 @@ async function readWorkerRequest<T extends { protocolVersion: string }>(
         throw new RpcFailure(
             'version_incompatible',
             `The CLI protocol version ${parsed.data.protocolVersion} is incompatible with the server one ` +
-                `${PROTOCOL_VERSION}. Update the skill together with the CLI and restart the Sherpa server — ` +
-                'they ship together.',
+                `${PROTOCOL_VERSION}: this Sherpa server (pid ${String(process.pid)}) is of another version. ` +
+                `Stop it with \`kill ${String(process.pid)}\`, or wait until it stops on its own after 15 idle minutes, ` +
+                'then run the skill again.',
         );
     }
     return parsed.data;
