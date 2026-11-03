@@ -109,6 +109,22 @@ Measurements print as `PERF …` lines. `docs/testing.md` and `packages/e2e/READ
 
 Edit design-token values in `packages/ui/src/styles/tokens.css` and icons in `packages/ui/src/icons/sprite.svg`. Tests check theme completeness, duplicate declarations, font-size rules, contrast and the agreement between `Icon` names and sprite symbols. Design documents explain decisions, and prototypes provide a visual reference. For a new state or component, add a gallery card and compare it with the prototype at the same viewport.
 
+## README media
+
+The README shows a demo video and 2 screenshots of Sherpa 0.11.1 at commit `ecbe204`, in Chromium, on the `medium` fixture PR. The route, the review comment and the agent note are prepared demo data. No live repository, GitHub credentials or model service is involved.
+
+The files are GitHub attachments, not repository files, because `npx skills add` clones the repository tree on every install. To replace one, drag the new file into any comment field on GitHub, copy the `https://github.com/user-attachments/assets/…` URL it produces and put it into the README. A video URL goes on its own line, and GitHub renders a player for it.
+
+| Capture | Content |
+|---|---|
+| Demo video | Overview fills with the summary and route stops. The reviewer opens the route, scrolls from stop 01 to stop 02, comments on lines 6–9 in `edit-policy.ts` and clicks "Request changes". Dark theme, about 30 seconds at 2560 × 1600 and 30 fps, H.264 with CRF 16 and fast start |
+| Test digest | Route stop 04, captured as an element so the whole test digest fits. Dark theme |
+| Full diff | The same file and agent note in the full diff. Dark theme, 1280 × 800 |
+
+To refresh a capture, start the fixture server with a separate `--sherpa-dir` in a temporary directory. Build the route through the CLI using the prepared results in `packages/fixtures/src/data/route-medium*.ts`, the same way the e2e helpers in `packages/e2e/src/route-worker.ts` do. Use English and the default text size. Capture the real UI without changing its markup or styles.
+
+For the video, use a 1280 × 800 viewport at device scale factor 2. Keep the initial Overview, the summary and each route stop arriving, and the click on "Open the route". Record the scroll from stop 01 to stop 02 as one continuous movement. Select lines 6–9, write a comment, save the draft and click "Request changes". Speed up generation and cut pauses between actions. Leave the "Changes requested" screen visible for several seconds.
+
 ## Release
 
 Bump `version` in the root `package.json`, then prepare the package:

@@ -6,9 +6,9 @@ The agent explains the change and says where to look first. The verdict stays yo
 
 [Quick start](#quick-start) · [What you get](#what-you-get) · [User guide](docs/guide.md)
 
-![Overview fills with a summary and route stops, then a reviewer follows the route, comments on selected lines and requests changes](docs/assets/review-demo.gif)
+https://github.com/user-attachments/assets/9031038c-647c-4f8e-9466-3acd3ea438f7
 
-The summary and the route fill in, the reviewer reads the stops, leaves a comment and clicks "Request changes". The recording uses a demo PR with a prepared route, so the agent's thinking time is not in it. Somewhere out there, another agent spends that time opening the next pull request. [High-resolution MP4](docs/assets/review-demo.mp4) · [Still frame](docs/assets/review-demo.png).
+The summary and the route fill in, the reviewer reads the stops, leaves a comment and clicks "Request changes". The recording uses a demo PR with a prepared route, so the agent's thinking time is not in it. Somewhere out there, another agent spends that time opening the next pull request.
 
 What sets Sherpa apart from a review page with an AI summary on top:
 
@@ -58,7 +58,7 @@ Generation starts on its own once the agent connects and the diff loads. Stops a
 
 A stop can show a digest of the tests instead of their code: new assertions, changed assertions, weaker checks and behaviour with no test. Each assertion links back to its test line, and "Show the test code" opens the underlying diff.
 
-![Test digest with new and changed assertions, two weakened checks, and uncovered behaviour](docs/assets/test-digest.png)
+![Test digest with new and changed assertions, two weakened checks, and uncovered behaviour](https://github.com/user-attachments/assets/687e98f6-9ae6-4a8f-ad82-7cad8c56fe26)
 
 In this demo PR, a test named "reports the remaining time" checks only status 204. The digest marks it as weakened and points to the assertion.
 
@@ -72,7 +72,7 @@ When the author pushes another commit, or the working tree changes in local revi
 
 ### A complete review interface
 
-![Full diff with the file tree, highlighted changes and the agent note from the same review](docs/assets/full-diff-dark.png)
+![Full diff with the file tree, highlighted changes and the agent note from the same review](https://github.com/user-attachments/assets/47242f92-90ed-44d2-b157-8524abda534a)
 
 Overview groups the files by CODEOWNERS zone. Full diff has a file tree, search, unified and split modes, image comparisons and rendered Markdown. Comments are saved as drafts immediately and published as one batch when you approve, request changes or publish without a verdict. The whole review works from the keyboard (`?` shows the map), in English or Russian, light or dark.
 
