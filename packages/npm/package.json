@@ -1,7 +1,7 @@
 {
   "name": "sherpa-review",
   "version": "0.11.1",
-  "description": "Local code review with an AI route through a PR diff, run by the agent in your harness",
+  "description": "AI-assisted code review in the browser: your Claude Code or Codex agent builds a route through the pull request",
   "license": "MIT",
   "type": "module",
   "engines": {
