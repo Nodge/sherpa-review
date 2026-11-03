@@ -1,97 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-/**
- * Shared design-token checks: parse CSS and document tables, check contrast and validate
- * one palette. Used by the main style test (`tokens.test.ts`) and extra style tests
- * in `extra/<id>/`, each with its own CSS and document.
- */
-
-/** Non-colour token → value from the design handoff. Each group comment names its section. */
-export const EXPECTED: Record<string, string> = {
-    // docs/design/SPEC-elements.md §1.1: disabled opacity .45.
-    '--disabled-opacity': '.45',
-
-    // Type — IBM Plex Sans 400/450/500/600 for UI, IBM Plex Mono 400/500 for code, paths, numbers,
-    // commits, keys and all machine data. The scale lives in docs/design/theme.md, in the
-    // "Typography" section: sizes in rem, an 11px floor. A separate test checks the values below
-    // against that table, so there is no reason to repeat it in prose here.
-    '--font-sans': "'IBM Plex Sans',system-ui,sans-serif",
-    '--font-mono': "'IBM Plex Mono',ui-monospace,monospace",
-    '--font-size-pr-title-overview': '1.5rem',
-    '--font-size-pr-title': '1.375rem',
-    '--font-size-screen-title': '1.1875rem',
-    '--font-size-stop-title-high': '1.0625rem',
-    '--font-size-stop-title': '0.9688rem',
-    '--font-size-section-title': '0.9688rem',
-    '--font-size-input': '0.875rem',
-    '--font-size-body': '0.8438rem',
-    '--font-size-ui': '0.8125rem',
-    '--font-size-secondary': '0.7813rem',
-    '--font-size-control': '0.75rem',
-    '--font-size-meta': '0.7188rem',
-    '--font-size-gutter': '0.6875rem',
-    '--font-size-badge': '0.6875rem',
-    '--font-size-scope': '0.6875rem',
-    '--font-size-tag': '0.6875rem',
-    '--font-size-stop-mark': '0.625rem',
-    '--font-size-avatar-glyph': '0.5625rem',
-    '--font-size-close-glyph': '1.125rem',
-    '--font-size-code': '0.75rem',
-    '--line-height-body': '1.62',
-    // Code line density in px does not depend on text size.
-    '--line-height-code': '20px',
-
-    // Radius — 2–3px (rules, tier marks) · 4–5px (badges, small chips) · 6px (buttons, rows) ·
-    // 7px (inputs, chips, primary buttons) · 8–9px (cards, popovers) · 10–12px (panels, dialogs).
-    // Ranges map to specific roles using sizes from docs/design/README.md §0–§5 and §14.
-    '--radius-rule': '2px',
-    '--radius-mark': '3px',
-    '--radius-key': '4px',
-    '--radius-badge': '5px',
-    '--radius-button': '6px',
-    '--radius-input': '7px',
-    '--radius-popover': '8px',
-    '--radius-card': '9px',
-    // docs/design/README.md §5: the floating bar has its own 11px radius.
-    '--radius-floating': '11px',
-    '--radius-panel': '12px',
-
-    // Spacing — page gutter `clamp(30px, 2.4vw, 60px)` · column gap `clamp(40px, 3vw, 72px)` ·
-    // 22px card gap · 14px control gap · 8–10px inner gap.
-    '--space-page': 'clamp(30px, 2.4vw, 60px)',
-    '--space-column': 'clamp(40px, 3vw, 72px)',
-    '--space-card': '22px',
-    '--space-control': '14px',
-    '--space-inner': '10px',
-    '--space-inner-tight': '8px',
-    // Prototype: Sherpa.dc.html:217 reserves 180px below Route. Shared by all reader views.
-    '--space-bar-reserve': '180px',
-
-    // Widths — docs/design/README.md §4 (agent panel `clamp(392px, 26vw, 560px)`), §10 (file tree
-    // `clamp(320px, 22vw, 560px)`) and "Spacing" (`--diff-max` 1280px unified / 1920px side by side).
-    '--width-agent-panel': 'clamp(392px, 26vw, 560px)',
-    '--width-file-tree': 'clamp(320px, 22vw, 560px)',
-    '--diff-max': '1280px',
-
-    // Motion — spinner `spin .8s linear infinite` · skeleton/streaming `shimmer 1.6s ease-in-out
-    // infinite` · caret `caret 1s step-end infinite` · jump scroll ~320ms ease-in-out cubic ·
-    // jump flash ~900ms. Also docs/design/SPEC-elements.md §1.1: hover 90ms ease-out.
-    // "ease-in-out cubic" uses the easeInOutCubic curve. CSS has no such keyword.
-    '--motion-hover': '90ms',
-    '--motion-hover-ease': 'ease-out',
-    '--motion-spin': '.8s',
-    '--motion-shimmer': '1.6s',
-    '--motion-caret': '1s',
-    '--motion-jump': '320ms',
-    '--motion-jump-ease': 'cubic-bezier(.65,0,.35,1)',
-    '--motion-flash': '900ms',
-};
-
-/**
- * Notation differences that CSS treats as the same value: spaces after commas, leading zeros
- * in fractions and case. The handoff writes `rgba(127,140,255,.13)`, the formatter `rgba(127, 140, 255, 0.13)`.
- * Compare the colour, not the spaces.
- */
+/** Normalize whitespace, case and fractional notation before comparing CSS values. */
 export function normalize(value: string): string {
     return value
         .toLowerCase()
@@ -138,47 +47,6 @@ export function duplicateDeclarations(css: string): string[] {
         duplicates.push(...declarations.filter((name, index) => declarations.indexOf(name) !== index));
     }
     return duplicates;
-}
-
-/** The palette document's "token | dark | light | source" table of colour tokens. */
-export function parsePaletteDoc(markdown: string): { dark: Map<string, string>; light: Map<string, string> } {
-    const result = { dark: new Map<string, string>(), light: new Map<string, string>() };
-    for (const [, name, darkValue, lightValue] of markdown.matchAll(
-        /^\| `(--[a-z0-9-]+)` \| `([^`]+)` \| `([^`]+)` \| [^|]+\|$/gm,
-    )) {
-        if (name !== undefined && darkValue !== undefined && lightValue !== undefined) {
-            result.dark.set(name, normalize(darkValue));
-            result.light.set(name, normalize(lightValue));
-        }
-    }
-    if (result.dark.size === 0) {
-        throw new Error('no colour token table found in the document');
-    }
-    return result;
-}
-
-/**
- * The "token | rem | px at M | px at L | where" table in the palette document's "Typography" section.
- * The px columns derive from rem. The test recalculates them.
- */
-export function parseTypographyDoc(markdown: string): Map<string, { rem: string; m: string; l: string }> {
-    const scale = new Map<string, { rem: string; m: string; l: string }>();
-    for (const [, name, rem, m, l] of markdown.matchAll(
-        /^\| `(--font-size-[a-z0-9-]+)` \| `([\d.]+rem)` \| ([\d.]+) \| ([\d.]+) \| [^|]+\|$/gm,
-    )) {
-        if (name !== undefined && rem !== undefined && m !== undefined && l !== undefined) {
-            scale.set(name, { rem, m, l });
-        }
-    }
-    if (scale.size === 0) {
-        throw new Error('no font scale table found in the document');
-    }
-    return scale;
-}
-
-/** rem → px at `base`, rounded to tenths without a trailing zero, as in the table. */
-export function remToPx(rem: string, base: number): string {
-    return String(Math.round(Number.parseFloat(rem) * base * 10) / 10);
 }
 
 /**
@@ -345,13 +213,12 @@ export interface PaletteCheck {
     /** Full token set: keys of the base dark palette. */
     readonly baseKeys: readonly string[];
     /** This palette's colours from the document table. */
-    readonly documented: Map<string, string>;
     /** A recorded exception pair: contrast below 4.5:1 is known and documented. */
     readonly isLow: (pair: TextPair) => boolean;
 }
 
-/** Checks for one palette: complete token set, colours against the document, tree labels and contrast. */
-export function describePalette({ theme, tokens, baseKeys, documented, isLow }: PaletteCheck): void {
+/** Checks for one palette: complete token set, tree labels and contrast. */
+export function describePalette({ theme, tokens, baseKeys, isLow }: PaletteCheck): void {
     describe(`${theme} palette`, () => {
         it('resets the full token set at the theme boundary', () => {
             expect([...tokens.keys()].sort()).toEqual([...baseKeys].sort());
@@ -374,11 +241,6 @@ export function describePalette({ theme, tokens, baseKeys, documented, isLow }: 
             const read = onPanel('--tree-read-color');
             expect(read).toBeLessThanOrEqual(onPanel('--text-muted-dim'));
             expect(read).toBeLessThanOrEqual(onPanel('--text-dim-strong'));
-        });
-
-        it('all colour values match the document', () => {
-            const colors = new Map([...tokens].filter(([name]) => documented.has(name)));
-            expect(Object.fromEntries(colors)).toEqual(Object.fromEntries(documented));
         });
     });
 

@@ -13,8 +13,7 @@ import '../../diff-view/diff-view.css';
 /**
  * Syntax highlighting for languages absent from fixtures: one card per language using a handwritten
  * hunk. Lines with `-`/`+` are deletions and additions, and the rest are context. Check visually:
- * semantic categories are in docs/design/theme.md, extra style colour palettes are in README.md
- * in their `styles/extra/<id>/` directories.
+ * syntax colours are in styles/tokens.css and each extra style's CSS.
  */
 
 interface Sample {

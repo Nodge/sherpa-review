@@ -1,10 +1,10 @@
 # Waiting for tasks in harnesses: the cost of an idle worker
 
-> Research from 2026-09-25. Source code and documentation were examined for 5 harnesses (Claude Code, Codex, OpenCode, Cursor, pi), with a live measurement for Codex. The goal is for the `worker next` loop to use zero model turns while the reviewer is silent, using skill text rather than harness-specific adapters.
+> Research from 2026-09-25. The research examined source code and documentation for 5 harnesses (Claude Code, Codex, OpenCode, Cursor, pi) and measured Codex live. The goal is for the `worker next` loop to use zero model turns while the reviewer is silent, and to get there through skill text rather than harness-specific adapters.
 
 ## Brief conclusion
 
-Harnesses fall into 2 types. The first can run a command in the background and wake the model when it finishes (Claude Code, Cursor). The second has no background mode but can hold a blocking call indefinitely with an explicit timeout (OpenCode, pi). Codex formally belongs to the second type, but its system prompt requires blocking for no more than 60 s, and without instructions the model polls the process about every 25 s. A live measurement showed that harness-neutral wording, "set all tool timeouts to a day, don't poll", overrides this rule: 0 model requests over 10 minutes versus 23 without it. This only holds for gpt-5.6-sol, though. With the same wording, gpt-6-astra polls every 60 s (15 requests over 10 minutes). It reaches zero only with text that explicitly names the cell pragma and overrides the documented tool limits (repeat measurement below).
+Harnesses fall into 2 types. The first can run a command in the background and wake the model when it finishes (Claude Code, Cursor). The second has no background mode but can hold a blocking call indefinitely with an explicit timeout (OpenCode, pi). Codex formally belongs to the second type, but its system prompt requires blocking for no more than 60 s, and without instructions the model polls the process about every 25 s. A live measurement showed that harness-neutral wording, "set all tool timeouts to a day, don't poll", overrides this rule, with 0 model requests over 10 minutes versus 23 without it. This only holds for gpt-5.6-sol, though. With the same wording, gpt-6-astra polls every 60 s (15 requests over 10 minutes). gpt-6-astra reaches zero only with text that explicitly names the cell pragma and overrides the documented tool limits (repeat measurement below).
 
 All 5 harnesses can therefore reach zero idle turns with one `SKILL.md` containing 2 branches based on harness capabilities. A task costs one turn when it arrives, almost always with a cold cache (a 5-minute TTL everywhere except Claude Code subscriptions, where it is an hour). A separate Codex handler isn't needed.
 
@@ -19,24 +19,24 @@ All 5 harnesses can therefore reach zero idle turns with one `SKILL.md` containi
 ## Claude Code
 
 - Bash with `run_in_background: true` returns a task ID. On process exit, the harness queues a notification and starts a new turn itself if the session is idle. The main session's process survives the end of the turn. A foreground subagent's process dies with it. The duration limit was removed in 2.1.260, and the output limit is 5 GB.
-- Foreground Bash defaults to 120 s, and the model can request up to 600 s (`BASH_DEFAULT_TIMEOUT_MS`, `BASH_MAX_TIMEOUT_MS`). A timeout moves the command to the background instead of killing it, which costs one extra turn. Start it in the background from the outset.
+- Foreground Bash defaults to 120 s, and the model can request up to 600 s (`BASH_DEFAULT_TIMEOUT_MS`, `BASH_MAX_TIMEOUT_MS`). A timeout moves the command to the background instead of killing it, which costs one extra turn, so the loop should start the command in the background from the outset.
 - A background process causes no periodic wakeups. Cache TTL is an hour with a subscription, 5 minutes with an API key (`CLAUDE_CODE_PROMPT_CACHE_TTL=1h` since 2.1.242).
-- External push into a session: cross-session messages through a Unix socket (2.1.224+, undocumented format), Monitor with a deadline of up to 30 minutes, and the `asyncRewake` hook. None is needed here. Background execution with a wakeup covers the task.
-- Skills: `~/.claude/skills/<name>/SKILL.md`, with symlink support. `/sherpa-review 12345` substitutes `$ARGUMENTS`.
-- Traps: a background task that "looks like it is waiting for input" notifies the model after about 45 s, so `worker next` must stay silent while waiting. A skill's `allowed-tools` grant resets after the next user message, so the loop needs a permanent `Bash(node */sherpa-review.mjs *)` rule. Under memory pressure, background tasks are killed after 30 minutes of inactivity (before 2.1.274, even under mild pressure).
+- A session can receive an external push through cross-session messages over a Unix socket (2.1.224+, undocumented format), through Monitor with a deadline of up to 30 minutes, or through the `asyncRewake` hook. None of them is needed here, because background execution with a wakeup covers the task.
+- Skills live in `~/.claude/skills/<name>/SKILL.md`, and symlinks work. `/sherpa-review 12345` substitutes `$ARGUMENTS`.
+- One trap is that a background task that "looks like it is waiting for input" notifies the model after about 45 s, so `worker next` must stay silent while waiting. Another is that a skill's `allowed-tools` grant resets after the next user message, so the loop needs a permanent `Bash(node */sherpa-review.mjs *)` rule. Under memory pressure, background tasks are killed after 30 minutes of inactivity (before 2.1.274, even under mild pressure).
 
 ## Codex
 
-- Process exit doesn't wake the model. `spawn_exit_watcher` sends an event only to the UI. Only subagent mail starts a turn while idle. Async hooks are picked up at turn boundaries, `notify` only sends outward, and `clock.sleep` is interrupted by user input, not by a process.
-- The model runs in code mode (the model catalog sets `tool_mode: code_mode_only` for gpt-5.6 and gpt-6), so it sees only `exec` (a JS cell) and `wait`. JS calls `exec_command` and `write_stdin`. Limits: 30 s for `exec_command`, `background_terminal_max_timeout` = 300 s for an empty `write_stdin`, and no limit for the cell or `wait`.
+- Process exit doesn't wake the model. `spawn_exit_watcher` sends an event only to the UI. Only subagent mail starts a turn while idle. Async hooks are picked up at turn boundaries, `notify` only sends outward, and `clock.sleep` is interrupted by user input rather than by a process.
+- The model runs in code mode (the model catalog sets `tool_mode: code_mode_only` for gpt-5.6 and gpt-6), so it sees only `exec` (a JS cell) and `wait`. JS calls `exec_command` and `write_stdin`. The limits are 30 s for `exec_command` and `background_terminal_max_timeout` = 300 s for an empty `write_stdin`, while the cell and `wait` have no limit.
 - The system prompt for every model except gpt-5.5 says "Avoid performing blocking sleep or wait calls longer than 60 seconds" and "don't go longer than 60 s without commentary". This causes polling about every 25 s.
 - A unified exec process survives the end of a turn. Closing the session or eviction from the 64 slots kills it. An empty poll doesn't return before its deadline when output appears, so heartbeat lines in `worker next` are useless.
-- Skills: `~/.agents/skills`, `.agents/skills` from cwd to the repository root, and `$CODEX_HOME/skills`, with symlink support. Invocation: `$sherpa-review 12345`.
+- Skills live in `~/.agents/skills`, `.agents/skills` from cwd to the repository root, and `$CODEX_HOME/skills`, and symlinks work. The skill is invoked as `$sherpa-review 12345`.
 - Two alternatives guarantee zero turns and both require user configuration. A Stop hook with `{"decision":"block","reason":"<task>"}` holds the turn without a model call, with no hook timeout limit or retry limit, but needs one-time approval in `/hooks`. A shared app-server daemon (`codex app-server daemon start`, `thread/queue/add`) supports external push, but `daemon_auto_start` in 0.156.1 is experimental and disabled.
 
 ### Live measurement
 
-`codex exec --json --approve-for-me`, gpt-5.6-sol, high reasoning effort, `sleep 600`, one run per variant. The counter is `token_usage_record` entries in the session rollout, each representing one model request.
+The setup was `codex exec --json --approve-for-me` with gpt-5.6-sol at high reasoning effort, a `sleep 600` command and one run per variant. The counter is `token_usage_record` entries in the session rollout, each representing one model request.
 
 | Variant | Requests over 10 minutes of waiting | Behaviour |
 |---|---|---|
@@ -45,9 +45,9 @@ All 5 harnesses can therefore reach zero idle turns with one `SKILL.md` containi
 | C. B + `background_terminal_max_timeout=86400000` | 0 | Same as B, no configuration needed |
 | D. An explicit JS snippet in the prompt | 0 | The cell executed the snippet as written |
 
-In B, the internal `write_stdin` hit the 300-second limit twice, but a return inside the cell costs no turn because the cell's limit is a day. Raising the configuration limit and providing explicit JS aren't needed.
+In B, the internal `write_stdin` hit the 300-second limit twice, but a return inside the cell costs no turn because the cell's limit is a day. Raising the configuration limit and providing explicit JS are therefore unnecessary.
 
-The cell the model wrote itself in variant B:
+In variant B, the model wrote this cell itself:
 
 ```js
 // @exec: {"yield_time_ms": 86400000, "max_output_tokens": 1000}
@@ -74,34 +74,34 @@ The trigger was an audit of 2 reviewer sessions on Codex Desktop 0.158 with gpt-
 | E. The "no background support" branch from SKILL.md 0.9.1 verbatim | 17 (15 while idle) | Day-long `exec_command` and `write_stdin` timeouts, but no cell pragma. The cell returned after 30 s, followed by 60 s `wait` calls. After 5 minutes, `write_stdin` hit the 300 s limit and the loop restarted |
 | F. The same branch with the cell pragma, a loop inside the script, and a note about documented ranges | 3 (0 while idle) | A cell like variant B above, one call before process exit |
 
-Sol works out the pragma on its own. Astra takes "effective range 250-30000" from the tool description and the system prompt's 60 s rule literally. Wording F was copied into `SKILL.md`. Zero idle turns depend on it.
+gpt-5.6-sol works out the pragma on its own, while gpt-6-astra takes "effective range 250-30000" from the tool description and the system prompt's 60 s rule literally. Wording F was copied into `SKILL.md`, and zero idle turns depend on it.
 
-Measurement limits: one run per variant, 10 minutes, headless mode. In the TUI, user messages queue until the pending call returns. Esc interrupts it.
+The measurement has limits: one run per variant, 10 minutes each, in headless mode. In the TUI, user messages queue until the pending call returns, and Esc interrupts the call.
 
 ## OpenCode
 
 - Bash has no background mode (`run_in_background` in PR #33310 hasn't been merged). Background subagents through `task` with `background: true` exist behind an experimental flag, but a subagent runs its own model loop and costs more than a blocking call.
 - Foreground bash defaults to 120 s (`OPENCODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS`). `timeout` has no limit, and a value above 2³¹−1 ms is equivalent to no timeout. A timeout kills the process and returns the tail of its output to the model with advice to retry with a longer timeout. There is no "kill when silent" heuristic.
-- The call waits for stdio to close, not for process exit (#47350, #49169). A daemon that inherits the tool's stdout will hang the call forever. Sherpa's `up` spawns the server with `detached`, stdio directed to a log file, and `unref`, so this doesn't affect it.
-- External push: the TUI doesn't open a port by default. The server runs in a worker thread with in-process RPC. `--port` enables `POST /session/:id/prompt_async`. A plugin with an `event` hook could push tasks, but that requires code.
-- Skills: `.opencode/skills`, `~/.config/opencode/skills`, `.claude/skills`, `~/.claude/skills`, `.agents/skills`, `~/.agents/skills`, with symlink support. A skill also registers as a slash command with `$ARGUMENTS`. Trap: in slash-command form, `` !`cmd` `` in SKILL.md executes.
-- Cache: Anthropic uses 5 minutes through `cacheControl: ephemeral`. An hour-long TTL requires model configuration. Compaction doesn't run while idle.
+- The call waits for stdio to close rather than for process exit (#47350, #49169). A daemon that inherits the tool's stdout will hang the call forever. Sherpa's `up` spawns the server with `detached`, stdio directed to a log file, and `unref`, so this doesn't affect it.
+- For external push, the TUI doesn't open a port by default. The server runs in a worker thread with in-process RPC. `--port` enables `POST /session/:id/prompt_async`. A plugin with an `event` hook could push tasks, but that requires code.
+- Skills live in `.opencode/skills`, `~/.config/opencode/skills`, `.claude/skills`, `~/.claude/skills`, `.agents/skills` and `~/.agents/skills`, and symlinks work. A skill also registers as a slash command with `$ARGUMENTS`. One trap is that in slash-command form, `` !`cmd` `` in SKILL.md executes.
+- The Anthropic cache lasts 5 minutes through `cacheControl: ephemeral`. An hour-long TTL requires model configuration. Compaction doesn't run while idle.
 
 ## Cursor
 
-- IDE: the Shell tool has `block_until_ms` (30 000 by default), after which the command moves to the background. `0` sends it there immediately. The agent wakes once when a background command finishes, and completions are batched. `AwaitShell(shell_id, block_until_ms)` waits without turns. One call was observed lasting 119 minutes.
+- In the IDE, the Shell tool has `block_until_ms` (30 000 by default), after which the command moves to the background. `0` sends it there immediately. The agent wakes once when a background command finishes, and completions are batched. `AwaitShell(shell_id, block_until_ms)` waits without turns. One call was observed lasting 119 minutes.
 - All of this is known from a leaked system prompt and forum replies by the maintainers (thread 172103, 2026-09-18), with nothing in the documentation. The contract changed several times in 2026, and some models don't see the parameter. Known bugs include extra wakeups when foreground commands move to the background, and zombie shells.
-- CLI: the 2026-08-11 changelog restores follow-up on background task completion in interactive and headless modes. Whether the CLI has `block_until_ms` is unverified.
-- External push: a deep link only fills in the prompt. `agent acp` provides JSON-RPC `session/prompt`, but this needs a driver, which means code. A Stop hook can return `followup_message`, with `loop_limit` defaulting to 5.
-- Skills: `.cursor/skills`, `~/.cursor/skills`, `.agents/skills`, `~/.agents/skills`, plus `.claude/skills` and `.codex/skills`, with symlink support. `/sherpa-review` in chat attaches the skill to the message.
+- In the CLI, the 2026-08-11 changelog restores follow-up on background task completion in interactive and headless modes. Whether the CLI has `block_until_ms` is unverified.
+- For external push, a deep link only fills in the prompt. `agent acp` provides JSON-RPC `session/prompt`, but this needs a driver, which means code. A Stop hook can return `followup_message`, with `loop_limit` defaulting to 5.
+- Skills live in `.cursor/skills`, `~/.cursor/skills`, `.agents/skills` and `~/.agents/skills`, plus `.claude/skills` and `.codex/skills`, and symlinks work. `/sherpa-review` in chat attaches the skill to the message.
 - The sandbox restricts network access by default. Loopback availability is unverified. The workaround is to allowlist the `node` command.
 
 ## pi
 
-- The repository moved to `earendil-works/pi`, package `@earendil-works/pi-coding-agent`, version 0.87.1 from 2026-09-22.
+- The repository moved to `earendil-works/pi`. The package is `@earendil-works/pi-coding-agent`, version 0.87.1 from 2026-09-22.
 - There is no background mode, and process exit doesn't wake the model. Foreground bash has no timeout by default. The model can optionally set `timeout` in seconds, with a 2³¹−1 ms limit. A timeout kills the process tree. One blocking call can wait for hours without turns.
 - External push is available only through an extension (`pi.sendUserMessage`). RPC mode controls only its own pi process. A skill cannot install an extension.
-- Skills: `~/.pi/agent/skills`, `.pi/skills`, `~/.agents/skills`, `.agents/skills`, with symlink support. `/skill:sherpa-review 12345` adds arguments to the instruction.
+- Skills live in `~/.pi/agent/skills`, `.pi/skills`, `~/.agents/skills` and `.agents/skills`, and symlinks work. `/skill:sherpa-review 12345` adds arguments to the instruction.
 - Cache warming is enabled by default (`cacheWarming: "streaming"`). During a pending call, pi repeats the last request with `maxTokens: 1` at 90 % of the cache lifetime, about 13 times per hour with a 5-minute cache, once with `PI_CACHE_RETENTION=long`, and stops after an hour. These are provider requests without reasoning, and only a user setting can disable them.
 - User messages during a pending call queue until it returns. Esc kills `worker next`.
 

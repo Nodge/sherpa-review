@@ -29,4 +29,4 @@ Text the reviewer reads (UI, route text, release `--notes` in the update toast) 
 
 ## UI
 
-A test compares the design tokens in `packages/ui/src/styles/tokens.css` with 2 documents: geometry, fonts and motion against `docs/design/README.md`, and colours in both themes against `docs/design/theme.md`. The state gallery (`packages/ui/gallery.html`, `src/dev/gallery/`) renders every screen state using fixtures from `@sherpa/fixtures`. A new state or component needs a new gallery card. Verify appearance with the gallery beside the prototype in the same viewport, until they match.
+Design-token values and SVG icons live in code. UI tests check CSS invariants and sprite consistency without reading design documents or prototypes. The state gallery (`packages/ui/gallery.html`, `src/dev/gallery/`) renders every screen state using fixtures from `@sherpa/fixtures`. A new state or component needs a new gallery card. Verify appearance with the gallery beside the prototype in the same viewport, until they match.

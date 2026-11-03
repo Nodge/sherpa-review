@@ -3,54 +3,16 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import {
-    describePalette,
-    duplicateDeclarations,
-    EXPECTED,
-    normalize,
-    parsePaletteDoc,
-    parseRootTokens,
-    parseTypographyDoc,
-    remToPx,
-    themeBlock,
-} from './tokens.test-support.js';
-
-/**
- * Check the main style's design tokens against the handoff.
- *
- * Geometry, fonts, disabled opacity and motion are checked against `EXPECTED`, a table
- * copied from the "Design tokens" section of `docs/design/README.md`.
- * Dark and light palette colours are checked against `docs/design/theme.md`. Component tokens live only in CSS.
- * Check that each theme has the full set, without duplicating values in the docs. Extra styles
- * are checked by the test in their style directory.
- */
+import { describePalette, duplicateDeclarations, parseRootTokens, themeBlock } from './tokens.test-support.js';
 
 const TOKENS_CSS = readFileSync(fileURLToPath(new URL('./tokens.css', import.meta.url)), 'utf8');
-const THEME_MD = readFileSync(fileURLToPath(new URL('../../../../docs/design/theme.md', import.meta.url)), 'utf8');
 
 const darkPalette = parseRootTokens(TOKENS_CSS);
 const lightCss = themeBlock(TOKENS_CSS, 'light');
 const lightPalette = parseRootTokens(lightCss);
-const documented = parsePaletteDoc(THEME_MD);
-const documentedScale = parseTypographyDoc(THEME_MD);
+const fontSizes = new Map([...darkPalette].filter(([name]) => name.startsWith('--font-size-')));
 
 describe('design tokens', () => {
-    it(':root declares every handoff token from README.md and theme.md', () => {
-        expect([...darkPalette.keys()]).toEqual(
-            expect.arrayContaining([...Object.keys(EXPECTED), ...documented.dark.keys()]),
-        );
-    });
-
-    it('the handoff non-colour table contains no colours', () => {
-        expect(Object.entries(EXPECTED).filter(([, value]) => /#|rgba?\(/.test(value))).toEqual([]);
-    });
-
-    for (const [name, expected] of Object.entries(EXPECTED)) {
-        it(`${name} = ${expected}`, () => {
-            expect(darkPalette.get(name)).toBe(normalize(expected));
-        });
-    }
-
     it('each token is declared once in each palette', () => {
         expect(duplicateDeclarations(TOKENS_CSS)).toEqual([]);
     });
@@ -69,32 +31,29 @@ describe('font scale', () => {
     const FLOOR_EXCEPTIONS = new Set(['--font-size-stop-mark']);
     const FLOOR_REM = 0.6875;
 
-    it('the theme.md table lists exactly the font tokens from tokens.css', () => {
-        const inCss = [...darkPalette.keys()].filter((name) => name.startsWith('--font-size-'));
-        expect(inCss.sort()).toEqual([...documentedScale.keys()].sort());
+    it('declares a font scale', () => {
+        expect(fontSizes.size).toBeGreaterThan(0);
     });
 
-    for (const [name, row] of documentedScale) {
-        it(`${name} = ${row.rem}`, () => {
-            expect(darkPalette.get(name)).toBe(normalize(row.rem));
-            expect(row.m).toBe(remToPx(row.rem, 16));
-            expect(row.l).toBe(remToPx(row.rem, 18));
+    for (const [name, size] of fontSizes) {
+        it(`${name} uses a positive rem size`, () => {
+            expect(size).toMatch(/^(?:\d+|\d*\.\d+)rem$/);
+            expect(Number.parseFloat(size)).toBeGreaterThan(0);
         });
     }
 
     it('only decorative glyphs and the stop label are below the 11px floor', () => {
-        const below = [...documentedScale]
+        const below = [...fontSizes]
             .filter(
-                ([name, row]) =>
-                    !GLYPHS.has(name) && !FLOOR_EXCEPTIONS.has(name) && Number.parseFloat(row.rem) < FLOOR_REM,
+                ([name, size]) =>
+                    !GLYPHS.has(name) && !FLOOR_EXCEPTIONS.has(name) && Number.parseFloat(size) < FLOOR_REM,
             )
             .map(([name]) => name);
         expect(below).toEqual([]);
     });
 
-    it('there is exactly one floor exception, the stop label', () => {
-        expect([...FLOOR_EXCEPTIONS]).toEqual(['--font-size-stop-mark']);
-        expect(documentedScale.get('--font-size-stop-mark')?.rem).toBe('0.625rem');
+    it('the stop label is the 10px text exception', () => {
+        expect(Number.parseFloat(fontSizes.get('--font-size-stop-mark') ?? '')).toBe(0.625);
     });
 
     it('the scale base and L text size are set on html', () => {
@@ -118,7 +77,6 @@ for (const [theme, tokens] of [['dark', darkPalette], ['light', lightPalette]] a
         theme,
         tokens,
         baseKeys: [...darkPalette.keys()],
-        documented: documented[theme],
         isLow: (pair) => pair.low?.includes(theme) === true,
     });
 }

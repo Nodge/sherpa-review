@@ -1,6 +1,6 @@
 # Sherpa additions, 2026-08-26
 
-Handoff spec for 5 groups of design requests. Interactive mockup: **`Sherpa Additions.dc.html`** (in this directory, opens in a browser, all interactive elements work, so click them). Tokens, fonts and shared rules are in `README.md` §Design tokens. The main interface's state matrix is in `SPEC-elements.md`. This document covers additions only.
+This is the handoff spec for 5 groups of design requests. Interactive mockup: **`Sherpa Additions.dc.html`** (in this directory, opens in a browser, all interactive elements work, so click them). Tokens, fonts and shared rules are in `README.md` §Design tokens. The main interface's state matrix is in `SPEC-elements.md`. This document covers additions only.
 
 | Block | What | Phase | Findings |
 |---|---|---|---|
@@ -10,7 +10,7 @@ Handoff spec for 5 groups of design requests. Interactive mockup: **`Sherpa Addi
 | **1d** | Comment composer + line comment | M5 | №26 |
 | **1e** | Discussion card in Overview | M5 | №5 |
 
-Status: **1a is already in the main prototype** (`Sherpa.dc.html`, the gap row above the first hunk is clickable). 1b–1e have not been added to the prototype. They are mockups for implementation.
+Status: **1a is already in the main prototype** (`Sherpa.dc.html`, the gap row above the first hunk is clickable). Blocks 1b–1e are not in the prototype yet. They are mockups for implementation.
 
 ---
 
@@ -60,7 +60,7 @@ Hover highlights **only its own half** and replaces the counter with the action 
 ### Behaviour and data
 
 - The increment is 20 lines. The last click loads the entire remainder (< 20).
-- Server response slower than 150 ms → keep the "pressed" state until the lines arrive (`loading…`), disable targets, ignore repeat clicks.
+- When the server responds slower than 150 ms, keep the "pressed" state until the lines arrive (`loading…`), disable targets and ignore repeat clicks.
 - Loading error: replace the counter with `could not load more · retry`, make the entire row a single retry target. Previously loaded lines remain visible.
 - Loaded lines are ordinary diff context rows (`ctx` numbers `#43474e`, code `#cfd3da`). They participate in file search and range selection.
 - Context expansion **does not change** file reading progress (partial/full), because context is not a change.
@@ -76,7 +76,7 @@ Hover highlights **only its own half** and replaces the counter with the action 
 
 ## 1b. Icon set
 
-A custom set rather than a ready-made one, because exactly 12 glyphs at one optical size are needed.
+The set is custom rather than ready-made, because the UI needs exactly 12 glyphs at one optical size.
 
 - `viewBox="0 0 16 16"`, drawing in a **12.8×12.8** square inside 16×16 (1.6px space on each side). The optical centre matches the centre of 11–12.5px rows without manual offsets.
 - **stroke** `stroke="currentColor"`, width 1.35–1.7, `stroke-linecap/linejoin: round`. The only filled icon is the thumb (`ic-thumb`), whose silhouette is only recognizable when filled. This departs from README §Assets ("fill=currentColor"), because filled shapes blur at 13px.
@@ -96,16 +96,16 @@ A custom set rather than a ready-made one, because exactly 12 glyphs at one opti
 | `ic-updown` | gap row with a remainder < increment |
 | `ic-reply` | "replying to" in deeply nested threads |
 
-Additional composer icons (1d): `ic-bold`, `ic-italic`, `ic-link`, `ic-code`, `ic-codeblock`, `ic-list`, `ic-trash`. Same geometry and rules.
+Additional composer icons (1d): `ic-bold`, `ic-italic`, `ic-link`, `ic-code`, `ic-codeblock`, `ic-list`, `ic-trash`. They follow the same geometry and rules.
 
 ### Rendering rules
 
 - Sizes: **13px** in 11–12.5px rows, **14px** in 25×25 icon buttons and in the toolbar,
-  **15px** on the Ship button, **9px** in the 11×11 box. No intermediate sizes.
+  **15px** on the Ship button, **9px** in the 11×11 box. There are no intermediate sizes.
 - Colour comes only from the parent's `color`. The icon is slightly dimmer than the text (`#6b7078` with `#9ba1ab` text).
 - **Required**: `viewBox` on the `<svg>` itself + `flex:none`. Without these, icons shrink inside a `display:flex` button (this happened before, with icons rendering at 11px instead of 14px).
 - `aria-hidden` on the icon, label on the button.
-- A collapsed chevron uses a **separate** `ic-chev-right`, not a rotated `ic-chev-down`, because rotation animation changes the apparent stroke width.
+- A collapsed chevron uses a **separate** `ic-chev-right` rather than a rotated `ic-chev-down`, because rotation animation changes the apparent stroke width.
 
 ---
 
@@ -113,11 +113,11 @@ Additional composer icons (1d): `ic-bold`, `ic-italic`, `ic-link`, `ic-code`, `i
 
 Width **620px**, `#0f1012`, border `1px solid #2b2f36`, radius 11px, shadow `0 18px 50px rgba(0,0,0,.55)`, backdrop `rgba(8,9,10,.55)`.
 
-Order: header → list of written comments → composer. Existing comments first, then input.
+The modal stacks the header, the list of written comments and the composer, in that order, so existing comments come before the input.
 
 **Header** (`#141518`, bottom `1px solid #1e2126`, padding 13px 15px): "Comments on the PR" 13px/600, context `outside the diff · 4821` 10.5px mono `#6b7078`, on the right a yellow chip `N drafts · go out on Ship` and a 25×25 close button (14px icon).
 
-**List.** Item = author (19px avatar, 12px name), state chip, time, actions, body.
+**List.** Each item has an author (19px avatar, 12px name), state chip, time, actions and body.
 
 | Item type | Border / background | Chip |
 |---|---|---|
@@ -130,34 +130,34 @@ Order: header → list of written comments → composer. Existing comments first
 
 **Edit in place.** The pencil turns the item itself into an editor (1d: same toolbar, same layouts, "Save changes" / "Cancel" buttons). The bottom composer remains for new comments only, so the texts do not mix.
 
-**Delete in 2 steps within the item.** Trash opens a row with `#170f0f` / `1px solid #4a2f2d`: "Delete the draft? It will not be published" + "Delete" / "Keep". No modal over a modal. Deletion cannot be undone, so confirmation is required.
+**Delete in 2 steps within the item.** Trash opens a row with `#170f0f` / `1px solid #4a2f2d`: "Delete the draft? It will not be published" + "Delete" / "Keep". There is no modal over a modal. Deletion cannot be undone, so confirmation is required.
 
-**Scroll.** Only the list scrolls. The header and composer stay fixed, `max-height: min(330px, 100vh − 260px)`, `overscroll-behavior: contain`. Thin `#2b2f36` scrollbar, transparent track. A 26px bottom gradient edge is the only sign that the list continues. Below a viewport height of 520px, the composer shrinks to 64px. Newest first. After saving, the list scrolls to the new draft and the composer clears.
+**Scroll.** Only the list scrolls. The header and composer stay fixed, `max-height: min(330px, 100vh − 260px)`, `overscroll-behavior: contain`. The scrollbar is thin `#2b2f36` on a transparent track. A 26px bottom gradient edge is the only sign that the list continues. Below a viewport height of 520px, the composer shrinks to 64px. The list shows the newest first. After saving, the list scrolls to the new draft and the composer clears.
 
 **Empty:** "No comments on the PR yet. What you write here goes out with the review on Ship."
 
-**Publishing.** No "Publish" buttons. Below the composer, show "Drafts go out as one batch on Ship, together with the line comments".
+**Publishing.** There are no "Publish" buttons. Below the composer, show "Drafts go out as one batch on Ship, together with the line comments".
 
-Shortcuts use 11.5px keycaps (`⌘⏎` save, `Esc` close), not 10.5px grey text.
+Shortcuts use 11.5px keycaps (`⌘⏎` save, `Esc` close) rather than 10.5px grey text.
 
 ---
 
 ## 1d. Comment composer
 
-One component in 3 places: **thread reply**, **line comment**, **modal 1c**.
+The composer is one component used in 3 places: **thread reply**, **line comment**, **modal 1c**.
 
-**Toolbar** (`#141518`, bottom `1px solid #1e2126`, padding 5px 6px): 6 buttons, 26×24, 14px icons for bold, italic, link, inline code, code block, list. No headings, because a 3-line comment does not need them. Hover `#22252b` / `#e0e2e7`, pressed `#2b2f36`.
+**Toolbar** (`#141518`, bottom `1px solid #1e2126`, padding 5px 6px): 6 buttons, 26×24, 14px icons for bold, italic, link, inline code, code block, list. There are no headings, because a 3-line comment does not need them. Hover `#22252b` / `#e0e2e7`, pressed `#2b2f36`.
 
 **Two layouts for one field**, switched on the right of the toolbar (20px segments, active `#2b2f36`/`#f0f1f4`):
 
 - **Visual** (default): typing, caret, selection and formatting directly in the rendered body.
 - **Markdown**: the same text as source, `IBM Plex Mono` 12px.
 
-There is **one** text model, markdown. "Visual" is neither a preview nor a second format. The body is edited with the same renderer that displays published comments, then serialized back to markdown (`**` `*` `` ` `` ```` ``` ```` `- ` `[]()`). The toolbar works in both layouts. In "Visual", it acts on the caret/selection and inserts a placeholder ("text", "code") when the selection is empty. In "Markdown", it wraps the selection in markers. The layout choice is saved per user.
+There is **one** text model, markdown. "Visual" is neither a preview nor a second format. The user edits the body in the same renderer that displays published comments, and the composer serializes it back to markdown (`**` `*` `` ` `` ```` ``` ```` `- ` `[]()`). The toolbar works in both layouts. In "Visual", it acts on the caret/selection and inserts a placeholder ("text", "code") when the selection is empty. In "Markdown", it wraps the selection in markers. The layout choice is saved per user.
 
-The "Visual" placeholder is a **separate layer** (`position:absolute`, `pointer-events:none`), not field content, otherwise it would become part of the comment text.
+The "Visual" placeholder is a **separate layer** (`position:absolute`, `pointer-events:none`) rather than field content, because otherwise it would become part of the comment text.
 
-**Action labels:** "Save draft" ("Save changes" when editing) and "Cancel". No "Send" or "Publish", because only Ship publishes. `⌘B/⌘I/⌘K` duplicate the buttons, `⌘⏎` = save, `Esc` = cancel (with confirmation when the text is not empty).
+**Action labels:** "Save draft" ("Save changes" when editing) and "Cancel". There is no "Send" or "Publish", because only Ship publishes. `⌘B/⌘I/⌘K` duplicate the buttons, `⌘⏎` = save, `Esc` = cancel (with confirmation when the text is not empty).
 
 **Autosave** (SPEC §2.17, ≤1s after input), status below the field on the right:
 
@@ -174,19 +174,19 @@ The "Visual" placeholder is a **separate layer** (`position:absolute`, `pointer-
 - The pencil sits in the line's **right gutter**, 23×23 button `#7f8cff`, 15px icon, shadow `0 1px 4px rgba(0,0,0,.45)`. It appears on row hover (`#141518`) and keyboard focus. For a selected range, it appears on the range's first line.
 - The composer expands **below the line, in the diff flow**, left offset **62px** (2 gutters + marker column), background `#0d0e10`, top/bottom borders `1px solid #191c20`, body width ≤620px.
 - Context above the field: `new comment · line 118` + chip `draft · publishes on ship`.
-- Existing thread on a line: someone else's published comment has no pencil (only "Reply" / "Resolve"). Your own draft is edited **in place** in its card (blue edge, "editing" chip). The body does not move into the modal or the bottom field.
+- Existing thread on a line: someone else's published comment has no pencil (only "Reply" / "Resolve"). You edit your own draft **in place** in its card (blue edge, "editing" chip). The body does not move into the modal or the bottom field.
 
 ---
 
 ## 1e. Discussion card in Overview
 
-Decision: the card is a **summary and entry point**, not a feed. Thread bodies live beside the code. Only threads **outside the diff** expand in the card, because there are few and nowhere else to read them. The card handles the real scale (86 threads, 85 from bots) without becoming a wall of text.
+Decision: the card is a **summary and entry point** rather than a feed. Thread bodies live beside the code. Only threads **outside the diff** expand in the card, because there are few and nowhere else to read them. The card handles the real scale (86 threads, 85 from bots) without becoming a wall of text.
 
-Column width 360px, border `1px solid #24272d`, radius 9px, background `#0f1012`.
+The card column is 360px wide, with border `1px solid #24272d`, radius 9px and background `#0f1012`.
 
 1. **Header:** "Discussion" 13px/600 + `86 threads · 48 open` 11px mono `#6b7078`.
-2. **Filters:** the same additive chips as in the route toolbar, `Humans 12` `Bots 74` `Resolved 38` (on: `#22252b` / `1px solid #2f333a` / `#e0e2e7`, off: transparent / `1px solid #22252b` / `#6b7078`). Default: humans on, bots and resolved off. State is shared with the diff and route.
-3. **Participants:** row 7px 13px, avatar 19px (bots use a square r5 + `bot` badge), name 11.5px mono, subline 11px `#6b7078` ("3 open · last 40 min ago"), counter 11px mono (`#e2954c` when any are open, otherwise `#6b7078`), `ic-chev-right`. At most **6 rows**, then "N more participants". Bots are not participants. One row per bot with a counter, and bot thread bodies never appear in the card.
+2. **Filters:** the same additive chips as in the route toolbar, `Humans 12` `Bots 74` `Resolved 38` (on: `#22252b` / `1px solid #2f333a` / `#e0e2e7`, off: transparent / `1px solid #22252b` / `#6b7078`). Default: humans on, bots and resolved off. The diff and route share this state.
+3. **Participants:** row 7px 13px, avatar 19px (bots use a square r5 + `bot` badge), name 11.5px mono, subline 11px `#6b7078` ("3 open · last 40 min ago"), counter 11px mono (`#e2954c` when any are open, otherwise `#6b7078`), `ic-chev-right`. At most **6 rows**, then "N more participants". Bots are not participants. Each bot gets one row with a counter, and bot thread bodies never appear in the card.
 4. **"Outside the diff N"** is a fold (`ic-chev-down`, rotated −90° when collapsed). Inside are thread cards `1px solid #1e2126` / `#111214`: author, state chip, body 12px, and where available a code line (one line, truncated) and link (one line, `text-overflow:ellipsis`), metadata 10.5px mono, "Reply" button. Markdown headings render as ordinary bold text. Bodies longer than 4 lines are truncated with "expand". The card never contains nested replies.
 5. **Footer:** "All threads beside the code →" link + "Comment on the PR" button (opens 1c).
 
@@ -234,10 +234,10 @@ Column width 360px, border `1px solid #24272d`, radius 9px, background `#0f1012`
 
 ## Open questions for the team
 
-**1a**: where to store loaded context between passes, nowhere (reset on reload, proposed) or in session storage together with partial reading progress.
+**1a**: where should loaded context live between passes? The options are nowhere (reset on reload, proposed) or session storage together with partial reading progress.
 
-**1d**: implement "Visual" with contentEditable + serialization (as in the mockup), or use a ready-made markdown editor. This determines whether lossless round-tripping can be guaranteed.
+**1d**: should "Visual" use contentEditable + serialization (as in the mockup), or a ready-made markdown editor? This determines whether lossless round-tripping can be guaranteed.
 
-**1e**: whether resolved bot threads count in the bot's row counter or disappear entirely when `Resolved` is off. Participant order (by open thread count, as now, or by last activity). Whether an anchor from Overview directly to a specific thread beside the code is needed.
+**1e**: do resolved bot threads count in the bot's row counter, or disappear entirely when `Resolved` is off? Should participants sort by open thread count (as now) or by last activity? Is an anchor from Overview directly to a specific thread beside the code needed?
 
 **Telemetry** (carried over from the previous handoff, still relevant): events for expanding a gap row (clicks to reveal the full file measure "route did not cover the context"), opening the line composer, switching Visual/Markdown layouts, deleting a draft.

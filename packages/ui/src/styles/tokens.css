@@ -1,13 +1,7 @@
 /*
- * Design tokens: geometry and motion in docs/design/README.md, "Design tokens" section.
- * The type scale is in docs/design/theme.md, "Typography" section, along with the dark and light palette colours.
+ * Main-style tokens. Components use these semantic roles for colours, fonts, geometry and motion.
  * Extra-style palettes live in their `styles/extra/<id>/` directories.
- * The only place in the UI for hex values, shadows, hatches and scales: component styles cannot
- * contain values, only these variables. The handoff table is checked against them
- * mechanically by `src/styles/tokens.test.ts`.
- *
- * Names are semantic: a variable is named for its role ("application surface"), not its
- * shade ("grey-1"). Otherwise recolouring the system would require rewriting every component.
+ * Design rationale: docs/design/theme.md.
  */
 
 /*
@@ -278,7 +272,7 @@ html[data-textsize='l'] {
     --font-smoothing: antialiased;
 
     /*
-     * Scale: docs/design/theme.md, "Typography" section. rem relative to the html base, with an 11px floor
+     * rem relative to the html base, with an 11px floor
      * (0.6875rem at a 16px base). Four small tokens hit the floor and now match. They stay
      * separate because they name different roles and will diverge if the scale moves again.
      */
@@ -412,9 +406,7 @@ html[data-textsize='l'] {
     --motion-flash: 900ms;
 }
 
-/* Sherpa light palette: docs/design/theme.md.
- * The full token set isolates nested gallery themes.
- */
+/* The full token set isolates nested gallery themes. */
 :root[data-theme='light'],
 [data-theme='light'] {
     color-scheme: light;
