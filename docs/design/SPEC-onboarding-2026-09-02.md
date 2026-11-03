@@ -1,6 +1,6 @@
 # Sherpa onboarding on the first visit 2026-09-02
 
-Handoff spec for the eight-tip tour. Storyboard with 1:1 cards and the reason for each step: **`Sherpa Onboarding.dc.html`**. Live implementation: **`Sherpa.dc.html`**, the "07 · First run" scenario in the SCENARIOS dock and the "Replay the onboarding tour · 8 steps" palette command. Tokens and shared rules: `README.md` §Design tokens and §16. Main interface state matrix: `SPEC-elements.md`. This spec covers onboarding only.
+This is the handoff spec for the eight-tip tour. The storyboard with 1:1 cards and the reason for each step is **`Sherpa Onboarding.dc.html`**. The live implementation is **`Sherpa.dc.html`**: the "07 · First run" scenario in the SCENARIOS dock and the "Replay the onboarding tour · 8 steps" palette command. Tokens and shared rules are in `README.md` §Design tokens and §16. The main interface state matrix is in `SPEC-elements.md`. This spec covers onboarding only.
 
 | What | Stage | Status |
 |---|---|---|
@@ -43,13 +43,13 @@ The format is deliberate: **no wizard or screen takeover**. There is no dimming,
 | Ring | target + 5px, `1.5px solid #7f8cff`, radius 11, `box-shadow:0 0 0 3px rgba(127,140,255,.13), 0 0 26px rgba(127,140,255,.16)`, `pointer-events:none`, z-index **88** |
 | Movement | `transition: left .18s ease, top .18s ease` on the card and ring |
 
-Not allowed inside the card: lists, links, images, progress dots, a second paragraph, icons. One step carries one idea.
+The card allows no lists, links, images, progress dots, second paragraph or icons. One step carries one idea.
 
 ---
 
 ## 2. Steps: copy and anchors
 
-The copy is final, the interface is in English. `sel` is the anchor selector in the prototype.
+The copy is final, and the interface is in English. `sel` is the anchor selector in the prototype.
 
 | # | Anchor (`sel`) | Title | Body |
 |---|---|---|---|
@@ -62,7 +62,7 @@ The copy is final, the interface is in English. `sel` is the anchor selector in 
 | 07 | `[data-tour="fulldiff"]`, the Full diff tab | The classic reader stays one click away | Full diff shows every file in plain order — nothing reordered or folded by the model. The AI layer moves to the margin instead of disappearing. |
 | 08 | `[data-tour="ship"]`, the floating panel of final actions | Nothing reaches the author until you say so | Comments are saved as drafts the moment you write them. This panel counts what is waiting, and Ship or Request changes publishes the batch. Sherpa never posts and never ships for you. |
 
-The order follows the reviewer's path, not the menu structure: **what to read** (01–03) → **how to measure progress** (04) → **how to change the order and ask a question** (05–06) → **the way out** (07) → **finishing** (08). On the last step the primary button is **Start reviewing**, and Back stays.
+The order follows the reviewer's path rather than the menu structure: **what to read** (01–03), then **how to measure progress** (04), then **how to change the order and ask a question** (05–06), then **the way out** (07), and finally **finishing** (08). On the last step the primary button is **Start reviewing**, and Back stays.
 
 ### Interface state during the steps
 
@@ -138,10 +138,10 @@ The tour **does not block** the interface: the ring's `pointer-events` is `none`
 
 ## 5. When to show it
 
-- **Trigger:** first visit to the UI, when the **first filled stop** is ready. Do not show the tour over the generation skeleton, there is nothing to highlight.
-- **Once per user**, not per PR.
+- **Trigger:** first visit to the UI, when the **first filled stop** is ready. Do not show the tour over the generation skeleton, because there is nothing to highlight.
+- The tour shows **once per user** rather than once per PR.
 - `gen: 'failed'` (validation failed): do not start the tour at all.
-- `gen: 'offline'` (agent disconnected): show the tour, **omit step 06**, counter becomes `/ 07`, remaining steps are renumbered.
+- `gen: 'offline'` (agent disconnected): show the tour and **omit step 06**. The counter becomes `/ 07`, and the remaining steps are renumbered.
 - If the agent dies **during** the tour, do not retract step 06 if already shown. If it has not been reached, omit it (see §9, question 3).
 
 ## 6. Leaving and returning
@@ -174,11 +174,11 @@ The tour **does not block** the interface: the ring's `pointer-events` is `none`
 | `tour_completed` | total time |
 | `tour_replayed` | source (palette) |
 
-Interpretation: the most frequently skipped step signals that the **copy needs rewriting**, not that the step should be removed. Frequent "target not found" results signal a poorly chosen anchor.
+Interpretation: the most frequently skipped step signals that the **copy needs rewriting** rather than that the step should be removed. Frequent "target not found" results signal a poorly chosen anchor.
 
 ## 9. Questions to settle before implementation
 
-1. **Where to store the completion flag and step number.** The prototype uses `localStorage` (`sherpa.onboarding.v1`, `sherpa.onboarding.step`). Product choice: per-user local Sherpa state on disk (survives a browser change, lost on reinstall) or a browser session. A choice is needed.
+1. **Where to store the completion flag and step number.** The prototype uses `localStorage` (`sherpa.onboarding.v1`, `sherpa.onboarding.step`). The product has to choose between per-user local Sherpa state on disk (survives a browser change, lost on reinstall) and a browser session.
 2. **Second pass.** Does the "what changed since last time" banner (F3) need its own small tip, or is that explaining the banner rather than onboarding?
 3. **Agent dies during the tour.** Continue without step 06 or show it with reconnection text?
 4. **Narrow windows.** The page is designed for ≥1440px. At 1280 some anchors (viewed counter, agent panel) go offscreen and the step uses the fallback layout. If 1280 is a real use case, these two steps need alternative anchors.

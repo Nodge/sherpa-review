@@ -22,8 +22,7 @@ body {
     min-width: 1280px;
     color: var(--text-primary-soft);
     font-family: var(--font-sans);
-    /* Inheritance starts with the main UI text (docs/design/theme.md, "Typography"): 13px at M,
-       14.6px at L. Stop paragraphs are larger and use their own `--font-size-body`. */
+    /* Stop paragraphs use their own size rather than inheriting the UI text size. */
     font-size: var(--font-size-ui);
     line-height: 1.5;
     -webkit-font-smoothing: var(--font-smoothing);

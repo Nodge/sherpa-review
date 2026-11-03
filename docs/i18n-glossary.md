@@ -1,6 +1,6 @@
 # UI glossary
 
-The glossary fixes one English term for each concept of Sherpa, so a translation of the UI into a new language starts from one name per thing. The strings themselves live in `packages/ui/src/i18n/en.ts`. This page says what each term means and which neighbouring term it must not be confused with.
+The UI glossary fixes one English term for each Sherpa concept. A translation of the UI into a new language starts from this page, so the translator begins with one name per thing. The strings themselves live in `packages/ui/src/i18n/en.ts`. For each term the table gives its meaning and the neighbouring term it must not be confused with.
 
 | Term | Meaning |
 |---|---|

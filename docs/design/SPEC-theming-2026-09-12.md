@@ -1,6 +1,6 @@
 # Sherpa light theme, settings, contrast, typography and responsive width · 2026-09-12
 
-Delta spec for what is already in production (README §0–16 + SPEC-onboarding-2026-09-02). Only **changes** are covered here. Anything unmentioned stays as is. Reference implementation: `Sherpa.dc.html` in this package (settings menu: sliders icon in the header's right corner. The Contrast slider in the Tweaks panel is a design review tool, excluded from the product).
+This is a delta spec for what is already in production (README §0–16 + SPEC-onboarding-2026-09-02). It covers only **changes**, and anything unmentioned stays as is. The reference implementation is `Sherpa.dc.html` in this package (the settings menu sits behind the sliders icon in the header's right corner). The Contrast slider in the Tweaks panel is a design review tool and stays out of the product.
 
 | Item | Prototype status | Production impact |
 |---|---|---|
@@ -20,7 +20,7 @@ Delta spec for what is already in production (README §0–16 + SPEC-onboarding-
 
 ## 1. Theme model
 
-Colours have one source: a set of CSS variables on `:root`. Each production colour has a variable named after its **old** hex (`#22252b` → `--c-22252b`), so migration is mechanical: replace the literal with `var(--c-<hex>)`. Alpha colours use the rgba digits (`rgba(0,0,0,.6)` → `--a-0006`). A few semantic pairs sit on top, with dark and light values that cannot be derived from one hex:
+Colours have one source: a set of CSS variables on `:root`. Each production colour has a variable named after its **old** hex (`#22252b` becomes `--c-22252b`), so migration is mechanical: replace the literal with `var(--c-<hex>)`. Alpha colours use the rgba digits (`rgba(0,0,0,.6)` becomes `--a-0006`). A few semantic pairs sit on top, with dark and light values that cannot be derived from one hex:
 
 | Variable | Dark | Light | Use |
 |---|---|---|---|
@@ -173,7 +173,7 @@ Colours have one source: a set of CSS variables on `:root`. Each production colo
 
 ## 3. Rebuilt dark palette
 
-User complaints about contrast were confirmed: the two lowest grey levels were 3.1:1 and 3.9:1 (text requires 4.5:1). The decision was made visually, using a slider on the running interface: **neutral tokens are stretched away from the page background by +80 % in dark and +40 % in light** (`new = bg + (old − bg) × 1.8`, clamped). **Accent colours (indigo, green, red, amber) are unchanged**. The result is in the table in §2. One manual adjustment beyond the formula raises `--c-6f76a8` (the hint below "Open the route") to ≈7:1 in both themes.
+Measurements confirmed the user complaints about contrast: the two lowest grey levels were 3.1:1 and 3.9:1 (text requires 4.5:1). The decision came from a visual pass with a slider on the running interface: **neutral tokens are stretched away from the page background by +80 % in dark and +40 % in light** (`new = bg + (old − bg) × 1.8`, clamped). **Accent colours (indigo, green, red, amber) are unchanged**. The result is in the table in §2. One manual adjustment beyond the formula raises `--c-6f76a8` (the hint below "Open the route") to ≈7:1 in both themes.
 
 For developers: the grey hierarchy in the dark theme is now flat. Muted labels (paths, counters, kickers) are almost white. This is a deliberate choice based on complaints. If feedback says "everything is equally loud", the next step is to restore 2–3 levels without lowering the overall level.
 
@@ -208,13 +208,13 @@ All `font-size` values use **rem** (`html { font-size: 100% }`), so the interfac
 | 15 | 15.5 | 0.9688 | section headings |
 | 19 · 22 · 24 | unchanged | 1.1875 · 1.375 · 1.5 | screen headings |
 
-Code: 12px mono (was 11.5), line-height stays 20px, so line density is unchanged. Control heights (23–30px) stay in px. All were checked for overflow in L mode.
+Code: 12px mono (was 11.5), line-height stays 20px, so line density is unchanged. Control heights (23–30px) stay in px. The design pass checked all of them for overflow in L mode.
 
 **M / L text size** (settings menu): M uses the scale above. L uses `html { font-size: 112.5% }` (14.6px base, 12.4px minimum). One line implements it because everything uses rem.
 
 ## 6. Width and responsiveness
 
-The interface has **no** overall width limit (verified: the limit hurts side by side). Instead:
+The interface has **no** overall width limit (a check showed that the limit hurts side by side). Instead, limits apply per part:
 
 | Item | Production | New |
 |---|---|---|
@@ -227,11 +227,11 @@ The interface has **no** overall width limit (verified: the limit hurts side by 
 | Overview | `max-width:1300px` | `max-width:1700px` |
 | **Code panels (stop diff column, Full diff cards, Full diff header)** | unlimited | `max-width: var(--diff-max)`: **unified 1280px, side by side 1920px** (×1.5). Left-aligned, with the remaining space empty on the right |
 
-`--diff-max` switches with the global diff mode (⇄) and on scenario change. The onboarding frame is recalculated after switching. `min-width:1440px` stays.
+`--diff-max` switches with the global diff mode (⇄) and on scenario change. The onboarding frame recalculates after switching. `min-width:1440px` stays.
 
 ## 6a. File tree in Full diff
 
-Production problem: the filename had less than half the row, so almost everything was truncated. The rebuilt row gives the name priority:
+In production, the filename had less than half the row, so almost every name was truncated. The rebuilt row gives the name priority:
 
 ```
 [02] ⌄ □ edit_policy.py                              pci  +96
@@ -256,13 +256,13 @@ Row order: chevron · marker (absolute) · read-state · name · `pci` · `+N`. 
 
 ## 7. Settings menu (header)
 
-Replaces the "RS" avatar. The skill runs locally, so there is no account, name or sign out.
+The menu replaces the "RS" avatar. The skill runs locally, so there is no account, name or sign out.
 
 **Trigger.** A 28×28 icon button, radius 7, border `--c-24272d`, 15px "sliders" icon (gear and sun icons read as "theme only"). Open state: bg `--c-1b1e24`, border `--c-2f333a`, icon `--c-e0e2e7`. `title` = "Settings" / "Settings".
 
 **Panel.** `position:absolute; right:0; top:32px`, width 252, padding 6, bg `--c-171a1f`, border `--c-313640`, radius 10, shadow `0 18px 44px --a-00055`, z 61. A transparent backdrop at z 60 sits below it (clicking outside closes it). Esc closes it. Opening it closes the Ship and filter menus.
 
-Rows (top to bottom), setting row height 34px, action items 30px, separator 1px `--c-1e2126`:
+The rows, top to bottom (setting row height 34px, action items 30px, separator 1px `--c-1e2126`):
 
 | # | Row | Control | Values | Persistence |
 |---|---|---|---|---|
