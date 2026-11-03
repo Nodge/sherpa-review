@@ -1,6 +1,5 @@
 {
   "name": "sherpa-review-monorepo",
-  "version": "0.11.1",
   "description": "Sherpa monorepo, a local code review tool with an AI route through a PR diff",
   "private": true,
   "license": "MIT",
@@ -15,9 +14,15 @@
     "test": "pnpm -r test",
     "build": "pnpm -r build",
     "docs:endpoints": "node scripts/protocol-endpoints.mjs --write",
-    "release": "node scripts/release.mjs"
+    "build:package": "node scripts/build-package.mjs",
+    "changeset": "changeset add",
+    "ci:changesets": "changeset status --since=origin/main",
+    "ci:version": "changeset version",
+    "ci:publish": "pnpm run build:package && changeset publish"
   },
   "devDependencies": {
+    "@changesets/changelog-github": "1.0.1",
+    "@changesets/cli": "3.0.3",
     "@eslint/js": "10.0.1",
     "@types/node": "26.6.6",
     "eslint": "10.14.0",

@@ -15,8 +15,9 @@ const cliPath = join(binDir, 'sherpa-review.mjs');
 const serverPath = join(binDir, 'sherpa-review-server.mjs');
 const uiRoot = resolve(packageRoot, '../ui');
 const repoRoot = resolve(packageRoot, '../..');
-/** Distribution version from the root package.json, the single source for all three bundles. */
-const releaseVersion = JSON.parse(readFileSync(join(packageRoot, '../../package.json'), 'utf8')).version;
+/** The published package's own manifest: its version is the single source for all three bundles. */
+const ownManifest = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8'));
+const releaseVersion = ownManifest.version;
 
 // One build for the whole file: both suites check a fresh `dist/`, even when only one of them runs.
 beforeAll(() => {
@@ -80,7 +81,7 @@ describe('npm package build', () => {
             license: 'MIT',
             type: 'module',
             bin: { 'sherpa-review': 'bin/sherpa-review.mjs' },
-            engines: root.engines,
+            engines: ownManifest.engines,
         });
         // npm resolves `sherpa-review@<version>` to a workspace root of the same name and version inside the checkout.
         expect(root.name).not.toBe(manifest.name);

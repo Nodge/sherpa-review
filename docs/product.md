@@ -2,7 +2,7 @@
 
 Sherpa is a guide that leads the reviewer along a route through the diff. This document describes the product: the problem it solves, the principles every design decision is checked against, the vocabulary, the screens, the end-to-end scenarios and the boundary of the first version.
 
-The version number lives in the root `package.json`. `sherpa-review --version` prints it, and the UI top bar shows it.
+The version number lives in `packages/npm/package.json`. `sherpa-review --version` prints it, and the UI top bar shows it. Release history: `packages/npm/CHANGELOG.md`.
 
 ## 1. In one paragraph
 

@@ -98,7 +98,7 @@ The UI tests check the implementation and shared style rules:
 
 - the package contents: `package.json`, `README.md`, `LICENSE`, `THIRD-PARTY-LICENSES.txt`, and `bin/` with an executable command and a nonexecutable server module
 - third-party notices for bundled packages, including IBM Plex fonts, with their license text and no workspace or build-only packages
-- the published manifest: name, version from the root `package.json`, one bin, no dependencies or scripts
+- the published manifest: name and version from `packages/npm/package.json`, one bin, no dependencies or scripts
 - that `skills/sherpa-review/SKILL.md` stays a stub calling `guide`
 - that the built CLI runs with plain node
 - that the server and UI haven't leaked into the CLI bundle: the CLI is smaller than the server and contains no `node:sqlite`

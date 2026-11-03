@@ -17,7 +17,7 @@ export function packageOf(modulePath, virtualPackages = {}) {
         const dir = Object.hasOwn(virtualPackages, namespace) ? virtualPackages[namespace] : undefined;
         if (dir === undefined) {
             throw new Error(
-                `@sherpa/npm: the bundle has code from the virtual module ${JSON.stringify(modulePath.slice(1))}, ` +
+                `sherpa-review: the bundle has code from the virtual module ${JSON.stringify(modulePath.slice(1))}, ` +
                     `and its namespace "${namespace}" maps to no package. Add it to the virtual packages in build.mjs.`,
             );
         }
@@ -46,14 +46,14 @@ export function packageOf(modulePath, virtualPackages = {}) {
 export function assetSources(assets, uiRoot, workerFiles) {
     return Object.entries(assets).flatMap(([file, sources]) => {
         if (sources.length === 0 && !workerFiles.includes(file)) {
-            throw new Error(`@sherpa/npm: the UI build emitted ${file} with no known source, so its license is unknown.`);
+            throw new Error(`sherpa-review: the UI build emitted ${file} with no known source, so its license is unknown.`);
         }
         for (const source of sources) {
             const inside = relative(uiRoot, source);
             const own = !inside.startsWith('..') && !isAbsolute(inside);
             if (packageOf(source) === null && !own) {
                 throw new Error(
-                    `@sherpa/npm: the UI build emitted ${file} from ${source}, outside node_modules and the UI package.`,
+                    `sherpa-review: the UI build emitted ${file} from ${source}, outside node_modules and the UI package.`,
                 );
             }
         }
@@ -96,7 +96,7 @@ export function thirdPartyNotices(modulePaths, virtualPackages = {}) {
             const files = readdirSync(dir).filter((file) => LICENSE_FILE.test(file)).sort();
             if (license === null && files.length === 0) {
                 throw new Error(
-                    `@sherpa/npm: ${id} (${dir}) is bundled but has no license file and no license field in ` +
+                    `sherpa-review: ${id} (${dir}) is bundled but has no license file and no license field in ` +
                         'package.json. Check its terms before shipping it.',
                 );
             }

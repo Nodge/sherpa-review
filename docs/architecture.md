@@ -12,7 +12,7 @@ Sherpa is a pnpm monorepo with 7 packages, TypeScript throughout, on Node 22.13 
 | `@sherpa/server` | The single-PR daemon: HTTP layer, task queue with leases, host adapters, route and chat orchestrators, result validator, storage |
 | `@sherpa/ui` | The reviewer's web interface: React 19, built by Vite |
 | `@sherpa/cli` | The single `sherpa-review` executable the agent uses: session instructions (`guide`), startup and the worker loop. It also starts the server with `sherpa-review server` |
-| `@sherpa/npm` | Builds the published `sherpa-review` npm package: a manifest and `bin/` with the command and server module |
+| `sherpa-review` (`packages/npm`) | Builds the published `sherpa-review` npm package: a manifest and `bin/` with the command and server module. Its `package.json` holds the distribution version, its `CHANGELOG.md` the release history |
 | `@sherpa/fixtures` | The fixture host and deterministic data for development mode, the state gallery, e2e and performance measurements |
 | `@sherpa/e2e` | End-to-end Playwright scenarios and performance measurements |
 
@@ -22,7 +22,7 @@ esbuild builds the **CLI** into one self-contained `.mjs` file with no runtime d
 
 The **server** builds the same way, into one ESM module named `sherpa-review-server.mjs` with the UI assets embedded. Importing the module executes nothing. Its `runServer(argv)` export starts the server. `packages/server/build-server.mjs` reads `packages/ui/dist` and replaces the `src/ui-assets.ts` module with a map from a path within the build to its base64 contents. In the source this map is deliberately empty, so development runs serve the UI from disk and the distribution serves it from memory, with no mode branches in the code.
 
-The two files make up one command. Only `sherpa-review.mjs` is executable. The CLI loads the server module with `import()` at a path computed at runtime, and only inside `sherpa-review server`. This keeps esbuild from pulling the server into the CLI bundle, which matters because the agent loop runs the CLI on every call and must not load the server with its embedded UI each time. `sherpa-review up` spawns the daemon as `node <runtime flags> <sherpa-review.mjs> server …` and passes the located module in `SHERPA_SERVER_BIN`. The CLI composition root (`packages/cli/src/index.ts`) sets the daemon's runtime flags (currently `--use-system-ca`), and the `up` core only filters out flags the current Node does not recognise. Both files share one distribution version, the `version` field of the root `package.json`.
+The two files make up one command. Only `sherpa-review.mjs` is executable. The CLI loads the server module with `import()` at a path computed at runtime, and only inside `sherpa-review server`. This keeps esbuild from pulling the server into the CLI bundle, which matters because the agent loop runs the CLI on every call and must not load the server with its embedded UI each time. `sherpa-review up` spawns the daemon as `node <runtime flags> <sherpa-review.mjs> server …` and passes the located module in `SHERPA_SERVER_BIN`. The CLI composition root (`packages/cli/src/index.ts`) sets the daemon's runtime flags (currently `--use-system-ca`), and the `up` core only filters out flags the current Node does not recognise. Both files share one distribution version, the `version` field of `packages/npm/package.json`.
 
 ### Distribution and session versions
 
