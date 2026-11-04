@@ -220,30 +220,37 @@ async function readWorkerIdFile(filePath: string): Promise<string | null> {
 }
 
 /**
- * Creates the file exclusively (`wx`). On the first run, several sessions may find no file at once,
- * and otherwise each would leave with its own id, while the last one stayed on disk. One
- * workerId would claim tasks and another would submit them. The loser of the race takes the winner's id.
+ * Writes the id to a temp file and hard-links it into place: the link is exclusive and the file
+ * appears already filled. On the first run, several sessions may find no file at once, and
+ * otherwise each would leave with its own id, while the last one stayed on disk. One workerId
+ * would claim tasks and another would submit them. The loser of the race takes the winner's id.
  */
 async function createWorkerIdFile(filePath: string): Promise<string> {
     const workerId = randomUUID();
     await fs.mkdir(path.dirname(filePath), { recursive: true, mode: STATE_DIR_MODE });
 
+    const tempPath = `${filePath}.${workerId}.tmp`;
     try {
-        await fs.writeFile(filePath, `${workerId}\n`, { mode: WORKER_ID_FILE_MODE, flag: 'wx' });
-    } catch (error) {
-        if (!isAlreadyExists(error)) {
-            throw error;
+        await fs.writeFile(tempPath, `${workerId}\n`, { mode: WORKER_ID_FILE_MODE });
+        // writeFile applies mode subject to umask. Set the permissions explicitly.
+        await fs.chmod(tempPath, WORKER_ID_FILE_MODE);
+        try {
+            await fs.link(tempPath, filePath);
+        } catch (error) {
+            if (!isAlreadyExists(error)) {
+                throw error;
+            }
+            const winner = await readWorkerIdFile(filePath);
+            if (winner !== null) {
+                return winner;
+            }
+            // An empty file from an interrupted write by an older version.
+            await fs.rename(tempPath, filePath);
         }
-        const winner = await readWorkerIdFile(filePath);
-        if (winner !== null) {
-            return winner;
-        }
-        await fs.writeFile(filePath, `${workerId}\n`, { mode: WORKER_ID_FILE_MODE });
+        return workerId;
+    } finally {
+        await fs.rm(tempPath, { force: true });
     }
-
-    // writeFile applies mode only on creation and subject to umask. Set the permissions explicitly afterward.
-    await fs.chmod(filePath, WORKER_ID_FILE_MODE);
-    return workerId;
 }
 
 function isAlreadyExists(error: unknown): boolean {
