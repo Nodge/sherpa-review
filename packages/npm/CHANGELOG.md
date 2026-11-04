@@ -1,5 +1,11 @@
 # sherpa-review
 
+## 0.12.1
+
+### Patch Changes
+
+- [#8](https://github.com/Nodge/sherpa-review/pull/8) [`d613d47`](https://github.com/Nodge/sherpa-review/commit/d613d47f56be9e78d83c4823b4af7ea981be6392) Thanks [@Nodge](https://github.com/Nodge)! - When two agent sessions start on the same pull request for the first time at once, they now always share one worker identity. Before, one session could occasionally pick up a route task that the other then failed to submit.
+
 ## 0.12.0
 
 ### Minor Changes
