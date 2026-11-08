@@ -24,13 +24,31 @@ Sherpa is for reviewers who get more pull requests than they can read line by li
 
 You need Node 22.13 or later, an agent harness that supports skills (Claude Code is tested, Codex has had less testing) and, for GitHub PRs, a token from `$GITHUB_TOKEN`, `$GH_TOKEN` or `gh auth token`. The PR is read through the API, so no checkout is needed. [Requirements in detail](docs/operations.md#requirements-in-detail), including the recommended models.
 
-Install the skill with [`skills`](https://skills.sh):
+Install the skill with [`skills`](https://skills.sh), for any harness:
 
 ```
 npx skills add Nodge/sherpa-review -g
 ```
 
-`-g` makes the skill available in all projects. Without it, the skill goes into the current project. The installer asks which harnesses to install it for. The skill is a stub that runs `npx -y sherpa-review@latest`, so every new session uses the latest published version and there is nothing to update by hand.
+`-g` makes the skill available in all projects. Without it, the skill goes into the current project. The installer asks which harnesses to install it for.
+
+Or, in Claude Code, install it as a plugin:
+
+```
+/plugin marketplace add Nodge/sherpa-review
+/plugin install sherpa-review@sherpa-review
+```
+
+On Claude Code 2.1.275 or later, `/plugin install sherpa-review --marketplace Nodge/sherpa-review` does both in one step.
+
+### Updating
+
+The skill runs the exact release it was installed with, through `npx -y sherpa-review@<version>`, so Sherpa changes only when you update it. Release notes are in the [changelog](packages/npm/CHANGELOG.md).
+
+- Installed with `skills`: run `npx skills update sherpa-review`.
+- Installed as a plugin: run `claude plugin marketplace update sherpa-review`, then `claude plugin update sherpa-review@sherpa-review`, or turn on auto-update for the marketplace in `/plugin`.
+
+A running session keeps the version it started with. The new one applies from the next session.
 
 Then, in an agent session, call the skill with a PR link:
 

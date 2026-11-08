@@ -17,7 +17,7 @@ The `/sherpa-review` skill accepts a PR link, a PR key such as `github-quillmart
 
 In a headless environment, ask the agent to add `--no-open` and open the printed link yourself. The link points at the machine's loopback address and contains the access token, so over SSH forward the server port first or see [Access from another machine](#access-from-another-machine).
 
-The skill itself is a stub that runs `npx -y sherpa-review@latest guide` to get the session instructions. The [`sherpa-review`](https://www.npmjs.com/package/sherpa-review) npm package contains those instructions and 2 built `.mjs` files: the CLI, and the server with the UI embedded. It has zero runtime dependencies. Every new agent session uses the latest published version. A running session keeps the version it started with, so an update cannot change its commands midway.
+The skill itself is a stub that runs `npx -y sherpa-review@<version> guide` to get the session instructions, with the exact version of the release you installed. The [`sherpa-review`](https://www.npmjs.com/package/sherpa-review) npm package contains those instructions and 2 built `.mjs` files: the CLI, and the server with the UI embedded. It has zero runtime dependencies. A new version arrives only when you update the skill or the plugin, see [Updating](../README.md#updating). A running session keeps the version it started with, so an update cannot change its commands midway.
 
 ## Access from another machine
 

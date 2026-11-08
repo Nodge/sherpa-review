@@ -17,7 +17,8 @@
     "build:package": "node scripts/build-package.mjs",
     "changeset": "changeset add",
     "ci:changesets": "changeset status --since=origin/main",
-    "ci:version": "changeset version",
+    "ci:version": "changeset version && node scripts/pin-version.mjs",
+    "ci:pins": "node scripts/pin-version.mjs --check",
     "ci:publish": "pnpm run build:package && changeset publish"
   },
   "devDependencies": {

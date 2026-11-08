@@ -17,8 +17,7 @@ const GITHUB_REPO = 'nodge/sherpa-review';
 export const ALL_HOSTS: readonly HostPlugin[] = [githubHostPlugin, localGitHostPlugin, fixtureHostPlugin];
 
 /**
- * No update channel in this distribution: the skill runs `npx sherpa-review@latest`, so a new session gets a new release.
- * `NpmUpdateChannel` stays in the code, unconnected.
+ * No update channel in this distribution. `NpmUpdateChannel` stays in the code, unconnected.
  */
 export const UPDATE_CHANNEL: UpdateChannel | null = null;
 

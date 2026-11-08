@@ -91,15 +91,23 @@ describe('npm package build', () => {
     });
 
     // The guide lives in the CLI (`sherpa-review guide`). An installed skill stays as it was copied.
-    it('keeps the skill a stub that calls the guide of the latest package', () => {
+    it('keeps the skill a stub that calls the guide of this release', () => {
         const skill = readFileSync(join(repoRoot, 'skills/sherpa-review/SKILL.md'), 'utf8');
 
         expect(skill).toMatch(/^---\nname: sherpa-review\n/u);
-        expect(skill).toContain('npx -y sherpa-review@latest guide');
+        expect(skill).toContain(`npx -y sherpa-review@${releaseVersion} guide`);
+        expect(skill).not.toContain('@latest');
         expect(skill).not.toContain(' up --pr');
         expect(skill).not.toContain('worker next');
         // A blanket stop rule would override the guide's recovery steps, such as resubmitting an oversized result.
         expect(skill).not.toContain('If a command fails');
+    });
+
+    // `scripts/pin-version.mjs` keeps them in step. The plugin version is what tells Claude Code there is an update.
+    it('pins the plugin to this release', () => {
+        const plugin = JSON.parse(readFileSync(join(repoRoot, '.claude-plugin/plugin.json'), 'utf8'));
+
+        expect(plugin).toMatchObject({ name: 'sherpa-review', version: releaseVersion });
     });
 
     it('runs the built CLI with plain node', () => {

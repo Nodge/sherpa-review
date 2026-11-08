@@ -8,7 +8,7 @@ description: "Sherpa: AI-assisted code review of pull requests and local changes
 The instructions for this skill live in the `sherpa-review` npm package, not in this file. Run
 
 ```
-npx -y sherpa-review@latest guide
+npx -y sherpa-review@0.12.0 guide
 ```
 
 and follow its output word for word, applying it to the argument this skill was invoked with.

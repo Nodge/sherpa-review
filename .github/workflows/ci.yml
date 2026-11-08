@@ -28,6 +28,8 @@ jobs:
               run: pnpm -r typecheck
             - name: ESLint
               run: pnpm -r lint
+            - name: Skill and plugin pinned to the package version
+              run: pnpm run ci:pins
             # The same build the Release workflow runs before publishing to npm.
             - name: Build the npm package
               run: pnpm run build:package
