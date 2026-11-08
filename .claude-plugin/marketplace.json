@@ -10,7 +10,6 @@
     {
       "name": "sherpa-review",
       "source": "./",
-      "description": "AI-assisted code review in the browser: your agent builds a route through the pull request and answers questions beside the diff",
       "category": "development"
     }
   ]
