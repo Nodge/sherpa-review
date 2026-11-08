@@ -1,0 +1,16 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "sherpa-review",
+  "description": "Sherpa, AI-assisted code review in the browser",
+  "owner": {
+    "name": "Maksim Zemskov",
+    "url": "https://github.com/Nodge"
+  },
+  "plugins": [
+    {
+      "name": "sherpa-review",
+      "source": "./",
+      "category": "development"
+    }
+  ]
+}

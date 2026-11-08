@@ -21,7 +21,7 @@ A PR that changes what ships to users carries a changeset for `sherpa-review` (`
 - Everything the model reads or that crosses a process boundary has a schema in `packages/protocol` and passes validation. The UI consumes only data that passes its schema. The server rejects task results that fail validation (fail closed).
 - Review hosts and update and feedback channels are plugins registered through the composition roots in `packages/server/src/hosts/all.ts` and `packages/cli/src/hosts/all.ts`. The core does not know hosts by name. Host-specific behaviour stays inside the `ReviewHost` adapter (`packages/protocol/src/review-host.ts`). A new host method needs a flag in `HostCapabilities` and a check in the contract test suite at `packages/server/src/hosts/review-host-contract.ts`.
 
-- The skill (`skills/sherpa-review/SKILL.md`) is a stub that runs `npx -y sherpa-review@latest guide`. Session instructions for the model live in `packages/cli/src/guide.ts`, not in SKILL.md.
+- The skill (`skills/sherpa-review/SKILL.md`) is a stub that runs `npx -y sherpa-review@<version> guide`, pinned to the version of `packages/npm/package.json`. The repository root is also a Claude Code plugin (`.claude-plugin/`) with the same skill. `scripts/pin-version.mjs` moves the pins on `ci:version`, and CI fails when they differ. Session instructions for the model live in `packages/cli/src/guide.ts`, not in SKILL.md.
 - The CLI is one self-contained `.mjs` with no runtime dependencies. The server is one bundle with the UI embedded. Any new dependency in `cli` or `server` must be bundled by esbuild.
 - Increment the protocol version (`packages/protocol/src/version.ts`) whenever worker endpoints or the task format change incompatibly.
 

@@ -28,9 +28,9 @@ The two files make up one command. Only `sherpa-review.mjs` is executable. The C
 
 The `sherpa-review` npm package is built into `packages/npm/dist`. It contains `package.json`, `README.md`, `LICENSE`, `THIRD-PARTY-LICENSES.txt`, `bin/sherpa-review.mjs` and `bin/sherpa-review-server.mjs`.
 
-The skill is a stub in `skills/sherpa-review/SKILL.md`, installed with `npx skills add`. It runs `npx -y sherpa-review@latest guide` to read the session instructions from the package. Changes to startup and the worker loop therefore reach new sessions without reinstalling the skill.
+The skill is a stub in `skills/sherpa-review/SKILL.md`, installed with `npx skills add` or as the Claude Code plugin whose manifest and marketplace live in `.claude-plugin/` at the repository root. It runs `npx -y sherpa-review@<version> guide` to read the session instructions from the package. The version is pinned to `packages/npm/package.json`: `scripts/pin-version.mjs` moves it into SKILL.md and `plugin.json` on `ci:version`, and CI checks it. A release therefore reaches a user when they update the skill or the plugin.
 
-When run from the npx cache, `guide` prints the start command as `npx -y sherpa-review@<its version> up …`. The `@latest` cache directory can be overwritten by a later release, while an exact version keeps its own directory. `up` prints the absolute CLI path inside that directory, so a session keeps the version it started with. Outside the npx cache, the guide prints `node <path>` commands for the local build.
+When run from the npx cache, `guide` prints the start command as `npx -y sherpa-review@<its version> up …`. This matters when `guide` itself was run through a tag such as `@latest`: a tag's cache directory can be overwritten by a later release, while an exact version keeps its own directory. `up` prints the absolute CLI path inside that directory, so a session keeps the version it started with. Outside the npx cache, the guide prints `node <path>` commands for the local build.
 
 ### Bundled licenses
 

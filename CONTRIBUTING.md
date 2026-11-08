@@ -32,7 +32,7 @@ The monorepo has 7 packages.
 
 `packages/cli` is the thin `sherpa-review` command (`guide`, `up`, `worker next` and the other commands). The worker loop runs it on every invocation, so startup has to be fast, which is why it has no runtime dependencies and builds into one `sherpa-review.mjs` bundle. Host adapters for the CLI live in its `src/hosts/`, separate from the server's.
 
-`packages/npm` builds the published `sherpa-review` npm package: a manifest plus the CLI and server module in `dist/bin/`. `dist/` is a build artifact and is not versioned (`.gitignore` excludes it). The skill is a small stub in `skills/sherpa-review/SKILL.md` that runs `sherpa-review guide` through npx.
+`packages/npm` builds the published `sherpa-review` npm package: a manifest plus the CLI and server module in `dist/bin/`. `dist/` is a build artifact and is not versioned (`.gitignore` excludes it). The skill is a small stub in `skills/sherpa-review/SKILL.md` that runs `sherpa-review guide` through npx. The repository root is also a Claude Code plugin and its marketplace (`.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`), which serve the same skill.
 
 `packages/fixtures` holds deterministic PRs (`medium`, `small`, `large`, `edge`, `huge`, `empty`), a fixture `ReviewHost` and builders for domain objects. Development mode, the state gallery and e2e all use them.
 
@@ -132,12 +132,12 @@ Releases go through [changesets](https://github.com/changesets/changesets). The 
 - A PR that changes what ships carries a changeset: `pnpm changeset`, select `sherpa-review`. The `@sherpa/*` packages are private and never get a changeset of their own. What counts as shipping is `changedFilePatterns` in the config: package sources and `package.json` files, build scripts, the UI's `vite.config.ts` and `index.html`. Tests, `src/dev/`, `packages/e2e`, docs and CI need none. A PR that touches a counted file without a user-visible change takes `pnpm changeset --empty`.
 - The changeset text is the release note in `packages/npm/CHANGELOG.md` and the GitHub release. Write it for a Sherpa user who has never read the code: what they can do now or what changed for them, in the words of the screen and the commands they type. Module names and internals stay out unless the change is about them. One user-visible change, one changeset. Bump: patch for fixes, minor for new features and behaviour, major for a break of the skill or CLI contract.
 - `pnpm run ci:changesets` (`changeset status --since=origin/main`) runs in CI on every push and PR and fails a counted change with no changeset. It is skipped for dependabot's own pushes. A dependabot PR that bumps a bundled runtime library ships to users, so add a patch changeset to it before merging ("Update <lib> to <version>"). A dev tooling bump alone takes none.
-- On push to main the Release workflow (`.github/workflows/release.yml`, `changesets/action`) opens or updates the "Upcoming Release" PR: `changeset version` bumps `packages/npm/package.json` and writes `CHANGELOG.md`.
+- On push to main the Release workflow (`.github/workflows/release.yml`, `changesets/action`) opens or updates the "Upcoming Release" PR: `changeset version` bumps `packages/npm/package.json` and writes `CHANGELOG.md`, then `scripts/pin-version.mjs` moves the new version into the `npx` command in `skills/sherpa-review/SKILL.md` and into `version` in `.claude-plugin/plugin.json`. `pnpm run ci:pins` runs in CI on every push and fails when a pin differs from the package version.
 - Merging that PR runs `pnpm run ci:publish`: `pnpm build:package`, then `changeset publish`, which publishes every version not yet on npm with trusted publishing (OIDC, no token in the repository) and creates the tag `sherpa-review@x.y.z` and the GitHub release.
 
 `pnpm build:package` (`scripts/build-package.mjs`) builds the UI and the package. It checks that `sherpa-review --version` and `packages/npm/dist/package.json` carry the version of `packages/npm/package.json` and lists what npm would upload. Use `pnpm build:package --skip-build` to check an existing `dist`. CI runs it on every push.
 
-Users get a release in their next agent session because the skill runs `npx -y sherpa-review@latest`.
+Users get a release when they update the skill (`npx skills update`) or the plugin. Until then the skill runs the exact version it was installed with. Between the merge of the Release PR and the end of `changeset publish`, `main` points at a version npm does not have yet, so an install in that window fails until the publish finishes.
 
 ## Decisions
 
