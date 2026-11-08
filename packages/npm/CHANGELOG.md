@@ -1,5 +1,15 @@
 # sherpa-review
 
+## 0.13.0
+
+### Minor Changes
+
+- [#10](https://github.com/Nodge/sherpa-review/pull/10) [`42835f3`](https://github.com/Nodge/sherpa-review/commit/42835f3511c6510972c9a5a804342582b127d57a) Thanks [@Nodge](https://github.com/Nodge)! - The skill now runs the exact Sherpa release you installed instead of the newest one, so Sherpa changes only when you update it: run `npx skills update sherpa-review`, or update the plugin. Sherpa can also be installed in Claude Code as a plugin: `/plugin marketplace add Nodge/sherpa-review`, then `/plugin install sherpa-review@sherpa-review`. See [Updating](https://github.com/Nodge/sherpa-review#updating).
+
+### Patch Changes
+
+- [#8](https://github.com/Nodge/sherpa-review/pull/8) [`d613d47`](https://github.com/Nodge/sherpa-review/commit/d613d47f56be9e78d83c4823b4af7ea981be6392) Thanks [@Nodge](https://github.com/Nodge)! - When two agent sessions start on the same pull request for the first time at once, they now always share one worker identity. Before, one session could occasionally pick up a route task that the other then failed to submit.
+
 ## 0.12.0
 
 ### Minor Changes

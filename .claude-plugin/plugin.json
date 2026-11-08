@@ -1,7 +1,7 @@
 {
   "name": "sherpa-review",
   "displayName": "Sherpa",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "AI-assisted code review in the browser: your agent builds a route through the pull request, stops ordered by importance with an explanation beside the diff, and answers questions about the lines you select",
   "author": {
     "name": "Maksim Zemskov",
