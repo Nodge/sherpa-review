@@ -10,6 +10,9 @@
   "license": "MIT",
   "homepage": "https://github.com/Nodge/sherpa-review",
   "repository": "https://github.com/Nodge/sherpa-review",
+  "documentationUrl": "https://github.com/Nodge/sherpa-review/blob/main/docs/guide.md",
+  "supportUrl": "https://github.com/Nodge/sherpa-review/issues",
+  "privacyPolicyUrl": "https://github.com/Nodge/sherpa-review#where-it-runs-and-what-it-sends",
   "keywords": [
     "code-review",
     "pull-request",
